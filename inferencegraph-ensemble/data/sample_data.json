@@ -1,0 +1,23 @@
+{
+  "feature_names": [
+    "MedInc",
+    "HouseAge",
+    "AveRooms",
+    "AveBedrms",
+    "Population",
+    "AveOccup",
+    "Latitude",
+    "Longitude"
+  ],
+  "sample_input": {
+    "MedInc": 1.6812,
+    "HouseAge": 25.0,
+    "AveRooms": 4.192200557103064,
+    "AveBedrms": 1.0222841225626742,
+    "Population": 1392.0,
+    "AveOccup": 3.8774373259052926,
+    "Latitude": 36.06,
+    "Longitude": -119.01
+  },
+  "expected_output": 0.477
+}

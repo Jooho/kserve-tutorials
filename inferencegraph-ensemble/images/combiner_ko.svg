@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 300" font-family="'Segoe UI', Arial, sans-serif" font-size="14">
+  <defs>
+    <marker id="arrow-ck" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="620" height="300" rx="10" fill="#f8f9fa" stroke="#dee2e6" stroke-width="1"/>
+
+  <!-- Title -->
+  <text x="310" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#212529">Ensemble Combiner (FastAPI)</text>
+
+  <!-- Input Box -->
+  <rect x="30" y="50" width="250" height="120" rx="8" fill="white" stroke="#4dabf7" stroke-width="1.5"/>
+  <text x="155" y="72" text-anchor="middle" font-size="13" font-weight="bold" fill="#1971c2">Ensemble 출력 (입력)</text>
+  <text x="50" y="96" font-size="12" fill="#495057" font-family="monospace">{"0": {</text>
+  <text x="60" y="112" font-size="12" fill="#495057" font-family="monospace">  "outputs": [{"data": [2.73]}]</text>
+  <text x="50" y="128" font-size="12" fill="#495057" font-family="monospace">},</text>
+  <text x="50" y="144" font-size="12" fill="#495057" font-family="monospace"> "1": {</text>
+  <text x="60" y="160" font-size="12" fill="#495057" font-family="monospace">  "outputs": [{"data": [4.15]}]</text>
+  <text x="50" y="164" font-size="12" fill="#495057" font-family="monospace">}}</text>
+
+  <!-- Arrow to function -->
+  <line x1="280" y1="110" x2="320" y2="110" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-ck)"/>
+
+  <!-- Function Box -->
+  <rect x="325" y="60" width="260" height="100" rx="8" fill="#fff9db" stroke="#fcc419" stroke-width="1.5"/>
+  <text x="455" y="82" text-anchor="middle" font-size="13" font-weight="bold" fill="#e67700">_average_predictions()</text>
+  <line x1="340" y1="90" x2="570" y2="90" stroke="#fcc419" stroke-width="0.5"/>
+  <text x="345" y="110" font-size="12" fill="#495057">1. 각 모델 결과에서 값 추출</text>
+  <text x="345" y="130" font-size="12" fill="#495057">2. 평균 계산: (2.73 + 4.15) / 2</text>
+  <text x="345" y="150" font-size="12" font-weight="600" fill="#495057">3. 결과: 3.44</text>
+
+  <!-- Arrow down -->
+  <line x1="455" y1="160" x2="455" y2="195" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-ck)"/>
+
+  <!-- Output Box -->
+  <rect x="325" y="200" width="260" height="80" rx="8" fill="white" stroke="#51cf66" stroke-width="1.5"/>
+  <text x="455" y="222" text-anchor="middle" font-size="13" font-weight="bold" fill="#2b8a3e">V2 응답 (출력)</text>
+  <text x="345" y="246" font-size="12" fill="#495057" font-family="monospace">{"outputs": [{</text>
+  <text x="355" y="262" font-size="12" fill="#495057" font-family="monospace">  "data": [3.44]</text>
+  <text x="345" y="274" font-size="12" fill="#495057" font-family="monospace">}]}</text>
+
+  <!-- Simplicity note -->
+  <text x="155" y="210" text-anchor="middle" font-size="12" fill="#868e96">combiner/app.py</text>
+  <text x="155" y="230" text-anchor="middle" font-size="12" fill="#868e96">핵심 함수 2개</text>
+  <text x="155" y="250" text-anchor="middle" font-size="12" fill="#868e96">총 60줄</text>
+</svg>

@@ -1,0 +1,7 @@
+{
+  "name": "lightgbm-predictor",
+  "implementation": "mlserver_lightgbm.LightGBMModel",
+  "parameters": {
+    "uri": "./model.bst"
+  }
+}

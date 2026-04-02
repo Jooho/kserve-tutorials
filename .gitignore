@@ -1,0 +1,6 @@
+.bkit/
+.claude/
+.ruff_cache/
+__pycache__/
+*.pyc
+.env

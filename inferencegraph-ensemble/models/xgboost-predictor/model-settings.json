@@ -1,0 +1,7 @@
+{
+  "name": "xgboost-predictor",
+  "implementation": "mlserver_xgboost.XGBoostModel",
+  "parameters": {
+    "uri": "./model.json"
+  }
+}

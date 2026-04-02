@@ -1,0 +1,16 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: ensemble-combiner
+  namespace: kserve-graph-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    containers:
+      - name: combiner
+        image: ensemble-combiner:latest
+        imagePullPolicy: Never
+        ports:
+          - containerPort: 8080
+            protocol: TCP
