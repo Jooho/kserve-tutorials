@@ -8,6 +8,7 @@ summary:
 status: draft                 # -> stable after the first green CI run
 series: {name: llmisvc-deep-dive, order: 1}
 env: kind-llmisvc/v1
+uses: [llmisvc/v1]
 namespace: llmisvc-anatomy
 kserve:
   default: v0.18.0

@@ -49,6 +49,24 @@ class EnvProfile:
 
 
 @dataclass
+class Module:
+    """A versioned library of scripts shared by tutorials: lib/<name>/v<N>/."""
+    ref: str            # "<name>/<version>", e.g. "llmisvc/v1"
+    path: Path
+    meta: dict
+
+    @property
+    def frozen(self) -> bool:
+        return bool(self.meta.get("frozen", False))
+
+    def scripts(self) -> list[Path]:
+        return sorted(p for p in self.path.iterdir() if p.is_file() and p.suffix == ".sh")
+
+
+MODULE_REF_RE = re.compile(r"(?:\$\{?TUT_LIB\}?|\blib)/([a-z0-9-]+/v[0-9]+)/")
+
+
+@dataclass
 class Tutorial:
     id: str
     path: Path
@@ -62,6 +80,10 @@ class Tutorial:
     @property
     def env_ref(self) -> str | None:
         return self.meta.get("env")
+
+    @property
+    def uses(self) -> list[str]:
+        return list(self.meta.get("uses", []))
 
     @property
     def langs(self) -> list[str]:
@@ -137,4 +159,19 @@ def load_envs(root: Path = REPO_ROOT) -> dict[str, EnvProfile]:
         except yaml.YAMLError:
             meta = {"_invalid": True}
         out[ref] = EnvProfile(ref=ref, path=prof.parent, meta=meta)
+    return out
+
+
+def load_modules(root: Path = REPO_ROOT) -> dict[str, Module]:
+    out: dict[str, Module] = {}
+    ldir = root / "lib"
+    if not ldir.is_dir():
+        return out
+    for m in sorted(ldir.glob("*/*/module.yaml")):
+        ref = f"{m.parent.parent.name}/{m.parent.name}"
+        try:
+            meta = yaml.safe_load(m.read_text()) or {}
+        except yaml.YAMLError:
+            meta = {"_invalid": True}
+        out[ref] = Module(ref=ref, path=m.parent, meta=meta)
     return out

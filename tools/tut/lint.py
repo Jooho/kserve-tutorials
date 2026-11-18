@@ -26,6 +26,13 @@ Documents (README.md and translations)
 Manifests
   M001 container images must be pinned (no `latest`, no missing tag)
 
+Script modules (lib/<name>/v<N>)
+  L001 module.yaml invalid, or a script is not executable
+  L002 a tutorial calls lib/<module> without listing it in `uses`, or lists a missing module
+  L003 a frozen module was modified (compare with --base)
+  L004 stable tutorials must only use frozen modules
+  L005 module is not used by any tutorial (warning)
+
 Environment profiles
   E001 profile.yaml invalid, or setup.sh / teardown.sh / README.md missing or not executable
   E002 a frozen profile was modified (compare with --base)
@@ -44,8 +51,8 @@ import jsonschema
 import yaml
 
 from . import generate, markdown
-from .model import (LANGS, REPO_ROOT, EnvProfile, Tutorial, load_envs, load_schema,
-                    load_tutorials, readme_name)
+from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, EnvProfile, Tutorial, load_envs,
+                    load_modules, load_schema, load_tutorials, readme_name)
 
 TRANSLATION_RE = re.compile(r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)\s*-->")
 HARDCODED_VERSION_RE = re.compile(r"kserve[^\n]{0,60}?\bv\d+\.\d+(\.\d+)?\b", re.I)
@@ -107,6 +114,7 @@ class Linter:
         self.findings: list[Finding] = []
         self.tutorials = load_tutorials(root)
         self.envs = load_envs(root)
+        self.modules = load_modules(root)
 
     def err(self, code, path, msg, line=None):
         self.findings.append(Finding("error", code, path, line, msg))
@@ -122,6 +130,10 @@ class Linter:
             self.lint_docs(t)
             self.lint_manifests(t)
         self.lint_envs()
+        self.lint_modules()
+        if self.base:
+            self.lint_frozen("envs", "profile.yaml", "E002")
+            self.lint_frozen("lib", "module.yaml", "L003")
         self.lint_generated()
         return self.findings
 
@@ -149,6 +161,12 @@ class Linter:
                     self.err("T005", f, f"env {env.ref} does not support KServe {ver}")
             if t.status == "stable" and not env.frozen:
                 self.err("T007", f, f"stable tutorial uses env {env.ref}, which is not frozen")
+        for ref in t.uses:
+            mod = self.modules.get(ref)
+            if mod is None:
+                self.err("L002", f, f"uses {ref!r}, but lib/{ref} does not exist")
+            elif t.status == "stable" and not mod.frozen:
+                self.err("L004", f, f"stable tutorial uses module {ref}, which is not frozen")
         if t.status in ("deprecated", "archived"):
             dep = t.meta.get("deprecation") or {}
             if not dep.get("reason"):
@@ -207,13 +225,23 @@ class Linter:
                 p = (path.parent / target.split("#")[0]).resolve()
                 if not p.exists():
                     self.err("D004", path, f"broken link: {target}", n)
-        # D005 include scope
+        # D005 include scope: own directory or a declared module
+        allowed = [t.path.resolve()] + [self.modules[u].path.resolve()
+                                        for u in t.uses if u in self.modules]
         for r in doc.regions:
             if r.kind == "include" and r.args:
                 tgt = (path.parent / r.args[0]).resolve()
-                if not tgt.is_relative_to(t.path.resolve()):
+                if not any(tgt.is_relative_to(a) for a in allowed):
                     self.err("D005", path, f"tut:include {r.args[0]} is outside the tutorial "
-                             "directory; copy the file instead of sharing it", r.start + 1)
+                             "directory and its declared modules", r.start + 1)
+        # L002 module calls must be declared
+        for b in doc.blocks:
+            if not b.is_shell:
+                continue
+            for ref in sorted(set(MODULE_REF_RE.findall(b.code))):
+                if ref not in t.uses:
+                    self.err("L002", path, f"calls lib/{ref} but tutorial.yaml does not list "
+                             f"it in `uses`", b.line)
         if not is_source:
             return doc
         # D006 setup first
@@ -288,16 +316,32 @@ class Linter:
                 self.err("E001", env.path / "README.md", "missing")
             if ref not in used:
                 self.warn("E003", prof, "not used by any tutorial")
-        if self.base:
-            self.lint_frozen_envs()
 
-    def lint_frozen_envs(self):
+    def lint_modules(self):
+        schema = load_schema("module.schema.json")
+        used = {u for t in self.tutorials for u in t.uses}
+        for ref, mod in self.modules.items():
+            f = mod.path / "module.yaml"
+            v = jsonschema.Draft202012Validator(schema)
+            for e in v.iter_errors(mod.meta):
+                where = "/".join(str(p) for p in e.path) or "(root)"
+                self.err("L001", f, f"{where}: {e.message}")
+            if mod.meta.get("id") != ref:
+                self.err("L001", f, f"id {mod.meta.get('id')!r} != {ref!r}")
+            for sc in mod.scripts():
+                if not os.access(sc, os.X_OK):
+                    self.err("L001", sc, "not executable (chmod +x)")
+            if ref not in used:
+                self.warn("L005", f, "not used by any tutorial")
+
+    def lint_frozen(self, top: str, meta_name: str, code: str):
+        """Fail when a directory <top>/<name>/<ver> that was frozen on --base changed."""
         try:
             changed = subprocess.run(
-                ["git", "diff", "--name-only", f"{self.base}...HEAD", "--", "envs/"],
+                ["git", "diff", "--name-only", f"{self.base}...HEAD", "--", f"{top}/"],
                 cwd=self.root, capture_output=True, text=True, check=True).stdout.split()
         except subprocess.CalledProcessError as e:
-            self.warn("E002", self.root / "envs", f"cannot diff against {self.base}: {e.stderr.strip()}")
+            self.warn(code, self.root / top, f"cannot diff against {self.base}: {e.stderr.strip()}")
             return
         seen = set()
         for path in changed:
@@ -308,14 +352,15 @@ class Linter:
             if ref in seen:
                 continue
             seen.add(ref)
-            base_prof = subprocess.run(
-                ["git", "show", f"{self.base}:envs/{ref}/profile.yaml"],
+            base_meta = subprocess.run(
+                ["git", "show", f"{self.base}:{top}/{ref}/{meta_name}"],
                 cwd=self.root, capture_output=True, text=True)
-            if base_prof.returncode != 0:
-                continue  # new profile
-            if (yaml.safe_load(base_prof.stdout) or {}).get("frozen"):
-                self.err("E002", self.root / "envs" / ref,
-                         f"env {ref} is frozen; create envs/{parts[1]}/<next version> instead "
+            if base_meta.returncode != 0:
+                continue  # new
+            if (yaml.safe_load(base_meta.stdout) or {}).get("frozen"):
+                nxt = f"v{int(parts[2].lstrip('v')) + 1}" if parts[2].lstrip('v').isdigit() else "<next>"
+                self.err(code, self.root / top / ref,
+                         f"{top}/{ref} is frozen; create {top}/{parts[1]}/{nxt} instead "
                          "and move tutorials to it one by one")
 
     # ------------------------------------------------------------ generated

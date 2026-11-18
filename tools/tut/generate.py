@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import markdown
-from .model import (LANGS, REPO_ROOT, Tutorial, load_envs, load_tutorials,
+from .model import (LANGS, REPO_ROOT, Tutorial, load_envs, load_modules, load_tutorials,
                     readme_name, version_key)
 
 EXT_LANG = {".yaml": "yaml", ".yml": "yaml", ".json": "json", ".py": "python",
@@ -62,6 +62,7 @@ def render_setup(t: Tutorial) -> str:
         f'export KSERVE_VERSION="${{KSERVE_VERSION:-{t.kserve_default}}}"',
         f'export NS="${{NS:-{t.namespace}}}"',
         'export REPO_ROOT="$(git rev-parse --show-toplevel)"',
+        'export TUT_LIB="$REPO_ROOT/lib"',
     ]
     if env:
         lines.append(f'"$REPO_ROOT/envs/{env}/setup.sh"')
@@ -167,6 +168,11 @@ def targets(root: Path = REPO_ROOT):
             p = t.readme(lang)
             if p.exists():
                 yield p, t, lang
+    for mod in load_modules(root).values():
+        for lang in LANGS:
+            p = mod.path / readme_name(lang)
+            if p.exists():
+                yield p, None, lang
     for env in load_envs(root).values():
         for lang in LANGS:
             p = env.path / readme_name(lang)

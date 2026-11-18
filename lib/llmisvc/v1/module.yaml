@@ -1,0 +1,8 @@
+id: llmisvc/v1
+description: Helpers for tutorials that deploy an LLMInferenceService on a Kind cluster.
+frozen: false          # -> true once a stable tutorial has passed with it
+requires: [kubectl, docker, curl, python3]
+scripts:
+  gateway-url.sh: "Print the Gateway URL of an LLMInferenceService (Kind NodePort)."
+  scheduler-pod.sh: "Print the name of the EPP scheduler Pod in a namespace."
+  completion.sh: "Send an OpenAI-style completion request and check that text comes back."

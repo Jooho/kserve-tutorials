@@ -269,3 +269,68 @@ def test_generated_regions_are_padded_and_idempotent(repo):
     assert "<!-- tut:setup -->\n\n```bash run" in once
     generate.sync(repo)
     assert (d / "README.md").read_text() == once
+
+
+# ----------------------------------------------------------------- modules
+def make_module(root: Path, ref="helpers/v1", frozen=True):
+    d = root / "lib" / ref
+    d.mkdir(parents=True)
+    (d / "module.yaml").write_text(yaml.safe_dump({"id": ref, "description": "d", "frozen": frozen}))
+    (d / "hello.sh").write_text("#!/bin/sh\necho hello\n")
+    (d / "hello.sh").chmod(0o755)
+    return d
+
+
+CALLS_MODULE = GOOD_README.replace(
+    'kubectl get cm x -n "$NS"', '"$TUT_LIB/helpers/v1/hello.sh"\nkubectl get cm x -n "$NS"')
+
+
+def test_L002_module_call_must_be_declared(repo):
+    make_module(repo)
+    make_tut(repo, "t", CALLS_MODULE)
+    assert "L002" in codes(repo)
+    make_tut(repo, "u", CALLS_MODULE, uses=["helpers/v1"])
+    errs = [(f.code, f.path.parent.name) for f in lint.Linter(repo).run() if f.severity == "error"]
+    assert ("L002", "u") not in errs
+
+
+def test_L002_missing_module(repo):
+    make_tut(repo, "t", uses=["nope/v1"])
+    assert "L002" in codes(repo)
+
+
+def test_L004_stable_needs_frozen_module(repo):
+    make_module(repo, frozen=False)
+    make_tut(repo, "t", CALLS_MODULE, uses=["helpers/v1"])
+    assert "L004" in codes(repo)
+
+
+def test_D005_include_from_declared_module_is_allowed(repo):
+    make_module(repo)
+    inc = GOOD_README + "\n<!-- tut:include ../../lib/helpers/v1/hello.sh -->\n<!-- /tut -->\n"
+    make_tut(repo, "ok", inc, uses=["helpers/v1"])
+    make_tut(repo, "bad", inc)
+    generate.sync(repo)
+    errs = [(f.code, f.path.parent.name) for f in lint.Linter(repo).run() if f.severity == "error"]
+    assert ("D005", "bad") in errs and ("D005", "ok") not in errs
+
+
+def test_affected_module_change_hits_only_its_users(repo):
+    make_module(repo, "helpers/v1")
+    make_module(repo, "helpers/v2")
+    make_tut(repo, "a", uses=["helpers/v1"])
+    make_tut(repo, "b", uses=["helpers/v2"])
+    make_tut(repo, "c")
+    ts = load_tutorials(repo)
+    assert [t.id for t in plan.affected(["lib/helpers/v2/hello.sh"], ts)] == ["b"]
+
+
+def test_L003_frozen_module_cannot_change(repo):
+    make_module(repo)
+    make_tut(repo, "t", CALLS_MODULE, uses=["helpers/v1"])
+    git = lambda *a: subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *a],
+                                    cwd=repo, check=True, capture_output=True)
+    git("init", "-q", "-b", "main"); git("add", "."); git("commit", "-qm", "base")
+    (repo / "lib/helpers/v1/hello.sh").write_text("#!/bin/sh\necho changed\n")
+    git("commit", "-qam", "edit")
+    assert "L003" in codes(repo, base="HEAD~1")

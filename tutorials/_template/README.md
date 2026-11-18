@@ -22,6 +22,7 @@ One paragraph: what the reader builds and why it matters.
 export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
 export NS="${NS:-my-tutorial}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
+export TUT_LIB="$REPO_ROOT/lib"
 "$REPO_ROOT/envs/kind-llmisvc/v1/setup.sh"
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 cd "$REPO_ROOT/tutorials/_template"
