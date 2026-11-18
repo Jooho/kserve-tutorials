@@ -43,7 +43,8 @@ def cmd_lint(a):
 def cmd_run(a):
     return runner.run(_tutorial(a.id), kserve_version=a.kserve_version, keep=a.keep,
                       dry_run=a.dry_run, teardown_env=a.teardown_env,
-                      report=Path(a.report) if a.report else None)
+                      report=Path(a.report) if a.report else None,
+                      keep_on_failure=a.keep_on_failure)
 
 
 def cmd_affected(a):
@@ -95,6 +96,8 @@ def main(argv=None):
     s.add_argument("id")
     s.add_argument("--kserve-version", help="override kserve.default")
     s.add_argument("--keep", action="store_true", help="skip cleanup blocks")
+    s.add_argument("--keep-on-failure", action="store_true",
+                   help="skip cleanup blocks only when a step failed (for debugging / CI diagnostics)")
     s.add_argument("--dry-run", action="store_true", help="print the generated script")
     s.add_argument("--teardown-env", action="store_true", help="run the env teardown.sh at the end")
     s.add_argument("--report", help="write a JSON result file")

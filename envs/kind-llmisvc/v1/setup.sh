@@ -38,12 +38,16 @@ cd "$KSERVE_SRC"
 log "creating kind cluster '$KIND_CLUSTER_NAME' with local registry"
 KIND_CLUSTER_NAME="$KIND_CLUSTER_NAME" ./hack/setup/dev/manage.kind-with-registry.sh
 log "installing KServe $KSERVE_VERSION (llmisvc)"
-# KServe's installer waits for the controller Deployment to be Available and
-# then applies the LLMInferenceServiceConfigs right away. On a fresh cluster the
-# validating webhook may not accept connections yet ("connection refused"), and
-# a plain re-run skips the step ("already installed"). So: wait until the
-# webhook Service has a ready endpoint, then retry with FORCE_UPGRADE=true.
+# Retry the KServe installer (up to 3 attempts) because two failures were seen
+# on fresh CI runners:
+#  - it applies the LLMInferenceServiceConfigs right after the controller
+#    Deployment is Available, before the validating webhook accepts connections
+#    ("connection refused"); a plain re-run then skips the step ("already
+#    installed"), hence FORCE_UPGRADE=true on retries;
+#  - transient download errors (e.g. proxy.golang.org while building
+#    cloud-provider-kind).
 webhook_ready() {
+  kubectl -n kserve get service llmisvc-webhook-server-service >/dev/null 2>&1 || return 0
   for _ in $(seq 1 60); do
     ip=$(kubectl -n kserve get endpoints llmisvc-webhook-server-service \
       -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)

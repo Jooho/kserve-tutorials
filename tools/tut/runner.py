@@ -22,7 +22,8 @@ from . import markdown
 from .model import REPO_ROOT, Tutorial
 
 
-def build_script(t: Tutorial, kserve_version: str | None, keep: bool) -> tuple[str, list[markdown.Block]]:
+def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
+                 keep_on_failure: bool = False) -> tuple[str, list[markdown.Block]]:
     doc = markdown.parse(t.readme("en").read_text())
     blocks = [b for b in doc.blocks if b.is_shell and b.role in ("run", "verify", "cleanup")]
     readme = f"tutorials/{t.id}/README.md"
@@ -36,8 +37,9 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool) -> tuple[s
         out.append(f"export KSERVE_VERSION={shlex.quote(kserve_version)}")
     out += [
         "TUT_BLOCK=''",
+        "__tut_failed=0",
         "__tut_report() { echo \"$1\" > \"${TUT_STATE_FILE:-/dev/null}\"; }",
-        "__tut_on_err() { local rc=$?; echo \"✗ FAILED in ${TUT_BLOCK} (exit ${rc})\" >&2; "
+        "__tut_on_err() { local rc=$?; __tut_failed=1; echo \"✗ FAILED in ${TUT_BLOCK} (exit ${rc})\" >&2; "
         "__tut_report \"$TUT_BLOCK\"; }",
         "trap __tut_on_err ERR",
     ]
@@ -45,6 +47,9 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool) -> tuple[s
     if cleanups and not keep:
         out.append("__tut_cleanup() {")
         out.append("  set +e")
+        if keep_on_failure:
+            out.append("  if [ \"$__tut_failed\" = 1 ]; then echo 'keeping resources for debugging "
+                       "(--keep-on-failure); cleanup skipped'; return; fi")
         out.append("  trap - ERR")
         out.append("  echo '::group::cleanup'")
         for b in cleanups:
@@ -94,8 +99,8 @@ def _indent(code: str, n: int) -> str:
 
 def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
         dry_run: bool = False, teardown_env: bool = False,
-        report: Path | None = None) -> int:
-    script, steps = build_script(t, kserve_version, keep)
+        report: Path | None = None, keep_on_failure: bool = False) -> int:
+    script, steps = build_script(t, kserve_version, keep, keep_on_failure)
     if dry_run:
         sys.stdout.write(script)
         return 0

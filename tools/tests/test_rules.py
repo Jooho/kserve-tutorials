@@ -334,3 +334,16 @@ def test_L003_frozen_module_cannot_change(repo):
     (repo / "lib/helpers/v1/hello.sh").write_text("#!/bin/sh\necho changed\n")
     git("commit", "-qam", "edit")
     assert "L003" in codes(repo, base="HEAD~1")
+
+
+def test_runner_keep_on_failure_skips_cleanup_only_on_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("OUT", str(tmp_path / "out"))
+    ok = "```bash run\ntrue\n```\n\n```bash cleanup\necho cleaned > \"$OUT\"\n```\n"
+    make_tut(tmp_path, "ok", ok)
+    make_tut(tmp_path, "bad", ok.replace("true", "false"))
+    ts = {t.id: t for t in load_tutorials(tmp_path)}
+    assert runner.run(ts["bad"], keep_on_failure=True) != 0
+    assert not (tmp_path / "out").exists()            # failed: resources kept for diagnostics
+    assert runner.run(ts["ok"], keep_on_failure=True) == 0
+    assert (tmp_path / "out").exists()                # passed: cleaned up as usual
