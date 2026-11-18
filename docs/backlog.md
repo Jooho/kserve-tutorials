@@ -20,7 +20,7 @@ Status: ☐ open · ◐ in progress · ☑ done
 | A6 | ☐ | **Gateway address module**: read the address from Gateway / LLMInferenceService status (same code on kind+cloud-provider-kind, EKS, OpenShift); verify it is reachable; on macOS use cloud-provider-kind's localhost mapping; `port-forward` only as a last resort, announced by doctor | `gateway-url.sh` uses `docker inspect kind-worker` + NodePort: Linux-only |
 | A7 | ☐ | **`addons/<name>/vN/`** for optional components (Prometheus/Grafana first, for the monitoring tutorial), versioned and tested like envs | Some tutorials need extra components; installing them ad hoc breaks independence |
 | A8 | ☐ | **Report upstream to KServe**: (1) installer applies LLMInferenceServiceConfigs before the webhook answers (CI-001); (2) v0.18.0–v0.19.0 default scheduler image `llm-d-inference-scheduler:v0.7.1` no longer pullable (CI-004) | Our workarounds in `envs/kind-llmisvc/v1/setup.sh` should become unnecessary |
-| A9 | ☐ | Verify the scheduler image workaround (`llm-d-router-endpoint-picker:v0.9.0` under KServe v0.18 config) actually works; if not, find the right tag or override | CI-004 workaround is a hypothesis until CI passes |
+| A9 | ☑ | Verify the scheduler image workaround (`llm-d-router-endpoint-picker:v0.9.0` under KServe v0.18 config) actually works | Verified: `llmisvc-anatomy` passed 16/16 including a completion through the Gateway ([run](https://github.com/Jooho/kserve-tutorials/actions/runs/44412518216)) |
 
 ## B. "Works in CI, fails on my machine"
 
@@ -48,7 +48,7 @@ Status: ☐ open · ◐ in progress · ☑ done
 
 | # | Status | Item | Why / evidence |
 |---|---|---|---|
-| D1 | ◐ | Get PR #1 green, squash, run the final test | In progress |
+| D1 | ◐ | Get PR #1 green, squash, run the final test | Green on [run 44412518216](https://github.com/Jooho/kserve-tutorials/actions/runs/44412518216) after 4 attempts (CI-001…004); squash + final test pending |
 | D2 | ☐ | After the first green run: `llmisvc-anatomy` → `stable`, freeze `envs/kind-llmisvc/v1` and `lib/llmisvc/v1` | T007/L004 |
 | D3 | ☐ | **Ready for the kserve organization**: Apache-2.0 LICENSE, DCO sign-off rule + check, no hard-coded `Jooho` URLs (derive from `github.repository`), CODEOWNERS, pinned public images only | Possible move under `kserve/` later |
 | D4 | ☐ | Bump GitHub Actions versions (Node 20 deprecation warnings on checkout, setup-python, upload-artifact, deploy-pages) | CI annotations |
