@@ -7,8 +7,8 @@ these exact steps, so compare against it when in doubt.
 
 ## 0. Before you start
 
-- Read [RFC 0001](rfc/0001-repository-structure.md) §4.6–4.8 (profiles,
-  independence, executable documents).
+- Read [docs/authoring.md](authoring.md) — the rules, including the ones
+  learned from CI.
 - Make sure `./tut lint` passes on `main`.
 - Pick the tutorial's id: lowercase, hyphenated, descriptive, without numbers
   (`llmisvc-request-flow`, not `02-request-flow`). Order is expressed with

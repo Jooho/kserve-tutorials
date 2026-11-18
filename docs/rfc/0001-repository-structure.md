@@ -366,8 +366,12 @@ the UI is built on the existing `tut` parser instead.
 
 AI works on top of the rules, never instead of them:
 
-- `CLAUDE.md` gives coding agents the rules and commands, so a local agent
-  migrating or writing tutorials follows the same contract as a person.
+- `AGENTS.md` (imported by `CLAUDE.md`) is the entry point for every coding
+  agent: commands, hard rules, and which document to read for which task
+  (`docs/authoring.md`, `docs/ci-playbook.md`, `docs/migration-guide.md`).
+- Knowledge accumulates in the repository, not in a session: whoever fixes a
+  failure adds a lesson to `docs/authoring.md § Rules learned from CI`, and
+  promotes it to a lint rule with a test when it can be checked mechanically.
 - A canary issue is a precise task: tutorial, KServe version, failing block and
   log. An agent can propose a fix PR; that PR passes lint and executes the
   tutorial like any other.
