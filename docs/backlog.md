@@ -56,3 +56,7 @@ Status: ☐ open · ◐ in progress · ☑ done
 | D6 | ☐ | Record verification results (last passed per tutorial × version) and show them on the site and in the UI | RFC open question 3 |
 | D7 | ☐ | GPU tutorials: lint-only in CI plus a recorded manual verification, or a self-hosted GPU runner | RFC open question 4 |
 | D8 | ☐ | Group CI jobs by env+version if the weekly matrix gets slow | RFC open question 5 |
+| D9 | ◐ | Release process: `main` → `stable` fast-forward after the full matrix passes, `YYYY.MM.N` tags, Makefile (docs/release.md) | Readers should only see verified states |
+| D10 | ☐ | Protect the `stable` branch (block force push/deletion, only GitHub Actions may push) — repository setting, needs a maintainer | docs/release.md § Repository settings |
+| D11 | ☐ | Rename the tutorial status `stable` (e.g. `ready`) so it is not confused with the `stable` branch | Same word, two meanings |
+| D12 | ☐ | Optionally start a dry-run release automatically when the weekly run is fully green | Less manual work once the release flow is trusted |

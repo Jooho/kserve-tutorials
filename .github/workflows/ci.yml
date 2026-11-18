@@ -29,11 +29,11 @@ jobs:
             echo "ref=HEAD~1" >> "$GITHUB_OUTPUT"
           fi
       - name: Rule tests
-        run: PYTHONPATH=tools python -m pytest -q tools/tests
+        run: make test
       - name: Lint
-        run: ./tut lint --base "${{ steps.base.outputs.ref }}"
+        run: make lint BASE="${{ steps.base.outputs.ref }}"
       - name: Site builds
-        run: ./tut site && mkdocs build --strict
+        run: make site
       - name: Plan affected tutorials
         id: plan
         run: |

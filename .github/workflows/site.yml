@@ -1,7 +1,13 @@
+# The site shows what readers should use: the `stable` branch.
+# Pushes made by the release workflow (GITHUB_TOKEN) do not trigger other
+# workflows, so release.yml calls this workflow directly.
 name: site
 on:
-  push: {branches: [main]}
+  push: {branches: [stable]}
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref: {type: string, default: stable}
 
 permissions: {contents: read, pages: write, id-token: write}
 concurrency: {group: pages, cancel-in-progress: true}
@@ -12,10 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref || 'stable' }}"}
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip, cache-dependency-path: tools/requirements.txt}
       - run: pip install -r tools/requirements.txt
-      - run: ./tut site && mkdocs build --strict
+      - run: make site
       - uses: actions/upload-pages-artifact@v3
         with: {path: build/site}
   deploy:

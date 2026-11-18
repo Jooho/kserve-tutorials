@@ -306,7 +306,8 @@ reviewed, tested change too.
 |---|---|---|
 | `ci.yml` | pull request, push to main | lint (`--base`), rule tests, site build; then **executes only affected tutorials** with their `kserve.default` |
 | `scheduled.yml` | weekly + manual | **Full matrix:** every runnable tutorial × every `kserve.tested` version. **Canary:** the latest KServe release against every stable/deprecated tutorial that does not list it yet. Failures open or update one issue per tutorial. |
-| `site.yml` | push to main | Builds and publishes the site to GitHub Pages |
+| `release.yml` | manual (`make release`) | Full matrix at one commit of `main`; if everything passes, fast-forwards `stable`, tags `YYYY.MM.N`, publishes the site |
+| `site.yml` | push to `stable`, called by `release.yml` | Builds and publishes the site to GitHub Pages |
 
 The canary answers "when do I need to update?" before readers notice: when
 KServe ships a release, each tutorial either passes (add the version to
@@ -362,7 +363,17 @@ must pass, no per-tutorial KServe version or environment, and its browser mode
 is a full VS Code (code-server). Those are the parts this project needs, so
 the UI is built on the existing `tut` parser instead.
 
-### 4.14 AI-assisted maintenance
+### 4.14 Release channel
+
+Two branches: `main` for development and `stable` for readers. A release
+promotes a commit of `main` to `stable` (fast-forward only) after the full
+matrix — every runnable tutorial × every tested KServe version — passes at
+that commit, and tags it `YYYY.MM.N`. The site is published from `stable`.
+Because `stable` is always an earlier commit of `main`, there are no
+back-ports, unlike the per-KServe-version branches rejected in §4.4.
+Details: docs/release.md.
+
+### 4.15 AI-assisted maintenance
 
 AI works on top of the rules, never instead of them:
 
