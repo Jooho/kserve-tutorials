@@ -51,8 +51,8 @@ import jsonschema
 import yaml
 
 from . import generate, markdown
-from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, EnvProfile, Tutorial, load_envs,
-                    load_modules, load_schema, load_tutorials, readme_name)
+from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
+                    load_modules, load_schema, load_tutorials)
 
 TRANSLATION_RE = re.compile(r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)\s*-->")
 HARDCODED_VERSION_RE = re.compile(r"kserve[^\n]{0,60}?\bv\d+\.\d+(\.\d+)?\b", re.I)

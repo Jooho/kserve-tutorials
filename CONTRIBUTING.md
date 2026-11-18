@@ -57,6 +57,19 @@ The list with codes is in [`tools/tut/lint.py`](tools/tut/lint.py) and RFC
 - Pinned container images.
 - Frozen env profiles are never modified; create the next version.
 
+### Shared scripts (modules)
+
+Scripts used by more than one tutorial live in `lib/<name>/v<N>/` with a
+`module.yaml`. List the module in `tutorial.yaml` (`uses: [llmisvc/v1]`) and
+call `"$TUT_LIB/llmisvc/v1/<script>"`. Lint fails on undeclared calls. Once a
+module is `frozen: true` it never changes: copy it to `v<N+1>`, change the
+copy, and move tutorials over one PR at a time.
+
+### Trying it in the UI
+
+`./tut ui` runs your tutorial step by step in a real shell, exactly as CI
+will (same parser, same verify semantics).
+
 ### Lifecycle
 
 `draft` → `stable` → `deprecated` → `archived`. Archiving a tutorial is a

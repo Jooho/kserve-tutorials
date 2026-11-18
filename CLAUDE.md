@@ -13,6 +13,7 @@ changes. These rules are not optional: CI enforces them.
 ./tut run <id> --dry-run    # the exact script CI will execute
 ./tut run <id>              # execute for real (Docker + kubectl + Kind)
 ./tut list
+./tut ui                    # local web UI: run tutorials step by step in a real shell
 ./tut translation mark <id> ko
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
@@ -22,25 +23,29 @@ Requires Python 3.11+, `pip install -r tools/requirements.txt`.
 ## Hard rules
 
 1. **A tutorial is self-contained.** Only touch `tutorials/<id>/` for a
-   tutorial change. Never reference files of another tutorial (copy them).
-   Never rely on state another tutorial created.
-2. **Frozen env profiles never change.** If `envs/<name>/vN/profile.yaml` has
+   tutorial change. Never reference files of another tutorial and never rely
+   on state another tutorial created.
+2. **Reuse scripts through modules.** A script two tutorials need goes into
+   `lib/<name>/vN/`, is listed in each tutorial's `uses`, and is called as
+   `"$TUT_LIB/<name>/vN/<script>"`. Never call an undeclared module. A frozen
+   module never changes: create `vN+1`.
+3. **Frozen env profiles never change.** If `envs/<name>/vN/profile.yaml` has
    `frozen: true`, create `vN+1` instead and move tutorials one by one.
-3. **README.md is the source.** Everything a reader runs is a role-tagged
+4. **README.md is the source.** Everything a reader runs is a role-tagged
    block (`bash run|verify|cleanup|skip`). Do not create separate scripts that
    duplicate README steps.
-4. **Never edit inside `<!-- tut:... -->` … `<!-- /tut -->`.** Change the source
+5. **Never edit inside `<!-- tut:... -->` … `<!-- /tut -->`.** Change the source
    (`tutorial.yaml`, the included file) and run `./tut sync`.
-5. **No hard-coded KServe versions** in prose or commands. Use
+6. **No hard-coded KServe versions** in prose or commands. Use
    `$KSERVE_VERSION`; versions live in `tutorial.yaml`.
-6. **Add a `verify` for every claim** the text makes that can be checked.
-7. **Pin images.** No `latest`.
-8. **Translations follow `README.md`**: same shell blocks in the same order;
+7. **Add a `verify` for every claim** the text makes that can be checked.
+8. **Pin images.** No `latest`.
+9. **Translations follow `README.md`**: same shell blocks in the same order;
    run `./tut translation mark` only after the translation is actually
    updated.
-9. **Do not weaken a rule to make lint pass.** Rule changes go in
+10. **Do not weaken a rule to make lint pass.** Rule changes go in
    `tools/tut/lint.py` with tests in `tools/tests/` and need explicit approval.
-10. **Do not set `status: stable`** unless `./tut run <id>` or CI has passed
+11. **Do not set `status: stable`** unless `./tut run <id>` or CI has passed
     with that exact README.
 
 ## Migrating a tutorial from the old repository

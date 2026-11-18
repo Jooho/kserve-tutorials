@@ -66,6 +66,7 @@ Map the old patterns to the new ones:
 | "You should see X" with no check | Keep the sentence and add a `verify` block that checks X. |
 | `sleep 60` while waiting | `kubectl wait ...` or `verify retry=N delay=S`. |
 | Inline copy of a YAML/py/sh file | `<!-- tut:include manifests/<file> -->` + `<!-- /tut -->`. |
+| The same helper logic in several tutorials (URL lookup, waiting, request + check) | A script in a module under `lib/<name>/vN/`, listed in `uses`, called as `"$TUT_LIB/<name>/vN/<script>"`. Check existing modules first. |
 | Links to tutorials that do not exist yet | Remove the link (plain text), or lint fails (D004). |
 | Separate `scripts/1.prepare.sh`, `2.deploy.sh` that the README tells you to run | Prefer inlining the commands as `run` blocks so the README stays the source. Keep a script only if it is long and self-explanatory, and show it with `tut:include`. |
 
@@ -86,6 +87,7 @@ that returns a valid response.
 ./tut sync
 ./tut lint
 ./tut run <id> --dry-run | less    # read the script CI will execute
+./tut ui                            # step through it in the browser
 ```
 
 ## 6. Run it

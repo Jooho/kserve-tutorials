@@ -20,7 +20,21 @@ CI recently checked that it does.
 
 <!-- /tut -->
 
-## Using a tutorial
+## Running tutorials locally (recommended)
+
+```bash skip
+git clone https://github.com/Jooho/kserve-tutorials.git && cd kserve-tutorials
+python3 -m pip install -r tools/requirements.txt
+./tut ui
+```
+
+A browser opens with every tutorial. Pick a KServe version and a tutorial,
+then press ▶ on each step (or ▶ Run all): the commands run in a terminal on
+your machine, shown in the page, and every check turns green or red. No
+copy and paste. You need what the tutorial's environment needs (for most:
+Docker, kubectl, Go).
+
+## Reading a tutorial without the UI
 
 1. Pick a tutorial for your KServe version (table above, or the site's
    "By KServe version" page).

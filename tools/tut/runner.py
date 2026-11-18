@@ -46,7 +46,7 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool) -> tuple[s
         out.append("__tut_cleanup() {")
         out.append("  set +e")
         out.append("  trap - ERR")
-        out.append(f"  echo '::group::cleanup'")
+        out.append("  echo '::group::cleanup'")
         for b in cleanups:
             out.append(f"  # --- {readme}:{b.line} (cleanup)")
             out.append("  (")

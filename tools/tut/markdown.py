@@ -39,6 +39,7 @@ class Block:
     line: int                 # 1-based line of the opening fence
     in_region: str | None     # kind of generated region the block sits in
     raw_info: str = ""
+    end: int = 0              # 1-based line of the closing fence
 
     @property
     def is_shell(self) -> bool:
@@ -120,7 +121,7 @@ def parse(text: str) -> Doc:
             indent = len(m.group("indent"))
             code = "\n".join(l[indent:] if l[:indent].isspace() else l for l in body)
             blk = Block(lang, role, attrs, code, start + 1, region[0] if region else None,
-                        raw_info=m.group("info").strip())
+                        raw_info=m.group("info").strip(), end=i + 1)
             if unknown:
                 doc.errors.append((start + 1, f"unknown fence tokens {unknown!r}"))
             doc.blocks.append(blk)

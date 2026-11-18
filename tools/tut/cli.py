@@ -69,6 +69,14 @@ def cmd_site(a):
     print(f"site source written to {out}")
 
 
+def cmd_ui(a):
+    try:
+        from .ui.server import serve
+    except ImportError as e:
+        sys.exit(f"{e}. Install the UI dependencies: pip install -r tools/requirements.txt")
+    serve(port=a.port, open_browser=not a.no_browser)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="tut", description="KServe tutorials toolkit")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -114,6 +122,11 @@ def main(argv=None):
     s = sub.add_parser("site", help="assemble the MkDocs source tree")
     s.add_argument("--out", default=str(REPO_ROOT / "build" / "site-src"))
     s.set_defaults(fn=cmd_site)
+
+    s = sub.add_parser("ui", help="local web UI: read and run tutorials in a real shell")
+    s.add_argument("--port", type=int, default=8080)
+    s.add_argument("--no-browser", action="store_true", help="do not open a browser")
+    s.set_defaults(fn=cmd_ui)
 
     a = p.parse_args(argv)
     return a.fn(a) or 0
