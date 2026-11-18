@@ -97,7 +97,31 @@ cd "$KSERVE_SRC"
 log "creating kind cluster '$KIND_CLUSTER_NAME' with local registry"
 KIND_CLUSTER_NAME="$KIND_CLUSTER_NAME" ./hack/setup/dev/manage.kind-with-registry.sh
 log "installing KServe $KSERVE_VERSION (llmisvc)"
-./hack/kserve-install.sh --type llmisvc --kserve-version "$KSERVE_VERSION"
+# KServe's installer waits for the controller Deployment to be Available and
+# then applies the LLMInferenceServiceConfigs right away. On a fresh cluster the
+# validating webhook may not accept connections yet ("connection refused"), and
+# a plain re-run skips the step ("already installed"). So: wait until the
+# webhook Service has a ready endpoint, then retry with FORCE_UPGRADE=true.
+webhook_ready() {
+  for _ in $(seq 1 60); do
+    ip=$(kubectl -n kserve get endpoints llmisvc-webhook-server-service \
+      -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
+    [[ -n "$ip" ]] && return 0
+    sleep 5
+  done
+  return 1
+}
+for attempt in 1 2 3; do
+  if [[ $attempt -eq 1 ]]; then
+    ./hack/kserve-install.sh --type llmisvc --kserve-version "$KSERVE_VERSION" && break
+  else
+    FORCE_UPGRADE=true ./hack/kserve-install.sh --type llmisvc --kserve-version "$KSERVE_VERSION" && break
+  fi
+  [[ $attempt -eq 3 ]] && { log "KServe install failed after 3 attempts"; exit 1; }
+  log "install attempt $attempt failed; waiting for the llmisvc webhook, then retrying"
+  webhook_ready || log "webhook endpoint still not ready, retrying anyway"
+  sleep 10
+done
 
 # 4. Readiness gate: the profile is only "done" when the controller is serving.
 kubectl wait --for=condition=Established crd/llminferenceservices.serving.kserve.io --timeout=120s
