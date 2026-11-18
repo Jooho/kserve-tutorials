@@ -1,7 +1,8 @@
 # Migration guide: moving an existing tutorial into this repository
 
 One tutorial per pull request. `tutorials/llmisvc-anatomy` is the reference
-result: it was migrated from `llmisvc/01-anatomy` in the old repository with
+result: it was migrated from `llmisvc/01-anatomy` in the old repository
+([`Jooho/kserve-tutorials-legacy`](https://github.com/Jooho/kserve-tutorials-legacy)) with
 these exact steps, so compare against it when in doubt.
 
 ## 0. Before you start

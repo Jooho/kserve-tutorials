@@ -18,7 +18,7 @@ tutorial, keeps documents, code and versions from drifting apart.
 
 ## 2. Motivation
 
-The first repository (`Jooho/kserve-tutorials`) showed the problems this design
+The first repository (now [`Jooho/kserve-tutorials-legacy`](https://github.com/Jooho/kserve-tutorials-legacy)) showed the problems this design
 targets. Each one was found by reading the files, not by any check:
 
 | Problem | Example |
@@ -333,8 +333,10 @@ AI works on top of the rules, never instead of them:
 
 1. **License.** Suggest Apache-2.0 for code (matches KServe) and CC BY 4.0 for
    prose. Needs a decision before the repository is promoted.
-2. **Repository.** New repository vs. replacing the content of
-   `Jooho/kserve-tutorials` on a new default branch (keeps stars and links).
+2. ~~**Repository.**~~ **Decided:** the old repository was renamed to
+   `Jooho/kserve-tutorials-legacy` and this repository starts fresh under the
+   original name, which also suits a later move under the `kserve`
+   organization (GitHub keeps redirects on transfer).
 3. **Recording verification.** The weekly run knows when each tutorial last
    passed per version. Publish as a JSON file on the site, or open a bot PR
    that updates a `verified` field? The JSON approach avoids commit noise.
@@ -362,5 +364,5 @@ AI works on top of the rules, never instead of them:
    needed (a profile is not frozen until a stable tutorial passes on it).
 3. **Migration** of the remaining tutorials, one PR each, following
    `docs/migration-guide.md` (done locally with Claude Code).
-4. **Publish**: license, Pages, links from the old repository.
+4. **Publish**: license, Pages, a pointer from `kserve-tutorials-legacy` to this repository.
 5. **Canary** enabled; first KServe release handled through the issue flow.

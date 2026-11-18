@@ -45,6 +45,9 @@ Requires Python 3.11+, `pip install -r tools/requirements.txt`.
 
 ## Migrating a tutorial from the old repository
 
+The old tutorials live in `Jooho/kserve-tutorials-legacy` (read only; never
+push there).
+
 Follow `docs/migration-guide.md` step by step, one tutorial per branch / PR.
 `tutorials/llmisvc-anatomy` is the reference result. Report anything that does
 not fit the rules instead of working around it.
