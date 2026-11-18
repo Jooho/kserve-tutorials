@@ -13,6 +13,7 @@ you must read, not in anyone's memory. CI enforces them.
 | A CI run, scheduled run or canary failed | [docs/ci-playbook.md](docs/ci-playbook.md) |
 | Change `envs/`, `lib/` (shared parts) | docs/authoring.md § Shared parts, then RFC §4.6 |
 | Change `tools/`, `schema/`, rules or workflows | [docs/rfc/0001-repository-structure.md](docs/rfc/0001-repository-structure.md) |
+| Plan or pick up structural work | [docs/backlog.md](docs/backlog.md) — known problems with evidence; update an item's status when you finish it |
 
 If the document and the code disagree, stop and report it; do not guess.
 
@@ -52,6 +53,9 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 9. **Never push to `Jooho/kserve-tutorials-legacy`** (read only).
 
 ## Leave the repository smarter than you found it
+
+When you find a problem you cannot fix in the current task, add it to
+docs/backlog.md with the evidence instead of leaving it in a chat.
 
 When you fix a failure that a rule could have prevented:
 
