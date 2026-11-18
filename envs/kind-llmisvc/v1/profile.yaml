@@ -1,0 +1,14 @@
+id: kind-llmisvc/v1
+description: >
+  Kind cluster (control-plane + worker) with a local registry, KServe
+  LLMInferenceService and its gateway stack, installed with KServe's own
+  hack scripts checked out at the requested KServe tag. CPU only.
+frozen: false          # -> true once a stable tutorial has passed on it
+kserve:
+  min: v0.17.1          # first tag that ships hack/kserve-install.sh --type llmisvc
+requires: [docker, kubectl, git, go]
+inputs:
+  KSERVE_VERSION: KServe tag to install (required, set by the tutorial's setup block)
+  KIND_CLUSTER_NAME: "Kind cluster name (default: kind)"
+  TUT_CACHE: "Where KServe sources are cached (default: ~/.cache/kserve-tutorials)"
+  TUT_ENV_RECREATE: "Set to 1 to delete and recreate a cluster built by another profile"

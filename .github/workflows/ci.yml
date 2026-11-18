@@ -1,0 +1,50 @@
+name: ci
+on:
+  pull_request:
+  push: {branches: [main]}
+
+permissions: {contents: read}
+concurrency: {group: "ci-${{ github.ref }}", cancel-in-progress: true}
+env: {NO_MKDOCS_2_WARNING: "1"}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip, cache-dependency-path: tools/requirements.txt}
+      - run: pip install -r tools/requirements.txt
+      - name: Base ref
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            echo "ref=origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+          elif git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
+            echo "ref=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=HEAD~1" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Rule tests
+        run: PYTHONPATH=tools python -m pytest -q tools/tests
+      - name: Lint
+        run: ./tut lint --base "${{ steps.base.outputs.ref }}"
+      - name: Site builds
+        run: ./tut site && mkdocs build --strict
+      - name: Plan affected tutorials
+        id: plan
+        run: |
+          m=$(./tut affected --base "${{ steps.base.outputs.ref }}" --json)
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "Affected: $m" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    needs: check
+    if: needs.check.outputs.matrix != '[]'
+    uses: ./.github/workflows/run-tutorials.yml
+    with:
+      matrix: ${{ needs.check.outputs.matrix }}
+      label: pr

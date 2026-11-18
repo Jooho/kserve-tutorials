@@ -1,0 +1,57 @@
+# Weekly: every tutorial x every tested KServe version, plus a canary run of
+# stable tutorials against the latest KServe release. Failures become issues.
+name: scheduled
+on:
+  schedule: [{cron: "17 4 * * 1"}]   # Mondays 04:17 UTC
+  workflow_dispatch:
+    inputs:
+      canary_version: {description: "KServe version for the canary (default: latest release)", required: false}
+
+permissions: {contents: read}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.p.outputs.full }}
+      canary: ${{ steps.p.outputs.canary }}
+      canary_version: ${{ steps.p.outputs.canary_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r tools/requirements.txt
+      - id: p
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          v="${{ inputs.canary_version }}"
+          [ -n "$v" ] || v=$(gh api repos/kserve/kserve/releases/latest --jq .tag_name)
+          echo "canary_version=$v" >> "$GITHUB_OUTPUT"
+          echo "full=$(./tut matrix --scheduled --json)" >> "$GITHUB_OUTPUT"
+          echo "canary=$(./tut matrix --canary "$v" --json)" >> "$GITHUB_OUTPUT"
+          echo "Canary version: $v" >> "$GITHUB_STEP_SUMMARY"
+
+  full:
+    needs: plan
+    if: needs.plan.outputs.full != '[]'
+    uses: ./.github/workflows/run-tutorials.yml
+    with: {matrix: "${{ needs.plan.outputs.full }}", label: scheduled}
+
+  canary:
+    needs: plan
+    if: needs.plan.outputs.canary != '[]'
+    uses: ./.github/workflows/run-tutorials.yml
+    with: {matrix: "${{ needs.plan.outputs.canary }}", label: canary}
+
+  report:
+    needs: [plan, full, canary]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {contents: read, issues: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: "report-*", path: reports}
+      - name: Summarize and file issues
+        env: {GH_TOKEN: "${{ github.token }}", RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}
+        run: python3 .github/scripts/report.py reports

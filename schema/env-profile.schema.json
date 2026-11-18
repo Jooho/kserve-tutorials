@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "envs/<name>/<version>/profile.yaml",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "description", "frozen", "kserve", "requires"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9-]+/v[0-9]+$"},
+    "description": {"type": "string", "minLength": 1},
+    "frozen": {
+      "description": "Once true the profile must never change; create the next version instead.",
+      "type": "boolean"
+    },
+    "kserve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min"],
+      "properties": {
+        "min": {"$ref": "#/$defs/version"},
+        "max": {"$ref": "#/$defs/version"}
+      }
+    },
+    "requires": {
+      "description": "Host tools the setup script expects.",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "inputs": {
+      "description": "Environment variables the setup script reads.",
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "supersedes": {"type": "string", "pattern": "^[a-z0-9-]+/v[0-9]+$"}
+  },
+  "$defs": {
+    "version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"}
+  }
+}

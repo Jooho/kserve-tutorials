@@ -1,0 +1,5 @@
+pyyaml==6.0.2
+jsonschema==4.23.0
+pytest==8.3.3
+mkdocs-material==9.5.44
+mkdocs-static-i18n==1.2.3
