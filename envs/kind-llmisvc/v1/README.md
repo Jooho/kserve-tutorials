@@ -41,6 +41,13 @@ script stops instead of changing it; set `TUT_ENV_RECREATE=1` to replace it.
 "$(git rev-parse --show-toplevel)/envs/kind-llmisvc/v1/teardown.sh"
 ```
 
+## Known issues and workarounds
+
+| Issue | Affects | Workaround in `setup.sh` |
+|---|---|---|
+| `ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1` is no longer publicly pullable (403); the scheduler Pod stays in `ImagePullBackOff` | KServe v0.18.0 – v0.19.0 default config, on any cluster | the well-known `kserve-config-llm-scheduler` is pointed at the renamed `ghcr.io/llm-d/llm-d-router-endpoint-picker` (override with `TUT_SCHEDULER_IMAGE`). If you use your own cluster, apply the same change. |
+| The installer applies LLMInferenceServiceConfigs before the webhook answers | fresh clusters | the install is retried with `FORCE_UPGRADE=true` |
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -126,6 +133,20 @@ for attempt in 1 2 3; do
   webhook_ready || log "webhook endpoint still not ready, retrying anyway"
   sleep 10
 done
+
+# Known upstream issue (KServe v0.18.0 - v0.19.0): the well-known scheduler
+# config points to ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1, which is no
+# longer publicly pullable (ghcr.io answers 403). llm-d renamed the image to
+# llm-d-router-endpoint-picker (first tag v0.9.0; KServe master uses v1.0.0).
+# Point the config at the renamed image so LLMInferenceServices can start.
+SCHEDULER_IMAGE="${TUT_SCHEDULER_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0}"
+if kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler -o yaml 2>/dev/null \
+    | grep -q "llm-d-inference-scheduler:v0.7.1"; then
+  log "patching kserve-config-llm-scheduler: llm-d-inference-scheduler:v0.7.1 -> $SCHEDULER_IMAGE"
+  kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler -o json \
+    | sed "s#ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1#${SCHEDULER_IMAGE}#g" \
+    | kubectl replace -f -
+fi
 
 # 4. Readiness gate: the profile is only "done" when the controller is serving.
 kubectl wait --for=condition=Established crd/llminferenceservices.serving.kserve.io --timeout=120s

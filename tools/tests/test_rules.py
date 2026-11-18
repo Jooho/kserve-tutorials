@@ -249,7 +249,7 @@ def test_runner_reports_failing_block_and_always_cleans_up(tmp_path, monkeypatch
     rc = runner.run(t, report=report)
     res = json.loads(report.read_text())
     assert rc != 0 and res["status"] == "failed"
-    assert res["failed_at"].startswith("tutorials/t/README.md:13 (verify 4/4)")
+    assert res["failed_at"].startswith("tutorials/t/README.md:13 (step 4/4 · verify)")
     assert (tmp_path / "out").read_text().strip() == "cleaned"   # cleanup ran after failure
     assert (tmp_path / "mark").exists()                         # retry block retried and passed
 

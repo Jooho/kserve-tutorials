@@ -115,3 +115,17 @@ can be checked mechanically.
   (pods, events, logs) before tearing down. When you add a new kind of
   resource, make sure `.github/scripts/diagnose.sh` would show it.
 - **Evidence:** same run as CI-002.
+
+### CI-004 Upstream images disappear
+- **What happened:** the LLMInferenceService never became Ready because the
+  EPP scheduler image from KServe's own default config,
+  `ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1`, stopped being publicly
+  pullable (ghcr.io 403 on the anonymous token). llm-d renamed it to
+  `llm-d-router-endpoint-picker`. Every KServe release up to v0.19.0 was
+  affected for every user, not only CI.
+- **Rule:** a published release can break without any change on our side;
+  that is what the weekly run is for. Work around platform breakage in the
+  environment profile (documented as a known issue with the upstream fix to
+  watch), never in individual tutorials. Diagnostics must show image pull
+  errors (they did: `ImagePullBackOff` + the 403 in events).
+- **Evidence:** [PR #1, third e2e run](https://github.com/Jooho/kserve-tutorials/actions/runs/44406969077).

@@ -8,11 +8,11 @@ root cause, fix it in the right place, and leave a lesson behind.
 The job log names the exact block:
 
 ```text
-✗ FAILED in tutorials/<id>/README.md:<line> (<role> <n>/<total>)
+✗ FAILED in tutorials/<id>/README.md:<line> (step <n>/<total> · <role>)
 ```
 
 `<total>` counts `run` + `verify` blocks; `cleanup` and `skip` are not
-numbered. The JSON report (`report.json` artifact) has the same `failed_at`.
+numbered (cleanup runs last, after the numbered steps). The JSON report (`report.json` artifact) has the same `failed_at`.
 
 ## 2. Decide whose problem it is
 

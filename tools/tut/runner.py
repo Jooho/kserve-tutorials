@@ -62,7 +62,7 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
         out.append("trap __tut_cleanup EXIT")
     steps = [b for b in blocks if b.role in ("run", "verify")]
     for n, b in enumerate(steps, 1):
-        label = f"{readme}:{b.line} ({b.role} {n}/{len(steps)})"
+        label = f"{readme}:{b.line} (step {n}/{len(steps)} · {b.role})"
         out.append("")
         out.append(f"TUT_BLOCK={shlex.quote(label)}")
         out.append(f"echo {shlex.quote('::group::' + label)}")
