@@ -361,6 +361,8 @@ start-up) that:
 - expands module scripts under the block that calls them;
 - resumes where the reader left off (⏵ Continue, ⏭ To here start at the first
   step that has not passed in this shell) instead of re-running setup;
+- lets the reader arrange it: full-width document, terminal at the bottom or
+  on the right, collapsible tutorial list, text size (remembered per browser);
 - offers Tab completion for kubectl/helm/kind and the aliases `k`, `kc <ns>`
   in its terminal only (never in tutorials, D013).
 

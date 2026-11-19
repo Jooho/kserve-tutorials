@@ -9,7 +9,14 @@
 </head>
 <body>
   <header class="topbar">
+    <button class="icon-btn" id="toggle-sidebar" title="Show / hide the tutorial list" aria-label="Toggle tutorial list">☰</button>
     <div class="brand">KServe Tutorials <span class="muted">local runner</span></div>
+    <div class="seg" id="fontsize" title="Text size (document and terminal)">
+      <button data-d="-1" aria-label="Smaller text">A−</button><span id="fs-val"></span><button data-d="1" aria-label="Larger text">A+</button>
+    </div>
+    <div class="seg" id="termpos" title="Terminal position">
+      <button data-pos="bottom" aria-label="Terminal at the bottom">⬓ Bottom</button><button data-pos="right" aria-label="Terminal on the right">◨ Right</button>
+    </div>
     <label class="field">KServe
       <select id="version"></select>
     </label>

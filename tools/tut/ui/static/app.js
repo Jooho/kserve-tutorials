@@ -303,17 +303,56 @@ function startShell() {
   loadEnv();
 }
 
-// ------------------------------------------------------------- splitter
-(() => {
+// ------------------------------------------------------------- layout & text size
+// Remembered per browser (localStorage); the page works without it.
+const VIEW = {
+  fs: +store.get("tut.fs", 14), pos: store.get("tut.termpos", "bottom"),
+  sidebar: store.get("tut.sidebar", "shown"),
+  termH: store.get("tut.termH", ""), termW: store.get("tut.termW", ""),
+};
+function applyView() {
+  const main = $(".main");
+  document.documentElement.style.setProperty("--fs", VIEW.fs + "px");
+  $("#fs-val").textContent = VIEW.fs + "px";
+  term.options.fontSize = Math.max(10, VIEW.fs - 1);
+  document.body.classList.toggle("term-right", VIEW.pos === "right");
+  document.body.classList.toggle("sidebar-hidden", VIEW.sidebar === "hidden");
+  document.querySelectorAll("#termpos button").forEach((b) => b.classList.toggle("on", b.dataset.pos === VIEW.pos));
+  if (VIEW.termH) main.style.setProperty("--term-h", VIEW.termH);
+  if (VIEW.termW) main.style.setProperty("--term-w", VIEW.termW);
+  requestAnimationFrame(refit);
+}
+$("#fontsize").addEventListener("click", (e) => {
+  const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
+  VIEW.fs = Math.min(24, Math.max(11, VIEW.fs + d)); store.set("tut.fs", VIEW.fs); applyView();
+});
+$("#termpos").addEventListener("click", (e) => {
+  const pos = e.target.closest("button")?.dataset.pos; if (!pos) return;
+  VIEW.pos = pos; store.set("tut.termpos", pos); applyView();
+});
+$("#toggle-sidebar").onclick = () => {
+  VIEW.sidebar = VIEW.sidebar === "hidden" ? "shown" : "hidden"; store.set("tut.sidebar", VIEW.sidebar); applyView();
+};
+(() => {   // splitter: drag to resize the terminal (height at the bottom, width on the right)
   const main = $(".main"); let drag = false;
   $("#splitter").addEventListener("mousedown", () => { drag = true; document.body.style.userSelect = "none"; });
-  addEventListener("mouseup", () => { drag = false; document.body.style.userSelect = ""; });
+  addEventListener("mouseup", () => {
+    if (!drag) return;
+    drag = false; document.body.style.userSelect = "";
+    store.set("tut.termH", VIEW.termH); store.set("tut.termW", VIEW.termW);
+  });
   addEventListener("mousemove", (e) => {
     if (!drag) return;
     const r = main.getBoundingClientRect();
-    const h = Math.min(Math.max(r.bottom - e.clientY, 120), r.height - 160);
-    main.style.setProperty("--term-h", h + "px");
+    if (VIEW.pos === "right") {
+      VIEW.termW = Math.min(Math.max(r.right - e.clientX, 260), r.width - 320) + "px";
+      main.style.setProperty("--term-w", VIEW.termW);
+    } else {
+      VIEW.termH = Math.min(Math.max(r.bottom - e.clientY, 120), r.height - 160) + "px";
+      main.style.setProperty("--term-h", VIEW.termH);
+    }
   });
 })();
+applyView();
 
 loadList();

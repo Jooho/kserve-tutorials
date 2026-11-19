@@ -56,8 +56,13 @@ RC_TEMPLATE = r"""
 PS1='\[\e[36m\]tut:{tid}\[\e[0m\] \[\e[2m\]\W\[\e[0m\] $ '
 . {shellrc}
 cd {repo}
+TUT_UI_DIR={tmpdir}
+# Called as ` __tut_run <idx>`: a short line that cannot wrap, so the erase
+# below removes it completely. The block's settings are in block-<idx>.args.
 __tut_run() {{
-  local idx=$1 role=$2 file=$3 retry=${{4:-1}} delay=${{5:-10}} label=$6 rc=0 try
+  local idx=$1 role=run retry=1 delay=10 label="" rc=0 try
+  local file="$TUT_UI_DIR/block-$idx.sh"
+  . "$TUT_UI_DIR/block-$idx.args"
   printf '\e[1A\e[2K'
   printf '\e[2m── %s ──\e[0m\n' "$label"
   printf '\e]777;tut;start;%s\a' "$idx"
@@ -79,10 +84,11 @@ __tut_run() {{
   done
   printf '\e]777;tut;end;%s;%s\a' "$idx" "$rc"
 }}
-# Last in PROMPT_COMMAND: tells the UI that bash is at a prompt and reading
-# input, so the next block is not typed ahead (typed-ahead text gets echoed).
-__tut_ready() {{ printf '\e]777;tut;ready;0\a'; }}
-PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}__tut_ready"
+# The prompt ends with an invisible "ready" marker. Readline draws PS1 only
+# after it has taken over the terminal, so once the UI sees the marker, text it
+# types is read by readline instead of being echoed by the tty (PROMPT_COMMAND
+# would be too early: it runs before readline starts).
+PS1="$PS1\[\e]777;tut;ready;0\a\]"
 """
 
 
@@ -110,7 +116,8 @@ class ShellSession:
     def start(self):
         rc = self.tmp / "rc.sh"
         rc.write_text(RC_TEMPLATE.format(tid=self.tid, repo=shlex.quote(str(self.repo)),
-                                         shellrc=shlex.quote(str(SHELLRC))))
+                                         shellrc=shlex.quote(str(SHELLRC)),
+                                         tmpdir=shlex.quote(str(self.tmp))))
         env = {k: v for k, v in os.environ.items() if not k.startswith("TUT_")}
         env.update(TERM="xterm-256color", TUT_UI="1", HISTCONTROL="ignorespace")
         if self.kserve_version:
@@ -230,8 +237,10 @@ class ShellSession:
         self.prompt_ready.clear()
         # Ctrl-U clears anything half-typed at the prompt; the leading space keeps
         # the call out of the shell history.
-        label = shlex.quote(label or f"{role} block {idx}")
-        self.write(f"\x15 __tut_run {idx} {role} {shlex.quote(str(f))} {retry} {delay} {label}\n")
+        (self.tmp / f"block-{idx}.args").write_text(
+            f"role={shlex.quote(role)} retry={retry} delay={delay} "
+            f"label={shlex.quote(label or f'{role} block {idx}')}\n")
+        self.write(f"\x15 __tut_run {idx}\n")
         return await fut
 
     def run_queue(self, blocks: list[dict], stop_on_fail: bool = True):
