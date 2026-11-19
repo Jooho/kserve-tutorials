@@ -294,6 +294,7 @@ async function openEditor() {
   edText.value = r.text;
   $("#editor-file").textContent = r.file;
   $("#editor").hidden = false; $("#docbody").classList.add("editing"); $("#edit").classList.add("on");
+  document.body.classList.add("authoring");          // show file:line, shared-step names, attrs
   edState("saved", "ok"); sizeEditor(); edText.focus();
 }
 
@@ -305,6 +306,7 @@ function closeEditor() {
   const anchor = [...document.querySelectorAll("#doc > *")].find((el) => el.getBoundingClientRect().bottom > top);
   ED.open = false;
   $("#editor").hidden = true; $("#docbody").classList.remove("editing"); $("#edit").classList.remove("on");
+  document.body.classList.remove("authoring");
   if (anchor) anchor.scrollIntoView({ block: "start" });
   refreshPreview();                                   // show the last saved text
   return true;
@@ -497,10 +499,10 @@ function renderBlock(b) {
   const label = { setup: "setup", run: "run", verify: "verify", cleanup: "cleanup", skip: "optional" }[role];
   el.innerHTML = `
     <div class="block-head">
-      <span class="badge">${label}</span>
-      ${b.shared ? `<span class="badge shared" title="shared step (tut:define / tut:use)">⇄ ${esc(b.shared)}</span>` : ""}
-      <span class="loc mono">${esc(S.doc.file)}:${b.line}</span>
-      ${attrs ? `<span class="attrs mono">${esc(attrs)}</span>` : ""}
+      <span class="badge" title="${esc(S.doc.file)}:${b.line}${attrs ? " · " + esc(attrs) : ""}">${label}</span>
+      ${b.shared ? `<span class="badge shared author" title="shared step (tut:define / tut:use)">⇄ ${esc(b.shared)}</span>` : ""}
+      <span class="loc mono author">${esc(S.doc.file)}:${b.line}</span>
+      ${attrs ? `<span class="attrs mono author">${esc(attrs)}</span>` : ""}
       <span class="head-actions">
         <span class="state"></span>
         ${RUNNABLE.has(b.role) ? `<button class="btn" data-act="to-here" title="Run the steps that have not passed yet, up to this one">⏭ To here</button>` : ""}
