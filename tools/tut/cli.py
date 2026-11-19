@@ -25,14 +25,73 @@ STATUS_ICON = {"draft": "🚧", "stable": "✅", "deprecated": "⚠️ ", "archi
 LANG_NAME = {"en": "English", "ko": "Korean"}
 
 
-def cmd_list(a):
+def _rows(a):
     from . import catalog
+    from .model import version_key
     ts = [t for t in load_tutorials(REPO_ROOT) if not t.errors]
+    cols = catalog.load_collections(REPO_ROOT)
     if a.status:
         ts = [t for t in ts if t.status == a.status]
     if a.tag:
         ts = [t for t in ts if a.tag in (t.meta.get("tags") or [])]
-    cols = catalog.load_collections(REPO_ROOT)
+    if getattr(a, "collection", None):
+        col = next((c for c in cols if c.id == a.collection), None)
+        if col is None:
+            sys.exit(f"unknown collection {a.collection!r}; collections: "
+                     f"{', '.join(c.id for c in cols) or '(none)'}")
+        order = {m: i for i, m in enumerate(col.members)}
+        ts = sorted((t for t in ts if t.id in order), key=lambda t: order[t.id])
+    elif a.sort == "status":
+        rank = {"stable": 0, "deprecated": 1, "draft": 2, "archived": 3}
+        ts.sort(key=lambda t: (rank.get(t.status, 9), t.id))
+    elif a.sort == "kserve":
+        ts.sort(key=lambda t: (max((version_key(v) for v in t.kserve_tested), default=(0,)), t.id),
+                reverse=True)
+    else:
+        ts.sort(key=lambda t: t.id)
+    return ts, cols
+
+
+def _show(t, cols):
+    """The detailed view of one tutorial (./tut show, ./tut list --long)."""
+    kv = ", ".join(f"{v} (default)" if v == t.kserve_default else v for v in t.kserve_tested)
+    parts = [f"env {t.env_ref}"] if t.env_ref else []
+    parts += [f"lib {u}" for u in t.uses]
+    langs = ["en (source)"] + [f"{l} {lint.TRANSLATION_STATES[lint.translation_state(t, l)]}"
+                               for l in LANG_NAME if l != "en"]
+    inc = [f"{c.id} (#{c.members.index(t.id) + 1})" for c in cols if t.id in c.members]
+    req = t.meta.get("requires") or {}
+    print(f"{t.id}  {STATUS_ICON.get(t.status, '')} {t.status}")
+    print(f"  {t.title()}")
+    if t.summary():
+        print(f"  {t.summary()}")
+    print(f"  KServe       {kv}")
+    if parts:
+        print(f"  uses         {'  ·  '.join(parts)}")
+    if req:
+        print(f"  needs        {'GPU, ' if req.get('gpu') else ''}{req.get('cpu', '?')} CPU, "
+              f"{req.get('memory', '?')} memory, ~{t.meta.get('timeout_minutes', 45)} min")
+    print(f"  languages    {'  ·  '.join(langs)}")
+    if inc:
+        print(f"  collections  {', '.join(inc)}")
+    if t.meta.get("tags"):
+        print(f"  tags         {' '.join('#' + x for x in t.meta['tags'])}")
+    if t.meta.get("owners"):
+        print(f"  owners       {', '.join('@' + o for o in t.meta['owners'])}")
+    dep = t.meta.get("deprecation") or {}
+    if dep:
+        print(f"  deprecation  {dep.get('reason', '')}"
+              + (f" → {dep['replacement']}" if dep.get("replacement") else ""))
+    print(f"  files        tutorials/{t.id}/README.md")
+
+
+def _fit(text: str, width: int) -> str:
+    return text if len(text) <= width else text[:max(1, width - 1)] + "…"
+
+
+def cmd_list(a):
+    import shutil
+    ts, cols = _rows(a)
     if a.json:
         print(json.dumps([{
             "id": t.id, "title": t.title(), "status": t.status, "kserve": t.meta.get("kserve"),
@@ -44,27 +103,42 @@ def cmd_list(a):
     if not ts:
         print("No tutorials match.")
         return
+    if a.long:
+        for t in ts:
+            _show(t, cols)
+            print()
+        return
+    # one line per tutorial; columns shrink to the terminal width (tags last)
+    lang_mark = {"current": "✓", "behind": "!", "unmarked": "?", "missing": "-"}
+    rows = []
     for t in ts:
-        kv = ", ".join(f"{v} (default)" if v == t.kserve_default else v for v in t.kserve_tested)
-        parts = [f"env {t.env_ref}"] if t.env_ref else []
-        parts += [f"lib {u}" for u in t.uses]
-        langs = ["en (source)"] + [
-            f"{l} {lint.translation_state(t, l).replace('current', 'up to date').replace('missing', 'not translated')}"
-            for l in LANG_NAME if l != "en"]
-        inc = [f"{c.id} (#{c.members.index(t.id) + 1})" for c in cols if t.id in c.members]
-        print(f"{t.id}  {STATUS_ICON.get(t.status, '')} {t.status}")
-        print(f"  {t.title()}")
-        print(f"  KServe       {kv}")
-        if parts:
-            print(f"  uses         {'  ·  '.join(parts)}")
-        print(f"  languages    {'  ·  '.join(langs)}")
-        if inc:
-            print(f"  collections  {', '.join(inc)}")
-        if t.meta.get("tags"):
-            print(f"  tags         {' '.join('#' + x for x in t.meta['tags'])}")
-        print()
-    print(f"{len(ts)} tutorial(s).  Run one: ./tut run <id>   ·   step through it: ./tut ui   ·   "
-          "translations: ./tut translation")
+        from .model import version_key
+        vs = sorted(t.kserve_tested, key=version_key)
+        kv = (vs[-1] + ("*" if vs[-1] == t.kserve_default else "") + (f" +{len(vs) - 1}" if len(vs) > 1 else "")
+              ) if vs else "-"
+        tr = " ".join(f"{l}{lang_mark[lint.translation_state(t, l)]}" for l in LANG_NAME if l != "en")
+        inc = ",".join(f"{c.id}#{c.members.index(t.id) + 1}" for c in cols if t.id in c.members)
+        rows.append([t.id, t.status, kv, tr, inc or "-",
+                     " ".join(t.meta.get("tags") or [])])
+    head = ["ID", "STATUS", "KSERVE", "TRANSL.", "COLLECTION", "TAGS"]
+    width = shutil.get_terminal_size((120, 20)).columns
+    w = [min(max(len(r[i]) for r in rows + [head]), cap)
+         for i, cap in enumerate((34, 10, 14, 7, 22, 999))]
+    w[-1] = width - sum(w[:-1]) - 2 * (len(w) - 1)
+    if w[-1] < 12:                       # no useful room for tags: drop the column
+        head, rows, w = head[:-1], [r[:-1] for r in rows], w[:-1]
+    line = lambda r: "  ".join(_fit(c, w[i]).ljust(w[i]) for i, c in enumerate(r)).rstrip()
+    print(line(head))
+    for r in rows:
+        print(line(r))
+    print(f"\n{len(ts)} tutorial(s)")
+    print("KSERVE: newest tested, * = default, +n = more versions · TRANSL.: ✓ ok ! behind ? unmarked - none")
+    print("Details: ./tut show <id> · filter: --tag --status --collection · step through: ./tut ui")
+
+
+def cmd_show(a):
+    from . import catalog
+    _show(_tutorial(a.id), catalog.load_collections(REPO_ROOT))
 
 
 def cmd_sync(a):
@@ -217,11 +291,18 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="tut", description="KServe tutorials toolkit")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("list", help="list tutorials: versions, env, languages, collections, tags")
+    s = sub.add_parser("list", help="one line per tutorial (details: ./tut show <id>)")
     s.add_argument("--status", choices=["draft", "stable", "deprecated", "archived"])
     s.add_argument("--tag", help="only tutorials with this tag (see catalog/tags.yaml)")
+    s.add_argument("--collection", help="only this collection, in reading order")
+    s.add_argument("--sort", choices=["id", "status", "kserve"], default="id")
+    s.add_argument("--long", "-l", action="store_true", help="the detailed view for every tutorial")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("show", help="everything about one tutorial")
+    s.add_argument("id", help="tutorial id (directory name under tutorials/)")
+    s.set_defaults(fn=cmd_show)
 
     s = sub.add_parser("sync", help="regenerate <!-- tut:... --> regions")
     s.add_argument("--check", action="store_true", help="fail instead of writing")
