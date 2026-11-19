@@ -88,12 +88,29 @@ class UI:
                 "summary": {l: t.summary(l) for l in ("en", "ko")},
                 "status": t.status, "env": t.env_ref, "uses": t.uses,
                 "kserve": {"default": t.kserve_default, "tested": t.kserve_tested},
-                "features": t.meta.get("features", []), "gpu": t.needs_gpu, "langs": t.langs,
-                "series": t.meta.get("series"),
+                "tags": t.meta.get("tags", []) or [], "gpu": t.needs_gpu, "langs": t.langs,
+                "replacement": (t.meta.get("deprecation") or {}).get("replacement"),
             })
         versions = sorted({v for t in out for v in t["kserve"]["tested"]}, key=version_key,
                           reverse=True)
         return web.json_response({"tutorials": out, "versions": versions})
+
+    async def api_catalog(self, request):
+        """Collections resolved for a KServe version, uncollected tutorials, tags."""
+        from .. import catalog
+        version = request.query.get("version") or None
+        tutorials = list(self.tutorials().values())
+        by_id = {t.id: t for t in tutorials}
+        cols = [{"id": c.id, "title": {l: c.text("title", l) for l in ("en", "ko")},
+                 "description": {l: c.text("description", l) for l in ("en", "ko")},
+                 "owners": c.owners, "items": catalog.resolve(c, by_id, version)}
+                for c in catalog.load_collections(self.root)]
+        reg = catalog.load_tags(self.root)
+        return web.json_response({
+            "version": version, "collections": cols,
+            "other": [t.id for t in catalog.uncollected(tutorials, catalog.load_collections(self.root))],
+            "tags": reg.get("tags") or {}, "groups": reg.get("groups") or {},
+        })
 
     async def api_tutorial(self, request):
         tid = request.match_info["tid"]
@@ -221,6 +238,7 @@ class UI:
         app.add_routes([
             web.get("/", self.index),
             web.get("/api/tutorials", self.api_tutorials),
+            web.get("/api/catalog", self.api_catalog),
             web.get("/api/tutorials/{tid}", self.api_tutorial),
             web.get("/api/tutorials/{tid}/env", self.api_env),
             web.get("/ws/{tid}", self.ws),

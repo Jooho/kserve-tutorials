@@ -83,18 +83,40 @@ generated `<!-- tut:setup -->` region [D006]. Files are shown with
   If a tutorial needs a retry or a readiness wait because the platform was not
   really ready, fix the environment profile.
 
-## 5. Lifecycle
+## 5. Tags and collections (catalog/)
+
+- **Tags** make tutorials findable (search, filter in the UI, site). Use only
+  tags listed in `catalog/tags.yaml` [G001]; lint suggests the closest one for a
+  typo. If no tag fits, add one to `catalog/tags.yaml` in the same PR, with a
+  group (`feature`, `topic`, `level`) and a one-line description. Prefer
+  reusing a tag over adding a near-duplicate. Give every tutorial one `level`.
+- **Collections** (`catalog/collections/<id>.yaml`) are ordered reading
+  paths. They list tutorial ids; tutorials never refer to collections and stay
+  independent. A tutorial may be in several collections or in none (it then
+  shows under "Other tutorials").
+  - Order is the list order — no order numbers to renumber.
+  - Each collection has `owners`; they review every change to it (generated
+    `.github/CODEOWNERS`). To add your tutorial to someone's path, edit the
+    list in your PR and let them review.
+  - Members must exist [C002] and appear once [C003]. When you archive a
+    member, give it a `deprecation.replacement` or readers hit a dead end
+    [C004]; the UI and site show the replacement in its place automatically.
+- **Owners**: `owners` in `tutorial.yaml`, collections, env profiles and lib
+  modules are GitHub handles. `./tut sync` writes `.github/CODEOWNERS` from them
+  (and `catalog/maintainers.yaml` for everything else) [O001]; never edit it.
+
+## 6. Lifecycle
 
 `draft` → `stable` (CI passed, parts frozen) → `deprecated` (still works,
 being replaced) → `archived` (kept, not run). Deprecating or archiving needs a
 `deprecation` block [T006] and changes only that tutorial.
 
-## 6. Translations
+## 7. Translations
 
 `README.md` is the source. A translation has the same shell blocks in the same
 order [D011]; after translating run `./tut translation mark <id> <lang>` [D010].
 
-## 7. Before you open a PR
+## 8. Before you open a PR
 
 ```bash skip
 ./tut sync && make check     # lint + tests + site
@@ -102,7 +124,7 @@ order [D011]; after translating run `./tut translation mark <id> <lang>` [D010].
 ./tut run <id>               # or step through it with ./tut ui
 ```
 
-## 8. Rules learned from CI
+## 9. Rules learned from CI
 
 Each entry: what happened → the rule → evidence. Add one whenever you fix a
 failure a rule could have prevented (see AGENTS.md). Promote it to lint when it

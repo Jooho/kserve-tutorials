@@ -8,14 +8,13 @@ summary:
   en: One sentence that tells a reader what they will be able to do afterwards.
   ko: 이 튜토리얼을 마치면 무엇을 할 수 있는지 한 문장으로.
 status: draft                   # draft -> stable -> deprecated -> archived
-# series: {name: llmisvc-deep-dive, order: 2}   # navigation only
 env: kind-llmisvc/v1            # a FROZEN profile under envs/ (required for stable)
 # uses: [llmisvc/v1]            # shared script modules under lib/, pinned
 namespace: my-tutorial          # defaults to the id
 kserve:
   default: v0.18.0              # what readers and PR CI use
   tested: [v0.18.0]             # what the weekly CI runs; must include default
-features: [llmisvc]             # lets us find every tutorial a KServe change affects
+tags: [llmisvc, beginner]       # from catalog/tags.yaml; add a tag there if none fits
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en, ko]                 # en is the source; others are translations
 timeout_minutes: 45

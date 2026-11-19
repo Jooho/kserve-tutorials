@@ -42,47 +42,142 @@ async function loadList() {
   sel.innerHTML = `<option value="">Tutorial default</option>` +
     S.versions.map((v) => `<option value="${v}">${v}</option>`).join("");
   sel.value = S.versions.includes(S.version) ? S.version : "";
-  renderList();
+  if (!S.versions.includes(S.version)) S.version = "";
+  await loadCatalog();
   const want = location.hash.slice(1) || store.get("tut.current", "");
   if (S.tutorials.some((t) => t.id === want)) openTutorial(want);
 }
 
+// ------------------------------------------------------------- catalog views
+// Collections are resolved on the server for the selected KServe version
+// (tools/tut/catalog.py); this code only displays them.
+Object.assign(S, { view: store.get("tut.view", "collections"), sort: store.get("tut.sort", "title"),
+                   tagFilter: new Set(), catalog: null, collapsed: new Set(JSON.parse(store.get("tut.collapsed", "[]"))) });
+
+async function loadCatalog() {
+  S.catalog = await fetch(`/api/catalog?version=${encodeURIComponent(S.version)}`).then((r) => r.json());
+  const groups = S.catalog.groups;
+  const byGroup = {};
+  for (const [name, t] of Object.entries(S.catalog.tags)) (byGroup[t.group] ||= []).push(name);
+  $("#addtag").innerHTML = `<option value="">＋ tag</option>` + Object.entries(byGroup).map(([g, names]) =>
+    `<optgroup label="${esc(groups[g] || g)}">${names.sort().map((n) =>
+      `<option value="${n}">${n}</option>`).join("")}</optgroup>`).join("");
+  renderList();
+}
+
+const byId = (id) => S.tutorials.find((t) => t.id === id);
+const vkey = (v) => v.replace(/^v/, "").split(".").map(Number);
+const vcmp = (a, b) => { const x = vkey(a), y = vkey(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+
+function matches(t) {
+  const q = $("#search").value.toLowerCase().trim();
+  const hay = [t.id, t.title.en, t.title.ko, t.summary.en, t.summary.ko, ...t.tags].join(" ").toLowerCase();
+  if (q && !q.split(/\s+/).every((w) => hay.includes(w))) return false;
+  for (const tag of S.tagFilter) if (!t.tags.includes(tag)) return false;
+  return true;
+}
+
+function item(t, { n = null, note = "", dim = false, extra = "" } = {}) {
+  const title = esc(t.title[S.lang] || t.title.en);
+  const tags = t.tags.map((x) => `<span class="tag ${S.tagFilter.has(x) ? "on" : ""}" data-tag="${x}"
+    title="${esc(S.catalog?.tags[x]?.description || "")}">#${x}</span>`).join("");
+  return `<li data-id="${t.id}" class="${t.id === S.current ? "on" : ""} ${dim ? "untested" : ""} ${extra}">
+    <div class="t">${n ? `<span class="num">${n}</span>` : ""}${title}</div>
+    <div class="meta"><span>${statusLabel(t.status)}</span><span>${t.kserve.tested.join(", ")}</span>
+      ${t.gpu ? "<span>GPU</span>" : ""}${note ? `<span class="note">${note}</span>` : ""}</div>
+    ${tags ? `<div class="tags">${tags}</div>` : ""}</li>`;
+}
+
 function renderList() {
-  const q = $("#search").value.toLowerCase();
-  const v = S.version;
-  const groups = {};
-  for (const t of S.tutorials) {
-    const title = t.title[S.lang] || t.title.en;
-    if (q && !(title + t.id + t.features.join(" ")).toLowerCase().includes(q)) continue;
-    const g = t.series ? t.series.name : "";
-    (groups[g] ||= []).push(t);
-  }
-  const html = [];
-  for (const [g, ts] of Object.entries(groups).sort()) {
-    if (g) html.push(`<li class="series">${esc(g)}</li>`);
-    ts.sort((a, b) => (a.series?.order ?? 0) - (b.series?.order ?? 0));
-    for (const t of ts) {
-      const tested = !v || t.kserve.tested.includes(v);
-      html.push(`<li data-id="${t.id}" class="${t.id === S.current ? "on" : ""} ${tested ? "" : "untested"}"
-        title="${tested ? "" : "Not tested on " + v}">
-        <div class="t">${esc(t.title[S.lang] || t.title.en)}</div>
-        <div class="meta"><span>${statusLabel(t.status)}</span><span>${t.kserve.tested.join(", ")}</span>
-        ${t.gpu ? "<span>GPU</span>" : ""}</div></li>`);
+  document.querySelectorAll("#views button").forEach((b) => b.classList.toggle("on", b.dataset.view === S.view));
+  $("#sort").hidden = S.view !== "all";
+  $("#sort").value = S.sort;
+  $("#tagchips").innerHTML = [...S.tagFilter].map((x) =>
+    `<span class="tag on" data-untag="${x}" title="Remove filter">#${x} ✕</span>`).join("");
+  const v = S.version, html = [];
+  if (!S.catalog) return;
+  if (S.view === "collections") {
+    const group = (id, title, desc, rows) => {
+      const shown = rows.filter((r) => r.html);
+      if (!shown.length) return;
+      const closed = S.collapsed.has(id);
+      html.push(`<li class="group" data-group="${id}" title="${esc(desc)}">${closed ? "▸" : "▾"} ${esc(title)}
+        <span class="count">${shown.length}</span></li>`);
+      if (!closed) shown.forEach((r) => html.push(r.html));
+    };
+    for (const c of S.catalog.collections) {
+      group(c.id, c.title[S.lang] || c.title.en, c.description[S.lang] || c.description.en,
+        c.items.filter((r) => r.state !== "missing").map((r) => {
+          const t = byId(r.shown); if (!t || !matches(t)) return {};
+          const note = { unavailable: `not on ${v}`, replaced: `replaces ${r.member}`, archived: "archived" }[r.state] || "";
+          return { html: item(t, { n: r.n, note, dim: r.state === "unavailable" || r.state === "archived" }) };
+        }));
+    }
+    group("_other", S.lang === "ko" ? "기타" : "Other tutorials", "Not in any collection",
+      S.catalog.other.map(byId).filter((t) => t && matches(t)).map((t) =>
+        ({ html: item(t, { dim: v && !t.kserve.tested.includes(v), note: v && !t.kserve.tested.includes(v) ? `not on ${v}` : "" }) })));
+  } else if (S.view === "all") {
+    const order = { stable: 0, deprecated: 1, draft: 2, archived: 3 };
+    const ts = S.tutorials.filter(matches).sort((a, b) =>
+      S.sort === "status" ? (order[a.status] - order[b.status]) || a.title.en.localeCompare(b.title.en)
+      : S.sort === "kserve" ? vcmp(b.kserve.tested.slice().sort(vcmp).at(-1) || "v0.0.0", a.kserve.tested.slice().sort(vcmp).at(-1) || "v0.0.0")
+      : (a.title[S.lang] || a.title.en).localeCompare(b.title[S.lang] || b.title.en));
+    ts.forEach((t) => html.push(item(t, { dim: v && !t.kserve.tested.includes(v), note: v && !t.kserve.tested.includes(v) ? `not on ${v}` : "" })));
+  } else {
+    html.push(`<li class="group" data-matrix="1">▦ ${S.lang === "ko" ? "버전 매트릭스 보기" : "Open the version matrix"}</li>`);
+    for (const ver of S.versions) {
+      if (v && ver !== v) continue;
+      const ts = S.tutorials.filter((t) => t.status !== "archived" && t.kserve.tested.includes(ver) && matches(t));
+      if (!ts.length) continue;
+      html.push(`<li class="group" data-group="v:${ver}">KServe ${ver}<span class="count">${ts.length}</span></li>`);
+      ts.forEach((t) => html.push(item(t)));
     }
   }
   $("#list").innerHTML = html.join("") || `<li class="muted">No tutorials match.</li>`;
 }
 
+function renderMatrix() {
+  const vs = S.versions;
+  const rows = S.tutorials.filter(matches).map((t) => `<tr data-id="${t.id}" class="${t.status === "archived" ? "archived" : ""}">
+    <td>${esc(t.title[S.lang] || t.title.en)} <span class="muted">${statusLabel(t.status)}</span></td>
+    ${vs.map((ver) => t.kserve.tested.includes(ver)
+      ? `<td class="yes ${ver === t.kserve.default ? "default" : ""}" title="${ver === t.kserve.default ? "default version" : "tested"}">✓</td>`
+      : "<td></td>").join("")}</tr>`).join("");
+  $("#matrix").innerHTML = `<h2>${S.lang === "ko" ? "KServe 버전별 튜토리얼" : "Tutorials by KServe version"}</h2>
+    <p class="muted">✓ = run and verified in CI on that version; outlined = the tutorial's default version.</p>
+    <table><thead><tr><th>Tutorial</th>${vs.map((v) => `<th>${v}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
+  $("#matrix").hidden = false; $("#doc-wrap").hidden = true; $("#empty").hidden = true;
+}
+$("#matrix").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) openTutorial(tr.dataset.id); });
+
 const statusLabel = (s) => ({ draft: "🚧 draft", stable: "✅ stable", deprecated: "⚠️ deprecated", archived: "🗄️ archived" }[s] || s);
 
 $("#list").addEventListener("click", (e) => {
+  const tag = e.target.closest("[data-tag]");
+  if (tag) { e.stopPropagation(); S.tagFilter.add(tag.dataset.tag); renderList(); return; }
+  if (e.target.closest("[data-matrix]")) { renderMatrix(); return; }
+  const g = e.target.closest("li.group[data-group]");
+  if (g && S.view === "collections") {
+    const id = g.dataset.group;
+    S.collapsed.has(id) ? S.collapsed.delete(id) : S.collapsed.add(id);
+    store.set("tut.collapsed", JSON.stringify([...S.collapsed])); renderList(); return;
+  }
   const li = e.target.closest("li[data-id]");
   if (li) openTutorial(li.dataset.id);
 });
-$("#search").addEventListener("input", renderList);
+$("#tagchips").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-untag]"); if (t) { S.tagFilter.delete(t.dataset.untag); renderList(); }
+});
+$("#addtag").addEventListener("change", (e) => { if (e.target.value) S.tagFilter.add(e.target.value); e.target.value = ""; renderList(); });
+$("#sort").addEventListener("change", (e) => { S.sort = e.target.value; store.set("tut.sort", S.sort); renderList(); });
+$("#views").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-view]"); if (!b) return;
+  S.view = b.dataset.view; store.set("tut.view", S.view); renderList();
+});
+$("#search").addEventListener("input", () => { renderList(); if (!$("#matrix").hidden) renderMatrix(); });
 $("#version").addEventListener("change", (e) => {
   S.version = e.target.value; store.set("tut.version", S.version);
-  renderList();
+  loadCatalog();
   if (S.current) {
     renderChips();
     const want = sessionVersionFor(currentMeta());
@@ -110,7 +205,7 @@ function sessionVersionFor(t) {
 async function openTutorial(id) {
   S.current = id; store.set("tut.current", id); history.replaceState(null, "", "#" + id);
   renderList();
-  $("#empty").hidden = true; $("#doc-wrap").hidden = false;
+  $("#empty").hidden = true; $("#matrix").hidden = true; $("#doc-wrap").hidden = false;
   await loadDoc();
   connect();
   loadEnv();

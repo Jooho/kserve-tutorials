@@ -132,16 +132,28 @@ def render_header(t: Tutorial, lang: str) -> str:
     return "\n".join(out)
 
 
-def render_catalog(tutorials: list[Tutorial], lang: str = "en") -> str:
+def render_catalog(tutorials: list[Tutorial], lang: str = "en", root: Path = REPO_ROOT) -> str:
+    from . import catalog
     visible = [t for t in tutorials if not t.errors]
-    hdr = ("| Tutorial | Status | Tested KServe | Environment | GPU |",
-           "|---|---|---|---|---|")
+    by_id = {t.id: t for t in visible}
+    hdr = ("| Tutorial | Status | Tested KServe | Tags | Environment | GPU |",
+           "|---|---|---|---|---|---|")
     rows = []
     for t in visible:
         st = STATUS_TEXT[lang].get(t.status, t.status)
+        tags = " ".join(f"`{x}`" for x in t.meta.get("tags", []) or [])
         rows.append(f"| [{t.title(lang)}](tutorials/{t.id}/) | {st} | "
-                    f"{', '.join(t.kserve_tested)} | `{t.env_ref or '—'}` | "
+                    f"{', '.join(t.kserve_tested)} | {tags} | `{t.env_ref or '—'}` | "
                     f"{'yes' if t.needs_gpu else 'no'} |")
+    cols = []
+    for c in catalog.load_collections(root):
+        cols += ["", f"- **{c.text('title', lang)}** — {c.text('description', lang)}".rstrip(" —")]
+        for r in catalog.resolve(c, by_id):
+            if r["state"] == "missing":
+                continue
+            t = by_id[r["shown"]]
+            note = {"archived": " 🗄️", "replaced": f" (replaces `{r['member']}`)"}.get(r["state"], "")
+            cols.append(f"  {r['n']}. [{t.title(lang)}](tutorials/{t.id}/){note}")
     by_version: dict[str, list[Tutorial]] = {}
     for t in visible:
         if t.status == "archived":
@@ -149,14 +161,18 @@ def render_catalog(tutorials: list[Tutorial], lang: str = "en") -> str:
         for v in t.kserve_tested:
             by_version.setdefault(v, []).append(t)
     out = ["<!-- " + GEN_NOTE[lang].replace("tutorial.yaml", "tutorials/*/tutorial.yaml") + " -->",
-           *hdr, *rows, "", "**By KServe version**", ""]
+           *hdr, *rows]
+    if cols:
+        out += ["", "**Collections** (reading paths)", *cols]
+    out += ["", "**By KServe version**", ""]
     for v in sorted(by_version, key=version_key, reverse=True):
         links = ", ".join(f"[{t.id}](tutorials/{t.id}/)" for t in by_version[v])
         out.append(f"- **{v}**: {links}")
     return "\n".join(out)
 
 
-def sync_file(path: Path, t: Tutorial | None, lang: str, tutorials: list[Tutorial]) -> str:
+def sync_file(path: Path, t: Tutorial | None, lang: str, tutorials: list[Tutorial],
+              root: Path = REPO_ROOT) -> str:
     text = path.read_text()
 
     def render(r: markdown.Region):
@@ -171,7 +187,7 @@ def sync_file(path: Path, t: Tutorial | None, lang: str, tutorials: list[Tutoria
                 raise SyncError("tut:header only works inside a tutorial")
             return render_header(t, lang)
         if r.kind == "catalog":
-            return render_catalog(tutorials, lang)
+            return render_catalog(tutorials, lang, root)
         raise SyncError(f"unknown region tut:{r.kind}")
 
     def padded(r: markdown.Region):
@@ -212,7 +228,7 @@ def sync(root: Path = REPO_ROOT, check: bool = False) -> tuple[list[Path], list[
     tutorials = load_tutorials(root)
     for path, t, lang in targets(root):
         try:
-            new = sync_file(path, t, lang, tutorials)
+            new = sync_file(path, t, lang, tutorials, root)
         except SyncError as e:
             errors.append(f"{path.relative_to(root)}: {e}")
             continue
@@ -220,4 +236,12 @@ def sync(root: Path = REPO_ROOT, check: bool = False) -> tuple[list[Path], list[
             changed.append(path)
             if not check:
                 path.write_text(new)
+    from . import catalog
+    owners_path = root / catalog.CODEOWNERS_PATH
+    owners = catalog.codeowners(root)
+    if not owners_path.exists() or owners_path.read_text() != owners:
+        changed.append(owners_path)
+        if not check:
+            owners_path.parent.mkdir(parents=True, exist_ok=True)
+            owners_path.write_text(owners)
     return changed, errors

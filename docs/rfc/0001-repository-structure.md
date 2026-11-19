@@ -106,14 +106,13 @@ id: llmisvc-anatomy                 # == directory name
 title: {en: "...", ko: "..."}
 summary: {en: "...", ko: "..."}
 status: stable                      # draft | stable | deprecated | archived
-series: {name: llmisvc-deep-dive, order: 1}   # navigation only
 env: kind-llmisvc/v1                # a frozen profile (required for stable)
 uses: [llmisvc/v1]                  # script modules, pinned
 namespace: llmisvc-anatomy          # default: id
 kserve:
   default: v0.18.0                  # what readers and PR CI use
   tested: [v0.18.0]                 # what the weekly CI runs
-features: [llmisvc, gateway-api-inference-extension, epp-scheduler]
+tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en]
 timeout_minutes: 60
@@ -124,8 +123,8 @@ deprecation:                        # deprecated / archived only
   replacement: other-tutorial
 ```
 
-`features` is what makes "which tutorials does this KServe change affect?" a
-search instead of an investigation.
+`tags` (from `catalog/tags.yaml`, §4.14) is what makes "which tutorials does
+this KServe change affect?" a search instead of an investigation.
 
 ### 4.4 Versioning model: per tutorial, not per branch
 
@@ -220,8 +219,8 @@ This mapping is tested in `tools/tests/test_rules.py`.
    environment profile and creates everything else it needs in its own
    namespace. If tutorial B builds on what tutorial A created, B re-creates it
    (by copying A's manifest into B; see rule 3).
-2. **Series are navigation only.** `series` orders tutorials on the site; it
-   never implies shared state.
+2. **Collections are navigation only.** A collection (`catalog/collections/`)
+   orders tutorials for readers; it never implies shared state.
 3. **Share through modules, not through other tutorials.** A tutorial never
    reads another tutorial's files. Scripts worth sharing move into a
    versioned module under `lib/`; manifests that two tutorials need are copied
@@ -295,6 +294,10 @@ of `tools/tut/lint.py`.
 | D010 | Translations carry a source marker; a stale marker is a warning |
 | D011 | Translations have the same sequence of shell block roles as the source |
 | M001 | Container images are pinned (no `latest`, no missing tag) |
+| G001 | Tags are listed in `catalog/tags.yaml` (suggests the closest) |
+| G002 | `catalog/tags.yaml` is valid |
+| C001–C004 | Collections are valid; members exist, appear once; archived members have a replacement (warning) |
+| O001 | `.github/CODEOWNERS` matches the `owners` fields |
 | L001 | Modules are valid and their scripts executable |
 | L002 | Every `lib/<module>` call is declared in `uses`, and declared modules exist |
 | L003 | Frozen modules are not modified |
@@ -379,7 +382,28 @@ must pass, no per-tutorial KServe version or environment, and its browser mode
 is a full VS Code (code-server). Those are the parts this project needs, so
 the UI is built on the existing `tut` parser instead.
 
-### 4.14 Release channel
+### 4.14 Catalog: tags, collections, owners
+
+Independence is about running; finding and following tutorials is a separate
+concern, kept in `catalog/` so it never touches a tutorial:
+
+- `catalog/tags.yaml` is the registry of tags (group + description). Tutorials
+  may only use registered tags (G001), so search and filters stay coherent as
+  many contributors (and agents) add tutorials.
+- `catalog/collections/<id>.yaml` are ordered reading paths owned by their
+  `owners`. A tutorial can be in several paths or none. For a KServe version,
+  `tools/tut/catalog.py` resolves each member to: available, not available on
+  that version, archived, or replaced by its `deprecation.replacement`; the UI,
+  the site and lint use the same function.
+- `.github/CODEOWNERS` is generated from the `owners` fields (tutorials,
+  collections, envs, libs) and `catalog/maintainers.yaml`, so ownership has one
+  source. It takes effect with "Require review from Code Owners" on `main`.
+
+A `series: {name, order}` field in `tutorial.yaml` was the first design; it was
+dropped because a tutorial could belong to one path only, the order was spread
+over many files and nobody owned a path.
+
+### 4.15 Release channel
 
 Two branches: `main` for development and `stable` for readers. A release
 promotes a commit of `main` to `stable` (fast-forward only) after the full
@@ -389,7 +413,7 @@ Because `stable` is always an earlier commit of `main`, there are no
 back-ports, unlike the per-KServe-version branches rejected in §4.4.
 Details: docs/release.md.
 
-### 4.15 AI-assisted maintenance
+### 4.16 AI-assisted maintenance
 
 AI works on top of the rules, never instead of them:
 

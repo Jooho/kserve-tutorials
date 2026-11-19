@@ -3,10 +3,22 @@
   "title": "envs/<name>/<version>/profile.yaml",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "description", "frozen", "kserve", "requires"],
+  "required": [
+    "id",
+    "description",
+    "frozen",
+    "kserve",
+    "requires"
+  ],
   "properties": {
-    "id": {"type": "string", "pattern": "^[a-z0-9-]+/v[0-9]+$"},
-    "description": {"type": "string", "minLength": 1},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/v[0-9]+$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
     "frozen": {
       "description": "Once true the profile must never change; create the next version instead.",
       "type": "boolean"
@@ -14,25 +26,49 @@
     "kserve": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["min"],
+      "required": [
+        "min"
+      ],
       "properties": {
-        "min": {"$ref": "#/$defs/version"},
-        "max": {"$ref": "#/$defs/version"}
+        "min": {
+          "$ref": "#/$defs/version"
+        },
+        "max": {
+          "$ref": "#/$defs/version"
+        }
       }
     },
     "requires": {
       "description": "Host tools the setup script expects.",
       "type": "array",
-      "items": {"type": "string"}
+      "items": {
+        "type": "string"
+      }
     },
     "inputs": {
       "description": "Environment variables the setup script reads.",
       "type": "object",
-      "additionalProperties": {"type": "string"}
+      "additionalProperties": {
+        "type": "string"
+      }
     },
-    "supersedes": {"type": "string", "pattern": "^[a-z0-9-]+/v[0-9]+$"}
+    "supersedes": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/v[0-9]+$"
+    },
+    "owners": {
+      "description": "GitHub handles; used for .github/CODEOWNERS.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9-]+(/[A-Za-z0-9._-]+)?$"
+      }
+    }
   },
   "$defs": {
-    "version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"}
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    }
   }
 }

@@ -1,0 +1,4 @@
+# Default code owners: everything not owned by a tutorial, collection, env or
+# lib owner (tools, workflows, schema, docs, catalog/tags.yaml).
+# Used to generate .github/CODEOWNERS with `./tut sync`.
+maintainers: [Jooho]

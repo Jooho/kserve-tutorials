@@ -27,13 +27,22 @@
 
   <div class="layout">
     <aside class="sidebar">
-      <input id="search" type="search" placeholder="Filter tutorials…" aria-label="Filter tutorials">
+      <div class="seg views" id="views" role="tablist">
+        <button data-view="collections" role="tab">Collections</button><button data-view="all" role="tab">All</button><button data-view="versions" role="tab">Versions</button>
+      </div>
+      <input id="search" type="search" placeholder="Search title, summary, tags…" aria-label="Search tutorials">
+      <div class="filters">
+        <select id="addtag" aria-label="Filter by tag"><option value="">＋ tag</option></select>
+        <select id="sort" aria-label="Sort"><option value="title">Sort: title</option><option value="status">Sort: status</option><option value="kserve">Sort: newest KServe</option></select>
+      </div>
+      <div id="tagchips"></div>
       <ul id="list"></ul>
     </aside>
 
     <main class="main">
       <section class="docpane" id="docpane">
         <div class="empty" id="empty">Pick a tutorial on the left.</div>
+        <section id="matrix" hidden></section>
         <div id="doc-wrap" hidden>
           <div class="toolbar">
             <div class="tb-title">

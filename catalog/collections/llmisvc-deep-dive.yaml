@@ -1,0 +1,13 @@
+# A collection is an ordered reading path; tutorials stay independent.
+# Order = list order. Owners review every change to this file (CODEOWNERS).
+id: llmisvc-deep-dive
+title:
+  en: LLMInferenceService deep dive
+  ko: LLMInferenceService 깊이 보기
+description:
+  en: From one YAML to the resources it creates, how a request is routed, how to observe it and how it scales.
+  ko: YAML 하나가 만드는 리소스부터 요청 라우팅, 관측, 확장까지.
+owners: [Jooho]
+members:
+  - llmisvc-anatomy
+  # planned (from the legacy repository): llmisvc-request-flow, llmisvc-monitoring, llmisvc-autoscaling

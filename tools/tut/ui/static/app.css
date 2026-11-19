@@ -47,7 +47,31 @@ body.sidebar-hidden .sidebar { display: none; }
 #list li.untested { opacity: .55; }
 #list .t { font-weight: 600; }
 #list .meta { color: var(--muted); font-size: 12px; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
-.series { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin: 12px 4px 4px; }
+.views { display: flex; width: 100%; margin-bottom: 8px; }
+.views button { flex: 1; }
+.views button.on { background: var(--accent); color: var(--accent-text); }
+.filters { display: flex; gap: 6px; margin-bottom: 6px; }
+.filters select { flex: 1; min-width: 0; font-size: 12px; }
+#tagchips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.tag { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+.tag:hover, .tag.on { border-color: var(--accent); color: var(--accent); }
+#list .tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+#list li.group { cursor: pointer; font-weight: 650; padding: 8px 6px 4px; margin-top: 6px; display: flex; gap: 6px; align-items: baseline; }
+#list li.group:hover { background: transparent; }
+#list li.group .count { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: auto; }
+#list li.group .desc { display: none; }
+#list .num { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 4px; }
+#list .note { font-size: 11px; color: var(--warn); }
+#list li.collapsed-member { display: none; }
+#matrix { padding: 16px 24px 48px; }
+#matrix table { border-collapse: collapse; font-size: 13px; }
+#matrix th, #matrix td { border: 1px solid var(--border); padding: 4px 10px; text-align: center; }
+#matrix td:first-child, #matrix th:first-child { text-align: left; }
+#matrix tr.archived td { color: var(--muted); }
+#matrix tbody tr { cursor: pointer; }
+#matrix tbody tr:hover td { background: var(--bg); }
+#matrix .yes { color: var(--ok); font-weight: 650; }
+#matrix .default { outline: 2px solid var(--ok); outline-offset: -3px; }
 
 .main { display: grid; grid-template-rows: 1fr 6px var(--term-h, 38%); min-height: 0; min-width: 0; }
 body.term-right .main { grid-template-rows: 1fr; grid-template-columns: minmax(0, 1fr) 6px var(--term-w, 45%); }

@@ -11,8 +11,8 @@ these exact steps, so compare against it when in doubt.
   learned from CI.
 - Make sure `./tut lint` passes on `main`.
 - Pick the tutorial's id: lowercase, hyphenated, descriptive, without numbers
-  (`llmisvc-request-flow`, not `02-request-flow`). Order is expressed with
-  `series.order`.
+  (`llmisvc-request-flow`, not `02-request-flow`). Order is expressed by
+  the collection's member list (`catalog/collections/`).
 
 ## 1. Inventory the old tutorial
 
@@ -23,7 +23,7 @@ Write down, before changing anything:
 | Which KServe version does it install / assume? | `kserve.default`, `kserve.tested` |
 | How is the cluster created and KServe installed? | Choose or create an env profile (step 2) |
 | What does it need from a previous tutorial? | Must be re-created inside this tutorial (step 4) |
-| Which KServe features does it exercise? | `features` |
+| Which KServe features does it exercise? Level? | `tags` (from `catalog/tags.yaml`) |
 | GPU? CPU / memory? | `requires` |
 | Which languages exist? | `langs` |
 | Which files does the text show inline? | Must become `tut:include` (step 5) |
@@ -47,7 +47,11 @@ cp -r tutorials/_template tutorials/<id>
 rm tutorials/<id>/manifests/example.yaml
 ```
 
-Fill in `tutorial.yaml`. Start with `status: draft`.
+Fill in `tutorial.yaml`. Start with `status: draft`. Pick `tags` from
+`catalog/tags.yaml` (one `level` tag at least) and set `owners`. If the old
+tutorial was part of a series, add it to the matching
+`catalog/collections/<id>.yaml` in reading order (the planned members are
+listed there as comments).
 
 ## 4. Rewrite the README
 

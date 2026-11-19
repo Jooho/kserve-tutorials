@@ -1,0 +1,29 @@
+# Every tag a tutorial may use (tutorial.yaml `tags:`), checked by ./tut lint (G001).
+# Need a new one? Add it here in the same PR, with a group and a description;
+# reuse an existing tag when one fits. Keep names lowercase-with-dashes.
+groups:
+  feature: KServe or ecosystem feature the tutorial exercises
+  topic: What the reader learns or does
+  level: Who the tutorial is for
+
+tags:
+  # feature
+  llmisvc:                           {group: feature, description: "LLMInferenceService"}
+  inferenceservice:                  {group: feature, description: "InferenceService (predictive and generative)"}
+  inferencegraph:                    {group: feature, description: "InferenceGraph (sequence, ensemble, switch, splitter)"}
+  gateway-api-inference-extension:   {group: feature, description: "Gateway API Inference Extension (InferencePool, EPP)"}
+  epp-scheduler:                     {group: feature, description: "Endpoint Picker scheduler (llm-d)"}
+  envoy-gateway:                     {group: feature, description: "Envoy Gateway / Envoy AI Gateway"}
+  vllm:                              {group: feature, description: "vLLM serving runtime"}
+  mlserver:                          {group: feature, description: "MLServer runtime (XGBoost, LightGBM, ...)"}
+  storage:                           {group: feature, description: "Model storage (PVC, S3, OCI, hf://)"}
+  autoscaling:                       {group: feature, description: "Autoscaling (HPA, KEDA, workload variants)"}
+  # topic
+  resources:                         {group: topic, description: "What KServe creates and why"}
+  request-flow:                      {group: topic, description: "How a request travels to a model"}
+  observability:                     {group: topic, description: "Metrics, dashboards, logs"}
+  ensemble:                          {group: topic, description: "Combining several models"}
+  # level
+  beginner:                          {group: level, description: "No KServe experience needed"}
+  intermediate:                      {group: level, description: "Knows the basic KServe resources"}
+  advanced:                          {group: level, description: "Production-style or internals"}
