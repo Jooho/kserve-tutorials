@@ -64,10 +64,10 @@ class Translator:
 
 
 def configured() -> Translator | None:
-    spec = (os.environ.get("TUT_TRANSLATOR") or "").strip()
+    spec = (os.environ.get("TUT_AI") or os.environ.get("TUT_TRANSLATOR") or "").strip()
     if not spec:
         return None
-    extra = shlex.split(os.environ.get("TUT_TRANSLATOR_ARGS", ""))
+    extra = shlex.split(os.environ.get("TUT_AI_ARGS", os.environ.get("TUT_TRANSLATOR_ARGS", "")))
     if spec.startswith("cmd:"):
         return Translator("cmd", [spec[4:].strip()], shell=True)
     if spec not in PRESETS:

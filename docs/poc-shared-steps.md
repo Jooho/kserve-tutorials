@@ -75,6 +75,33 @@ It can only read and write this tutorial's README.md / README.<lang>.md.
 Note: while the file is not synced, the line numbers on blocks are those of the
 preview, not the file.
 
+## New tutorial from tested work, with AI: `./tut draft`
+
+Authors start from work they tested by hand: several scripts that call each
+other, manifests, notes, maybe a README. A program alone cannot turn that into
+a tutorial, so the author's own AI CLI does it, inside guard rails:
+
+```bash skip
+export TUT_AI=claude                       # or copilot, codex, cmd:<command> (also used by translation)
+./tut draft ~/work/my-test [--id my-test] [--title "..."]
+```
+
+1. `tutorials/<id>/` is scaffolded; the folder is **copied** to
+   `build/draft/<id>/input/` (the original is only read).
+2. `build/draft/<id>/parts.md` lists what can be reused: envs (what they
+   install, tools, who uses them), helper scripts (how to call them, who uses
+   them), shared steps.
+3. The AI gets the rules (AGENTS.md, docs/authoring.md), an example tutorial
+   and the parts. It may write only `tutorials/<id>/` and `build/draft/<id>/`,
+   and may run only `./tut _draftcheck <id>` (sync + lint + dry run; never a
+   cluster). It writes `build/draft/<id>/notes.md`: what it changed in the
+   tested commands and why, which parts it used, TODOs.
+4. The program checks and writes `build/draft/<id>/report.md`: lint, files
+   changed outside the allowed places, and every input script command that is
+   not in the tutorial as-is (changed on purpose or missing).
+5. The author finishes in `./tut ui` (✎ Edit, Problems, Run all), then
+   `./tut run <id> --twice`.
+
 ## What changed
 
 | Part | Change |
@@ -86,6 +113,8 @@ preview, not the file.
 | `tools/tut/ui/*` | `?collection=` on a tutorial: hidden blocks, path bar (step n/m, prev/next, vars, show all, open standalone), hint on a failed covered verify; the shell gets the path's vars and restarts when the mode changes |
 | `tools/tut/ui/*` (preview) | the page and the run messages use the in-memory synced text; `/api/stamp` (reload on save), `/api/tutorials/<id>/problems` (lint for one tutorial); ✎ Edit split view (`GET/PUT /api/tutorials/<id>/source`, `POST /api/sync`); sidebar `# tags` toggle; learning paths in purple |
 | `tools/tests/test_shared.py` | sync, lint, coverage order, live preview, Problems, editor read/save/conflict, sync |
+| `tools/tut/draft.py`, `./tut draft`, `./tut _draftcheck` | AI draft from a folder of tested work; `TUT_AI` (TUT_TRANSLATOR still read) |
+| `tools/tests/test_draft.py` | stand-in AI: original untouched, parts and prompt, outside changes reported, command coverage |
 | `tools/tests/test_learning_path.py` | server API + real shell: standalone 7/7, path in order in the shared NS, path out of order fails at the covered check |
 | `tutorials/poc-shared-*`, `catalog/collections/poc-shared-steps.yaml` | the PoC itself |
 
