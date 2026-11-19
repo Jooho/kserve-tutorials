@@ -1,0 +1,20 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: InferenceGraph
+metadata:
+  name: housing-price-graph
+  namespace: kserve-graph-demo
+spec:
+  nodes:
+    # Root node - sequence: ensemble → combiner
+    root:
+      routerType: Sequence
+      steps:
+        - nodeName: ensemble-node
+        - serviceUrl: http://ensemble-combiner-predictor.kserve-graph-demo.svc.cluster.local/v2/models/ensemble-combiner/infer
+          data: $response
+    # Ensemble node - parallel prediction from both models
+    ensemble-node:
+      routerType: Ensemble
+      steps:
+        - serviceName: xgboost-predictor
+        - serviceName: lightgbm-predictor

@@ -12,6 +12,7 @@ CI recently checked that it does.
 <!-- Generated from tutorials/*/tutorial.yaml by `./tut sync` — do not edit by hand. -->
 | Tutorial | Status | Tested KServe | Tags | Environment | GPU |
 |---|---|---|---|---|---|
+| [Two Models, One Answer — InferenceGraph Ensemble and Combiner](tutorials/inferencegraph-ensemble/) | 🚧 draft | v0.18.0 | `inferencegraph` `inferenceservice` `mlserver` `storage` `ensemble` `intermediate` | `kind-kserve/v1` | no |
 | [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-kserve/v1` | no |
 
 **Collections** (reading paths)
@@ -21,7 +22,7 @@ CI recently checked that it does.
 
 **By KServe version**
 
-- **v0.18.0**: [llmisvc-anatomy](tutorials/llmisvc-anatomy/)
+- **v0.18.0**: [inferencegraph-ensemble](tutorials/inferencegraph-ensemble/), [llmisvc-anatomy](tutorials/llmisvc-anatomy/)
 
 <!-- /tut -->
 

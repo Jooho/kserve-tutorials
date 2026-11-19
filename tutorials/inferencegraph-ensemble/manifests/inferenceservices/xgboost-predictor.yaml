@@ -1,0 +1,14 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: xgboost-predictor
+  namespace: kserve-graph-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: xgboost
+      runtime: kserve-mlserver
+      storageUri: pvc://model-pvc/xgboost-predictor
