@@ -124,6 +124,11 @@ pre.static { background: var(--code-bg); padding: 10px 12px; border-radius: 8px;
 .state { font-size: 12px; min-width: 76px; text-align: right; }
 .state.running { color: var(--running); } .state.queued { color: var(--muted); }
 .state.passed { color: var(--ok); } .state.stopped { color: var(--warn); } .state.failed { color: var(--bad); font-weight: 600; }
+.block.selected { box-shadow: 0 0 0 2px var(--accent); }
+.block.selected .block-head::before { content: "▶ next"; font-size: 11px; font-weight: 650; color: var(--accent); margin-right: 2px; }
+.block { cursor: pointer; }
+.block pre, .block .scripts { cursor: auto; }
+kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid currentColor; border-radius: 4px; opacity: .8; margin-left: 4px; }
 .block.st-failed { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
 .block.st-running { box-shadow: 0 0 0 2px var(--running); }
 .block pre { margin: 0; padding: 10px 12px; overflow: auto; background: var(--code-bg); border-radius: 0 0 8px 8px; }

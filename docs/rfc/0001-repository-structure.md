@@ -362,6 +362,9 @@ start-up) that:
 - shows the environment status (no cluster / built by which profile and
   version) before the setup step runs;
 - expands module scripts under the block that calls them;
+- steps through a tutorial like a notebook: one step is selected; ▶ Next
+  (Shift+Enter) runs it and, when it passes, selects the next step; clicking a
+  step selects it;
 - resumes where the reader left off (⏵ Continue, ⏭ To here start at the first
   step that has not passed in this shell) instead of re-running setup;
 - lets the reader arrange it: full-width document, terminal at the bottom or

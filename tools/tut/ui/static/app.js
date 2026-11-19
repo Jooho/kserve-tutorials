@@ -224,6 +224,7 @@ async function loadDoc() {
     el.replaceWith(renderBlock(b));
   }
   updateProgress();
+  select(firstPending(), false);
 }
 
 function renderChips() {
@@ -269,6 +270,7 @@ function renderBlock(b) {
       <pre><code>${esc(s.content ?? "(file not found)")}</code></pre></details>`).join("")}`;
   el.addEventListener("click", (e) => {
     const act = e.target.closest("button")?.dataset.act;
+    if (!act && !e.target.closest("pre, summary, a")) { select(b.idx); return; }   // Jupyter-style select
     if (act === "run") {
       if (b.attrs.once && S.states[b.idx] === "passed" &&
           !confirm("This step is marked `once`: it is not meant to run twice. Run it again anyway?")) return;
@@ -312,9 +314,48 @@ setInterval(() => document.querySelectorAll(".block").forEach((el) => {
   if (["passed", "failed", "stopped"].includes(st)) paint(el, st);
 }), 30000);
 
+// ---------------------------------------------------------- Next (Jupyter-style)
+// One step is selected. Next / Shift+Enter runs it; when it passes, the
+// selection moves to the following run/verify step. Clicking a step selects it.
+function firstPending() {
+  const p = pendingSteps();
+  return p.length ? p[0] : null;
+}
+function select(idx, scroll = true) {
+  S.selected = idx;
+  document.querySelectorAll(".block.selected").forEach((el) => el.classList.remove("selected"));
+  const el = idx == null ? null : document.querySelector(`.block[data-idx="${idx}"]`);
+  if (el) {
+    el.classList.add("selected");
+    if (scroll) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+function nextAfter(idx) {
+  const n = S.doc.blocks.find((x) => RUNNABLE.has(x.role) && x.idx > idx);
+  return n ? n.idx : null;
+}
+function runSelected() {
+  if (!S.doc) return;
+  if (S.selected == null) select(firstPending());
+  const b = S.doc.blocks[S.selected];
+  if (!b) { alert("Every step has passed in this shell. Use ⏩ Run all to start over."); return; }
+  if (b.attrs.once && S.states[b.idx] === "passed" &&
+      !confirm("This step is marked `once`: it is not meant to run twice. Run it again anyway?")) return;
+  S.advanceFrom = b.idx;
+  run([b.idx], false, false);
+}
+$("#next").onclick = runSelected;
+addEventListener("keydown", (e) => {
+  if (!(e.key === "Enter" && e.shiftKey)) return;
+  if (e.target.closest?.(".xterm, input, select, textarea")) return;   // typing in the terminal or a field
+  e.preventDefault();
+  runSelected();
+});
+
 function setState(idx, state, ts) {
   S.states[idx] = state;
   if (ts) (S.times ||= {})[idx] = ts;
+  if (state === "passed" && S.advanceFrom === idx) { S.advanceFrom = null; select(nextAfter(idx)); }
   const el = document.querySelector(`.block[data-idx="${idx}"]`);
   if (el) {
     paint(el, state);
@@ -331,10 +372,11 @@ function updateProgress() {
   $("#progress").textContent = `${ok}/${steps.length} passed${bad ? ` · ${bad} failed` : ""}`;
 }
 
-function run(idxs, stopOnFail = true) {
+function run(idxs, stopOnFail = true, focusTerminal = true) {
   if (!idxs.length) return;
   send({ type: "run", blocks: idxs, lang: S.doc.lang, stop_on_fail: stopOnFail });
-  term.focus();
+  if (focusTerminal) term.focus();
+  else if (document.activeElement?.closest?.(".xterm")) document.activeElement.blur();   // keep Shift+Enter for Next
 }
 
 $("#continue").onclick = () => {
@@ -393,6 +435,7 @@ function startShell() {
   S.states = {};
   document.querySelectorAll(".block").forEach((el) => paint(el, null));
   updateProgress();
+  select(firstPending(), false);
   term.reset();
   send({ type: "start", kserve_version: sessionVersionFor(t), cols: term.cols, rows: term.rows });
   loadEnv();

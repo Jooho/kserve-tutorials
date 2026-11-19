@@ -47,9 +47,10 @@ tutorials use their own, once (remembered in `.tut.env`, not in git):
 make config CLUSTER=tut
 ```
 
-Pick a KServe version and a tutorial, then press ▶ on each step (or ▶ Run
-all): the commands run in a terminal on your machine, shown in the page, and
-every check turns green or red. No copy and paste.
+Pick a KServe version and a tutorial, then step through it like a notebook:
+**▶ Next** (or Shift+Enter) runs the selected step and moves to the next one;
+click any step to select it. The commands run in a terminal on your machine,
+shown in the page, and every check turns green or red. No copy and paste.
 
 The CLI tools a tutorial needs (kind, kubectl, helm, cloud-provider-kind) are
 installed by the tutorial's first step, at the versions its environment pins,

@@ -51,8 +51,9 @@
             </div>
             <div class="tb-actions">
               <span class="progress" id="progress"></span>
-              <button class="btn primary" id="continue" title="Run from the first step that has not passed yet to the end">⏵ Continue</button>
-              <button class="btn" id="run-all" title="Run every step again from the top, stop at the first failure">▶ Run all</button>
+              <button class="btn primary" id="next" title="Run the selected step, then select the next one (Shift+Enter). Click a step to select it.">▶ Next <kbd>⇧↵</kbd></button>
+              <button class="btn" id="continue" title="Run from the first step that has not passed yet to the end">⏵ Continue</button>
+              <button class="btn" id="run-all" title="Run every step again from the top, stop at the first failure">⏩ Run all</button>
               <button class="btn" id="stop" title="Ctrl-C">■ Stop</button>
               <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹 Cleanup</button>
               <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻ New shell</button>
