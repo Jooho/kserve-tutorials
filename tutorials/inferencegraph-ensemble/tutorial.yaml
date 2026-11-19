@@ -5,14 +5,12 @@ title:
 summary:
   en: Chain XGBoost and LightGBM InferenceServices with an InferenceGraph, first as an Ensemble and then as a Sequence that averages them in a combiner.
 status: draft                   # draft -> stable -> deprecated -> archived
-# env: none fits yet. kind-llmisvc/v1 installs only the LLMInferenceService stack
-# (no InferenceService/InferenceGraph controller, no MLServer runtime, no
-# ingress-nginx), so the cluster and KServe are set up as tutorial steps.
-# See build/draft/inferencegraph-ensemble/notes.md.
+env: kind-kserve/v1
+env_options: {types: [kserve], mode: standard}   # InferenceService + InferenceGraph, RawDeployment
 namespace: kserve-graph-demo    # the manifests (and the combiner serviceUrl) use this namespace
 kserve:
-  default: v0.17.0              # the version the author tested
-  tested: [v0.17.0]
+  default: v0.18.0              # the author tested v0.17.0; the env needs v0.17.1+
+  tested: [v0.18.0]
 tags: [inferencegraph, inferenceservice, mlserver, storage, ensemble, intermediate]
 requires: {gpu: false, cpu: 4, memory: 8Gi}
 langs: [en]                 # en is the source; others are translations

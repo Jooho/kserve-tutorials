@@ -95,7 +95,7 @@ def test_draft_end_to_end_with_a_stand_in_ai(repo, work):
     assert r.tid == work.name and t.is_dir()
     assert sorted(p.name for p in work.rglob("*")) == before          # original untouched
     assert (r.work / "input" / "scripts" / "deploy.sh").exists()
-    assert "kind-llmisvc/v1" in (r.work / "parts.md").read_text()
+    assert "kind-kserve/v1" in (r.work / "parts.md").read_text()
     assert "./tut _draftcheck" in (r.work / "prompt.md").read_text()
     assert r.outside == [] and r.agent_rc == 0
     assert [c for _, _, c in r.found] == ["kubectl apply -f manifests/model.yaml -n ${NAMESPACE}"]  # $NS in the tutorial

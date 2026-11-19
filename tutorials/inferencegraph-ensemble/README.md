@@ -3,7 +3,7 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** 🚧 draft · **Tested with KServe:** v0.17.0 · **Environment:** — · **GPU:** not required
+> **Status:** 🚧 draft · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
 
 <!-- /tut -->
 
@@ -19,91 +19,43 @@ returns their average as a single prediction.
 
 ![InferenceGraph architecture](images/architecture.svg)
 
-**What you need on your machine:** Docker (running), `kind`, `kubectl`,
-`curl` and Python 3 with the `venv` module. This tutorial has no shared
-environment profile yet, so it creates its own Kind cluster
-(`inferencegraph-ensemble`) and installs KServe itself (Steps 1–2).
+**What you need on your machine:** Docker (running), `curl` and Python 3 with
+the `venv` module. Step 0 creates the Kind cluster and installs KServe in
+standard mode (environment `kind-kserve/v1`); `kind` and `kubectl` come with it.
 
 ## Step 0: Environment
 
-This sets `KSERVE_VERSION` and the namespace (`$NS`, `kserve-graph-demo`) and
-moves into the tutorial directory. It is safe to run again.
+This sets `KSERVE_VERSION` and the namespace (`$NS`, `kserve-graph-demo`),
+creates the Kind cluster with KServe (InferenceService, standard mode) or reuses
+it, and moves into the tutorial directory. It is safe to run again.
 
 <!-- tut:setup -->
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.17.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
 export NS="${NS:-kserve-graph-demo}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
 export TUT_LIB="$REPO_ROOT/lib"
+# pinned CLI tools of the environment, for this shell only
+export PATH="$REPO_ROOT/.tools/kind/v0.30.0:$REPO_ROOT/.tools/kubectl/v1.34.13:$REPO_ROOT/.tools/helm/v3.16.3:$REPO_ROOT/.tools/cloud-provider-kind/v0.12.0:$PATH"
+# what this tutorial needs from the environment (env_options in tutorial.yaml)
+TUT_ENV_TYPES=kserve TUT_ENV_MODE=standard TUT_ENV_KEDA=false "$REPO_ROOT/envs/kind-kserve/v1/setup.sh"
+kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 cd "$REPO_ROOT/tutorials/inferencegraph-ensemble"
 ```
 
 <!-- /tut -->
 
-## Step 1: Create a Kind cluster with ingress-nginx
+## Step 1: ingress-nginx, and KServe pointed at it
 
-The cluster has one control-plane node labelled `ingress-ready=true`, which
-is where the Kind flavour of ingress-nginx runs. Ports 80/443 of the node are
-mapped to the host. If the cluster already exists it is reused.
-
-```bash run
-CLUSTER_NAME="${CLUSTER_NAME:-inferencegraph-ensemble}"
-kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME" \
-  || kind create cluster --name "$CLUSTER_NAME" --config manifests/kind-cluster.yaml
-kubectl config use-context "kind-$CLUSTER_NAME"
-kubectl cluster-info --context kind-${CLUSTER_NAME}
-kubectl wait --for=condition=Ready nodes --all --timeout=300s
-```
-
-<details>
-<summary>manifests/kind-cluster.yaml</summary>
-
-<!-- tut:include manifests/kind-cluster.yaml -->
-
-```yaml
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-  kubeadmConfigPatches:
-  - |
-    kind: InitConfiguration
-    nodeRegistration:
-      kubeletExtraArgs:
-        node-labels: "ingress-ready=true"
-  extraPortMappings:
-  - containerPort: 80
-    hostPort: 80
-    protocol: TCP
-  - containerPort: 443
-    hostPort: 443
-    protocol: TCP
-```
-
-<!-- /tut -->
-
-</details>
-
-The models will live on a PersistentVolumeClaim with the `standard`
-StorageClass. Kind ships one (local-path provisioner); the second line only
-renames it if your Kind version calls it `local-path`.
-
-```bash run
-kubectl get storageclass standard >/dev/null 2>&1 || \
-    kubectl patch storageclass local-path -p '{"metadata": {"name":"standard"}}'
-kubectl get storageclass
-```
-
-Install the ingress-nginx controller. The InferenceGraph will be reached
-through it with a `Host:` header.
+The InferenceGraph will be reached through the ingress-nginx controller with a
+`Host:` header. Its Kind flavour runs on the node labelled `ingress-ready=true`.
 
 ```bash run
 INGRESS_NGINX_VERSION="${INGRESS_NGINX_VERSION:-v1.11.3}"
-CLUSTER_NAME="${CLUSTER_NAME:-inferencegraph-ensemble}"
-kubectl label node ${CLUSTER_NAME}-control-plane ingress-ready=true --overwrite 2>/dev/null || true
+kubectl label node -l node-role.kubernetes.io/control-plane ingress-ready=true --overwrite
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml
 kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s
 ```
@@ -117,17 +69,14 @@ kubectl wait --namespace ingress-nginx \
   --timeout=300s
 ```
 
-## Step 2: Install KServe and point it at ingress-nginx
-
-KServe's standard-mode quick-install script installs the InferenceService and
-InferenceGraph controllers and the built-in serving runtimes (including
-`kserve-mlserver`). It is skipped when KServe is already installed. This
-takes several minutes.
+The models will live on a PersistentVolumeClaim with the `standard`
+StorageClass. Kind ships one (local-path provisioner); the second line only
+renames it if your Kind version calls it `local-path`.
 
 ```bash run
-if ! kubectl get crd inferenceservices.serving.kserve.io >/dev/null 2>&1; then
-  curl -s "https://raw.githubusercontent.com/kserve/kserve/refs/heads/master/install/${KSERVE_VERSION}/kserve-standard-mode-full-install-with-manifests.sh" | bash
-fi
+kubectl get storageclass standard >/dev/null 2>&1 || \
+    kubectl patch storageclass local-path -p '{"metadata": {"name":"standard"}}'
+kubectl get storageclass
 ```
 
 By default KServe does not know about ingress-nginx. Set `ingressClassName`
@@ -164,13 +113,13 @@ kubectl get cm inferenceservice-config -n kserve -o jsonpath='{.data.ingress}' \
   | python3 -c 'import json, sys; c = json.load(sys.stdin); assert c["ingressClassName"] == "nginx", c'
 ```
 
-## Step 3: Create the namespace
+## Step 2: Create the namespace
 
 ```bash run
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-## Step 4: Train the two models
+## Step 3: Train the two models
 
 `scripts/train.py` downloads the California Housing dataset (8 numeric
 features, target = median house value in units of $100,000), trains an
@@ -374,7 +323,7 @@ grep -q '"mlserver_xgboost.XGBoostModel"' models/xgboost-predictor/model-setting
 grep -q '"mlserver_lightgbm.LightGBMModel"' models/lightgbm-predictor/model-settings.json
 ```
 
-## Step 5: Build the combiner and load images into Kind
+## Step 4: Build the combiner and load images into Kind
 
 The combiner is a tiny FastAPI app that speaks the V2 inference protocol. It
 receives the Ensemble output (`{"0": {...}, "1": {...}}`), takes the first
@@ -483,7 +432,7 @@ image is large; loading it ahead of time saves a slow pull when the
 predictors start.
 
 ```bash run
-CLUSTER_NAME="${CLUSTER_NAME:-inferencegraph-ensemble}"
+CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"   # the environment's cluster
 COMBINER_IMAGE="${COMBINER_IMAGE:-ensemble-combiner:v1}"
 MLSERVER_IMAGE="${MLSERVER_IMAGE:-docker.io/seldonio/mlserver:1.5.0}"
 docker build -t ${COMBINER_IMAGE} combiner/
@@ -493,11 +442,11 @@ kind load docker-image ${MLSERVER_IMAGE} --name ${CLUSTER_NAME}
 ```
 
 ```bash verify
-CLUSTER_NAME="${CLUSTER_NAME:-inferencegraph-ensemble}"
+CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"   # the environment's cluster
 docker exec "${CLUSTER_NAME}-control-plane" crictl images | grep -q 'ensemble-combiner'
 ```
 
-## Step 6: Put the models on a PVC
+## Step 5: Put the models on a PVC
 
 The InferenceServices load their models from `pvc://model-pvc/<name>`.
 Create the claim; it stays `Pending` until a Pod mounts it (the local-path
@@ -590,7 +539,7 @@ The helper is no longer needed:
 kubectl delete pod model-upload-helper -n "$NS" --force --grace-period=0 --ignore-not-found
 ```
 
-## Step 7: Deploy the three InferenceServices
+## Step 6: Deploy the three InferenceServices
 
 Two predictors run on the `kserve-mlserver` runtime with the models from the
 PVC; the combiner is a custom container. All three use `RawDeployment` mode
@@ -682,7 +631,7 @@ kubectl wait --for=condition=Ready isvc/xgboost-predictor isvc/lightgbm-predicto
 kubectl get isvc -n "$NS"
 ```
 
-## Step 8: Ensemble only — one request, two answers
+## Step 7: Ensemble only — one request, two answers
 
 The `Ensemble` router sends **the same input to every step in parallel** and
 returns all results, keyed by step index.
@@ -787,7 +736,7 @@ assert {r["0"]["model_name"], r["1"]["model_name"]} == {"xgboost-predictor", "li
 The two models disagree (in the author's run: XGBoost ≈ 2.74, LightGBM ≈
 4.16). The client gets both and has to decide what to do with them.
 
-## Step 9: Sequence + Combiner — one request, one answer
+## Step 8: Sequence + Combiner — one request, one answer
 
 To merge the results on the server, wrap the ensemble in a `Sequence`:
 
@@ -889,11 +838,11 @@ kubectl delete namespace "$NS" --ignore-not-found
 rm -f "${TMPDIR:-/tmp}/inferencegraph-ensemble.json" "${TMPDIR:-/tmp}/inferencegraph-combined.json"
 ```
 
-The Kind cluster (with ingress-nginx and KServe) is kept so you can run the
-tutorial again quickly. Remove it when you are done:
+The Kind cluster (with ingress-nginx and KServe) is kept so you can run this
+and other tutorials again quickly. Remove it when you are done:
 
 ```bash skip
-kind delete cluster --name "${CLUSTER_NAME:-inferencegraph-ensemble}"
+"$REPO_ROOT/envs/kind-kserve/v1/teardown.sh"
 ```
 
 ## What we learned

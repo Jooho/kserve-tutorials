@@ -150,14 +150,24 @@ def parts_catalog(root: Path = REPO_ROOT) -> str:
            "modules in tutorial.yaml (`env:`, `uses:`); use shared steps with one line.", ""]
     out += ["## Environments (`env:` in tutorial.yaml)", "",
             "An env creates the cluster and installs KServe; the generated setup step runs it.",
-            "If none fits, do NOT create one: write the setup as steps and add a TODO to the notes.", ""]
+            "Pick what to install with env_options. If no env and no option fits, do NOT create",
+            "one: write the setup as steps and add a TODO to the notes.", ""]
     for ref, env in sorted(load_envs(root).items()):
         users = [t.id for t in tutorials if t.env_ref == ref]
         tools = (env.path / "tools.env").read_text().strip() if (env.path / "tools.env").exists() else ""
+        options = env.meta.get("options") or {}
         out += [f"### `{ref}`", "", f"- what: {env.meta.get('description', '').strip()}",
                 f"- KServe: {env.meta.get('kserve', {})}", f"- frozen: {env.meta.get('frozen', False)}",
-                f"- use: `env: {ref}`", f"- used by: {', '.join(users) or '-'}",
+                f"- use: `env: {ref}`" + (" plus `env_options:` (see options)" if options else ""),
+                f"- used by: {', '.join(users) or '-'}",
                 f"- details: envs/{ref}/README.md, envs/{ref}/setup.sh"]
+        if options:
+            out += ["- options (`env_options` in tutorial.yaml; anything else fails lint T008):"]
+            out += [f"  - `{k}`: {v.get('description', '')}; allowed {v.get('allowed')}, default {v.get('default')}"
+                    for k, v in options.items()]
+            used = [f"{t.id}: {t.env_options}" for t in tutorials if t.env_ref == ref and t.env_options]
+            if used:
+                out += ["  - examples: " + "; ".join(used)]
         if tools:
             out += ["- tools:", "", "```", tools, "```"]
         out.append("")

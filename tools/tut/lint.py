@@ -9,6 +9,7 @@ Tutorial metadata
   T005 every tested KServe version must be supported by the env profile
   T006 deprecated/archived tutorials need a `deprecation` block
   T007 stable tutorials must use a frozen env profile
+  T008 env_options must be options the env declares, with allowed values
 
 Documents (README.md and translations)
   D001 shell code blocks need exactly one role: run | verify | cleanup | skip
@@ -207,6 +208,22 @@ class Linter:
                     self.err("T005", f, f"env {env.ref} does not support KServe {ver}")
             if t.status == "stable" and not env.frozen:
                 self.err("T007", f, f"stable tutorial uses env {env.ref}, which is not frozen")
+        opts = t.env_options
+        if opts and env is None:
+            self.err("T008", f, "env_options without an env")
+        elif env is not None:
+            declared = env.meta.get("options") or {}
+            for name, value in opts.items():
+                if name not in declared:
+                    self.err("T008", f, f"env {env.ref} has no option {name!r} "
+                             f"(options: {', '.join(declared) or 'none'})")
+                    continue
+                allowed = declared[name].get("allowed", [])
+                for v in (value if isinstance(value, list) else [value]):
+                    if v not in allowed:
+                        self.err("T008", f, f"env_options.{name}: {v!r} is not one of {allowed}")
+            if opts.get("keda") is True and opts.get("mode", "standard") != "standard":
+                self.err("T008", f, "env_options: keda needs mode standard")
         for ref in t.uses:
             mod = self.modules.get(ref)
             if mod is None:
