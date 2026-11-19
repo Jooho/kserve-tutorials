@@ -200,6 +200,7 @@ What a change can reach:
 | `tutorials/<id>/**` | `<id>` |
 | `envs/<name>/v<N>/**` | Tutorials whose `env` is `<name>/v<N>` (only allowed while not frozen) |
 | `lib/<name>/v<N>/**` | Tutorials that list `<name>/v<N>` in `uses` (only allowed while not frozen) |
+| how tutorials are executed (runner, parser, setup generator, tool installer, local config, `run-tutorials.yml`) | every tutorial |
 | anything else | None; lint and unit tests still run, the weekly run covers the rest |
 
 **Script modules** (`lib/<name>/v<N>/`) apply the same rule to reusable

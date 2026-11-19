@@ -202,6 +202,9 @@ def test_affected_env_change_hits_only_its_users(repo):
     assert [t.id for t in plan.affected(["envs/kind-x/v2/setup.sh"], ts)] == ["b"]
     assert [t.id for t in plan.affected(["tutorials/c/README.md"], ts)] == ["c"]
     assert plan.affected(["tools/tut/lint.py", "README.md"], ts) == []
+    # changing how tutorials are executed runs all of them
+    assert [t.id for t in plan.affected(["tools/tut/runner.py"], ts)] == ["a", "b", "c"]
+    assert len(plan.affected([".github/workflows/run-tutorials.yml"], ts)) == 3
 
 
 def test_E002_frozen_env_cannot_change(repo):

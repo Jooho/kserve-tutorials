@@ -8,6 +8,8 @@ Blast radius rules (the reason envs are versioned):
   tutorials/<id>/**           -> <id>
   envs/<name>/<ver>/**        -> tutorials whose `env` is <name>/<ver>
   lib/<name>/<ver>/**         -> tutorials that list <name>/<ver> in `uses`
+  how tutorials are executed  -> every tutorial (runner, markdown parser, generated
+    (EXECUTION_PATHS)            setup step, tool installer, local config, CI job)
   anything else               -> nothing (lint and unit tests still run)
 """
 from __future__ import annotations
@@ -24,9 +26,19 @@ def changed_files(base: str, root: Path = REPO_ROOT) -> list[str]:
     return [l for l in out.split("\n") if l]
 
 
+# Files that change how *every* tutorial runs; a change here runs them all.
+EXECUTION_PATHS = (
+    "tools/tut/runner.py", "tools/tut/markdown.py", "tools/tut/generate.py",
+    "tools/install-tools.sh", "tools/local-config.sh",
+    ".github/workflows/run-tutorials.yml", ".github/scripts/diagnose.sh",
+)
+
+
 def affected(paths: list[str], tutorials: list[Tutorial]) -> list[Tutorial]:
     by_id = {t.id: t for t in tutorials}
     hit: dict[str, Tutorial] = {}
+    if any(p in EXECUTION_PATHS for p in paths):
+        return list(tutorials)
     for p in paths:
         parts = Path(p).parts
         if len(parts) >= 2 and parts[0] == "tutorials" and parts[1] in by_id:
