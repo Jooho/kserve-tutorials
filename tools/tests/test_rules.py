@@ -449,3 +449,18 @@ def test_site_drops_the_github_language_links(tmp_path):
     site._copy_tree(src, tmp_path / "out")
     text = (tmp_path / "out" / "index.md").read_text()
     assert "README.ko.md" not in text and "**Status:** x" in text and "Body" in text
+
+
+def test_site_points_folder_links_at_index_pages(tmp_path):
+    """Folder links (fine on GitHub) become index.md links, so mkdocs --strict
+    checks them (a missing folder then fails the build); existing folders
+    without an index page and external links stay."""
+    from tut import site
+    (tmp_path / "a").mkdir(); (tmp_path / "b").mkdir(); (tmp_path / "files").mkdir()
+    (tmp_path / "b" / "index.md").write_text("# B\n")
+    page = tmp_path / "a" / "index.md"
+    page.write_text("[b](../b/) [b2](../b/#part) [files](../files/) [ext](https://x.io/y/) "
+                    "[top](#top) [missing](../gone/)\n")
+    site._link_dir_indexes(tmp_path)
+    assert page.read_text() == ("[b](../b/index.md) [b2](../b/index.md#part) [files](../files/) "
+                                "[ext](https://x.io/y/) [top](#top) [missing](../gone/index.md)\n")

@@ -79,4 +79,26 @@ def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
                 lines.append(f"- [{t.title()}](tutorials/{t.id}/index.md) — {t.summary()}")
         lines.append("")
     (out / "versions.md").write_text("\n".join(lines))
+    _link_dir_indexes(out)
     return out
+
+
+_DIR_LINK = re.compile(r"(\]\()(?![a-z][a-z0-9+.-]*:|#|/)([^)\s#]*/)(#[^)\s]*)?(\))")
+
+
+def _link_dir_indexes(out: Path) -> None:
+    """READMEs link folders (`../other/`), which GitHub opens as their README.
+    MkDocs cannot check a folder link, so point it at the folder's index.md
+    page, so `mkdocs build --strict` checks it: a link to a folder that no
+    longer exists fails the build. Only a folder that exists without an index
+    page (e.g. manifests/) keeps its plain link."""
+    for md in out.rglob("*.md"):
+        def fix(m):
+            d = md.parent / m.group(2)
+            if d.is_dir() and not (d / "index.md").is_file():
+                return m.group(0)
+            return f"{m.group(1)}{m.group(2)}index.md{m.group(3) or ''}{m.group(4)}"
+        text = md.read_text()
+        new = _DIR_LINK.sub(fix, text)
+        if new != text:
+            md.write_text(new)
