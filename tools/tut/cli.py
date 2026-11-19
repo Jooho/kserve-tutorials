@@ -275,26 +275,16 @@ def _translation_draft(a, langs):
         return 0
     failed = 0
     for t in targets:
-        src = t.readme("en").read_text()
         print(f"→ {t.id} → {lang} with {tr.name} …", flush=True)
-        try:
-            text = translate.extract(translate.run(tr, translate.build_prompt(src, lang)))
-        except (translate.TranslationError, subprocess.TimeoutExpired) as e:
-            print(f"  ✗ {e}")
+        r = translate.draft_one(t, lang, tr)
+        if not r.ok:
+            print(f"  ✗ {r.message}")
+            if r.path:
+                print(f"    the AI output is in {r.path.relative_to(REPO_ROOT)}: run draft again, or fix it,"
+                      f"\n    save it as tutorials/{t.id}/README.{lang}.md and run: ./tut translation mark {t.id} {lang}")
             failed += 1
             continue
-        problems = translate.check(src, text)
-        if problems:
-            rej = REPO_ROOT / "build" / "translations" / f"{t.id}.{lang}.rejected.md"
-            rej.parent.mkdir(parents=True, exist_ok=True)
-            rej.write_text(text)
-            print("  ✗ rejected, nothing written: " + "; ".join(problems)
-                  + f"\n    the AI output is in {rej.relative_to(REPO_ROOT)}: run draft again, or fix it,"
-                  f"\n    save it as tutorials/{t.id}/README.{lang}.md and run: ./tut translation mark {t.id} {lang}")
-            failed += 1
-            continue
-        path = lint.write_draft(t, lang, text, tr.name)
-        generate.sync(REPO_ROOT)
+        path = r.path
         print(f"  ✓ wrote {path.relative_to(REPO_ROOT)} (AI draft, not reviewed)\n"
               f"    review it, then: ./tut translation mark {t.id} {lang}")
     return 1 if failed else 0
@@ -328,7 +318,8 @@ CONFIG_FILE = REPO_ROOT / ".tut.env"
 CONFIG_KEYS = {"KIND_CLUSTER_NAME": "name of the kind cluster tutorials create/use (default: kind)",
                "TUT_SKIP_TOOLS": "tools you provide yourself, e.g. \"helm\" (default: none)",
                "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)",
-               "TUT_TRANSLATOR": "AI CLI for `translation draft`: claude | copilot | codex | cmd:<command>",
+               "TUT_AI": "your AI CLI for `draft` and `translation draft`: claude | copilot | codex | cmd:<command>",
+               "TUT_TRANSLATOR": "older name of TUT_AI (still read)",
                "TUT_TRANSLATOR_ARGS": "extra flags for that CLI, e.g. \"--model sonnet\""}
 
 

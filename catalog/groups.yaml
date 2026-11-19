@@ -1,0 +1,13 @@
+# Groups: what kind of tutorial it is. Every tutorial belongs to one group
+# (tutorial.yaml `group:`), checked by ./tut lint (G003). The UI's Groups view
+# lists them in this order. A group is for browsing; an ordered learning path
+# over several tutorials is a collection (catalog/collections/).
+groups:
+  llmisvc:
+    title: {en: LLMInferenceService, ko: LLMInferenceService}
+    description: {en: "Serving LLMs with LLMInferenceService: resources, routing, scheduling, scaling.",
+                  ko: "LLMInferenceService로 LLM 서빙하기: 리소스, 라우팅, 스케줄링, 확장."}
+  inferencegraph:
+    title: {en: InferenceGraph, ko: InferenceGraph}
+    description: {en: "Chain InferenceServices into one endpoint: ensembles, sequences, switches, splitters.",
+                  ko: "여러 InferenceService를 하나의 엔드포인트로: 앙상블, 시퀀스, 스위치, 스플리터."}

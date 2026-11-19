@@ -78,6 +78,16 @@
         "type": "string",
         "pattern": "^[a-z0-9][a-z0-9-]*$"
       }
+    },
+    "vars": {
+      "description": "Shell variables shared by every member when the collection is opened as a learning path in the UI (e.g. NS). Standalone runs and CI ignore them.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Z_][A-Z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   }
 }

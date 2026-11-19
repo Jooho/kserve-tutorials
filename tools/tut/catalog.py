@@ -2,6 +2,7 @@
 lint, the local UI and the site.
 
   catalog/tags.yaml               every tag a tutorial may use
+  catalog/groups.yaml             what kind of tutorial it is (one per tutorial, for browsing)
   catalog/collections/<id>.yaml   ordered reading paths over independent tutorials
   catalog/maintainers.yaml        default code owners
 
@@ -33,6 +34,11 @@ class Collection:
         return list(self.meta.get("members") or [])
 
     @property
+    def vars(self) -> dict[str, str]:
+        """Shared shell variables for the learning path (UI only)."""
+        return {str(k): str(v) for k, v in (self.meta.get("vars") or {}).items()}
+
+    @property
     def owners(self) -> list[str]:
         return list(self.meta.get("owners") or [])
 
@@ -52,6 +58,11 @@ def _yaml(path: Path) -> dict:
 
 def load_tags(root: Path = REPO_ROOT) -> dict:
     return _yaml(root / CATALOG / "tags.yaml")
+
+
+def load_groups(root: Path = REPO_ROOT) -> dict:
+    """{id: {title, description}} in file order (catalog/groups.yaml)."""
+    return dict(_yaml(root / CATALOG / "groups.yaml").get("groups") or {})
 
 
 def load_maintainers(root: Path = REPO_ROOT) -> list[str]:

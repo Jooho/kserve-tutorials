@@ -27,6 +27,8 @@ Documents (README.md and translations)
        `helm install`, `>>`, `kubectl delete` without --ignore-not-found) unless
        the block is marked `once`; warning for drafts
   D013 the UI terminal's aliases (k, kc) must not appear in README blocks
+  D014 shared steps (tut:define / tut:use, PoC): one definition per name, `use`
+       an existing name, no markers inside a definition, do not use your own
 
 Catalog (catalog/)
   G001 every tag must be listed in catalog/tags.yaml (suggests the closest one)
@@ -35,6 +37,9 @@ Catalog (catalog/)
   C002 collection member is not a tutorial
   C003 collection lists a tutorial twice
   C004 collection member is archived and has no replacement (warning)
+  C005 a collection (learning path) needs at least 2 members; until then the UI
+       does not show it (warning)
+  G003 every tutorial needs a group from catalog/groups.yaml
   O001 .github/CODEOWNERS is stale -> run `./tut sync`
 
 Manifests
@@ -64,7 +69,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from . import catalog, generate, markdown
+from . import catalog, generate, markdown, shared
 from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
                     load_modules, load_schema, load_tutorials)
 
@@ -168,6 +173,7 @@ class Linter:
     # ------------------------------------------------------------------ run
     def run(self) -> list[Finding]:
         schema = load_schema("tutorial.schema.json")
+        self.shared_defs = shared.definitions(self.tutorials)
         for t in self.tutorials:
             self.lint_meta(t, schema)
             self.lint_docs(t)
@@ -283,6 +289,30 @@ class Linter:
                         (self.warn if t.status == "draft" else self.err)(
                             "D012", path, f"not safe to run twice: {why} (or mark the block `once`)",
                             b.line + off)
+        # D014 shared steps
+        defs = getattr(self, "shared_defs", {})
+        mine = shared.regions(doc)
+        defined_here = {x.name for x in mine if x.kind == "define"}
+        for x in mine:
+            at = x.region.start + 1
+            if not shared.NAME_RE.match(x.name) or len(x.region.args) != 1:
+                self.err("D014", path, f"tut:{x.kind} needs exactly one name (a-z, 0-9, -)", at)
+                continue
+            if x.kind == "define":
+                if "<!-- tut:" in x.region.body:
+                    self.err("D014", path, f"tut:define {x.name}: no tut: markers inside a "
+                             "definition (shared steps do not nest)", at)
+                owners = [tid for tid, _ in defs.get(x.name, [])]
+                if len(owners) > 1:
+                    self.err("D014", path, f"tut:define {x.name} is defined more than once: "
+                             f"{', '.join(owners)}", at)
+            else:
+                if x.name in defined_here:
+                    self.err("D014", path, f"tut:use {x.name}: this tutorial defines it itself", at)
+                elif x.name not in defs:
+                    known = ", ".join(sorted(defs)) or "none yet"
+                    self.err("D014", path, f"tut:use {x.name}: no tutorial defines it "
+                             f"(defined: {known})", at)
         # D003 hard-coded versions
         region_lines = _region_lines(doc)
         for n, line in enumerate(text.split("\n"), 1):
@@ -416,6 +446,17 @@ class Linter:
                     self.err("G001", t.path / "tutorial.yaml",
                              f"tag {tag!r} is not in catalog/tags.yaml{hint} "
                              "(add it there with a group and description if it is really new)")
+        groups = catalog.load_groups(self.root)
+        for t in self.tutorials:
+            g = t.meta.get("group")
+            if not g:
+                self.err("G003", t.path / "tutorial.yaml",
+                         f"no `group:` — pick one of {', '.join(groups) or '(catalog/groups.yaml is empty)'}")
+            elif g not in groups:
+                near = difflib.get_close_matches(g, list(groups), n=1)
+                hint = f" — did you mean {near[0]!r}?" if near else ""
+                self.err("G003", t.path / "tutorial.yaml",
+                         f"group {g!r} is not in catalog/groups.yaml{hint} (add it there if it is really new)")
         by_id = {t.id: t for t in self.tutorials}
         schema = load_schema("collection.schema.json")
         for c in catalog.load_collections(self.root):
@@ -424,6 +465,9 @@ class Linter:
                 self.err("C001", c.path, f"{'/'.join(map(str, e.path)) or '(root)'}: {e.message}")
             if c.meta.get("id") != c.id:
                 self.err("C001", c.path, f"id {c.meta.get('id')!r} != file name {c.id!r}")
+            if len(c.members) < 2:
+                self.warn("C005", c.path, f"a learning path needs at least 2 tutorials; with "
+                          f"{len(c.members)} it is not shown in the UI yet (browse by group instead)")
             seen = set()
             for m in c.members:
                 if m in seen:

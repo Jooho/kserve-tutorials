@@ -1,0 +1,16 @@
+# PoC: a learning path over three independent tutorials that share steps.
+# vars: exported in every member's UI shell when opened from this collection
+# (standalone runs and CI do not see them).
+id: poc-shared-steps
+title:
+  en: "PoC: shared steps"
+description:
+  en: Three tiny tutorials (no cluster) that reuse each other's steps with tut:define / tut:use.
+owners: [Jooho]
+vars:
+  NS: poc-path
+  MODEL: path-model
+members:
+  - poc-shared-1-deploy
+  - poc-shared-2-config
+  - poc-shared-3-scale

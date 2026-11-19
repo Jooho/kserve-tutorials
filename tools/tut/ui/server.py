@@ -21,7 +21,8 @@ from aiohttp import WSMsgType, web
 
 from .. import lint as tlint
 from .. import markdown as tmd
-from ..model import REPO_ROOT, load_tutorials, version_key
+from .. import shared
+from ..model import LANGS, REPO_ROOT, load_tutorials, version_key
 from .session import ShellSession
 
 STATIC = Path(__file__).parent / "static"
@@ -56,10 +57,33 @@ class UI:
             if not ws.closed:
                 asyncio.ensure_future(ws.send_str(data))
 
+    def learning_path(self, tid: str, col_id: str | None):
+        """(collection, position) when `tid` is opened from collection `col_id`."""
+        if not col_id:
+            return None, None
+        from .. import catalog
+        col = next((c for c in catalog.load_collections(self.root) if c.id == col_id), None)
+        if not col or tid not in col.members:
+            return None, None
+        return col, col.members.index(tid)
+
+    def preview(self, t, path: Path, lang: str) -> tuple[str, bool, str | None]:
+        """The README as it will be after `./tut sync` (tut:use filled in, header,
+        setup), computed in memory: what you see while writing is what runs.
+        Returns (text, the file still needs sync, sync error)."""
+        from .. import generate
+        raw = path.read_text()
+        try:
+            new = generate.sync_file(path, t, lang, list(self.tutorials().values()), self.root)
+        except generate.SyncError as e:
+            return raw, False, str(e)
+        return new, new != raw, None
+
     def doc_blocks(self, tid: str, lang: str):
+        # The page and the "run" messages use the same text, so block indexes match.
         t = self.tutorial_or_404(tid)
         path = t.readme(lang) if t.readme(lang).exists() else t.readme("en")
-        text = path.read_text()
+        text, _, _ = self.preview(t, path, lang)
         return t, path, text, tmd.parse(text)
 
     # ----------------------------------------------------------- middleware
@@ -72,6 +96,16 @@ class UI:
         resp = await handler(request)
         if request.query.get("token") and isinstance(resp, web.StreamResponse) and not resp.prepared:
             resp.set_cookie("tut_token", self.token, httponly=True, samesite="Strict")
+        return resp
+
+    @web.middleware
+    async def no_stale_assets(self, request: web.Request, handler):
+        """The page and its scripts change with every `git pull`: make the browser
+        revalidate them (ETag) instead of mixing a new index.html with a cached
+        old app.js, which left the tutorial list empty."""
+        resp = await handler(request)
+        if request.path == "/" or request.path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"
         return resp
 
     # --------------------------------------------------------------- routes
@@ -90,6 +124,7 @@ class UI:
                 "status": t.status, "env": t.env_ref, "uses": t.uses,
                 "kserve": {"default": t.kserve_default, "tested": t.kserve_tested},
                 "tags": t.meta.get("tags", []) or [], "gpu": t.needs_gpu, "langs": t.langs,
+                "group": t.meta.get("group"),
                 "replacement": (t.meta.get("deprecation") or {}).get("replacement"),
             })
         versions = sorted({v for t in out for v in t["kserve"]["tested"]}, key=version_key,
@@ -111,12 +146,18 @@ class UI:
             "version": version, "collections": cols,
             "other": [t.id for t in catalog.uncollected(tutorials, catalog.load_collections(self.root))],
             "tags": reg.get("tags") or {}, "groups": reg.get("groups") or {},
+            "tutorial_groups": [{"id": gid, "title": g.get("title", {}), "description": g.get("description", {})}
+                                for gid, g in catalog.load_groups(self.root).items()],
         })
 
     async def api_tutorial(self, request):
         tid = request.match_info["tid"]
         lang = request.query.get("lang", "en")
         t, path, text, doc = self.doc_blocks(tid, lang)
+        _, stale, sync_error = self.preview(t, path, lang)
+        col, pos = self.learning_path(tid, request.query.get("collection"))
+        names = shared.block_names(doc)
+        covered = shared.covered(col.members, tid, self.tutorials()) if col else {}
         lines = text.split("\n")
         blocks = []
         # Replace each fenced block with a placeholder the front end hydrates.
@@ -129,9 +170,14 @@ class UI:
                     p = self.root / "lib" / ref / name
                     scripts.append({"path": f"lib/{ref}/{name}",
                                     "content": p.read_text() if p.is_file() else None})
+            name = names.get(i)
             blocks.append({"idx": i, "lang": b.lang, "role": b.role, "attrs": b.attrs,
                            "code": b.code, "line": b.line, "region": b.in_region,
-                           "scripts": scripts})
+                           "scripts": scripts,
+                           # learning path: a shared step an earlier member already has,
+                           # and cleanup (done once, at the end of the path)
+                           "shared": name, "covered_by": covered.get(name) if name else None,
+                           "group_skip": bool(col) and b.role == "cleanup"})
         body = "\n".join(lines)
         body = re.sub(r"<details>", '<details markdown="1">', body)
         html = md.markdown(body, extensions=["tables", "md_in_html", "sane_lists"])
@@ -143,10 +189,114 @@ class UI:
             "translation": None if lang == "en" else tlint.translation_state(t, lang),
             "file": str(path.relative_to(self.root)), "html": html, "blocks": blocks,
             "states": self.block_states.get(tid, {}),
+            "preview": {"stale": stale, "error": sync_error},
+            "group": None if not col else {
+                "id": col.id, "title": {l: col.text("title", l) for l in ("en", "ko")},
+                "n": pos + 1, "total": len(col.members), "vars": col.vars,
+                "prev": col.members[pos - 1] if pos > 0 else None,
+                "next": col.members[pos + 1] if pos + 1 < len(col.members) else None},
             "session": {"alive": tid in self.sessions and self.sessions[tid].alive,
                         "kserve_version": self.sessions[tid].kserve_version
                         if tid in self.sessions else None},
         })
+
+    def source_path(self, tid: str, lang: str, file: str = "readme") -> Path:
+        """What the editor may read and write: this tutorial's README.md /
+        README.<lang>.md, or its tutorial.yaml (title, tags, env ...). Nothing else."""
+        t = self.tutorial_or_404(tid)
+        if file == "tutorial.yaml":
+            return t.path / "tutorial.yaml"
+        if file != "readme":
+            raise web.HTTPBadRequest(text=f"the editor only opens README and tutorial.yaml, not {file!r}")
+        if lang not in LANGS:
+            raise web.HTTPBadRequest(text=f"unknown language {lang!r}")
+        p = t.readme(lang)
+        return p if p.exists() else t.readme("en")
+
+    async def api_source(self, request):
+        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"),
+                             request.query.get("file", "readme"))
+        return web.json_response({"file": str(p.relative_to(self.root)), "text": p.read_text(),
+                                  "mtime": str(p.stat().st_mtime_ns)})
+
+    async def api_source_save(self, request):
+        """Save from the editor. `mtime` must match the file on disk, so a change
+        made in another editor meanwhile is never overwritten silently (409)."""
+        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"),
+                             request.query.get("file", "readme"))
+        data = await request.json()
+        if str(data.get("mtime")) != str(p.stat().st_mtime_ns):
+            return web.json_response({"error": "changed on disk", "text": p.read_text(),
+                                      "mtime": str(p.stat().st_mtime_ns)}, status=409)
+        text = str(data.get("text", ""))
+        p.write_text(text if text.endswith("\n") else text + "\n")
+        return web.json_response({"mtime": str(p.stat().st_mtime_ns)})
+
+    async def api_translate(self, request):
+        """Make (or update) README.<lang>.md with the user's AI CLI (TUT_AI), the
+        same checked flow as `./tut translation draft`. Takes a minute or more."""
+        from .. import translate
+        t = self.tutorial_or_404(request.match_info["tid"])
+        lang = request.query.get("lang", "")
+        if lang not in LANGS or lang == "en":
+            raise web.HTTPBadRequest(text=f"unknown translation language {lang!r}")
+        try:
+            tr = translate.configured()
+        except translate.TranslationError as e:
+            return web.json_response({"ok": False, "message": str(e)})
+        if tr is None or not tr.available:
+            return web.json_response({"ok": False, "message":
+                "No AI CLI is set up for translations. In the terminal you started ./tut ui from:\n"
+                "  ./tut config TUT_AI=claude      # or copilot, codex\nthen restart ./tut ui."
+                if tr is None else f"TUT_AI={tr.name}, but `{tr.argv[0]}` is not on PATH"})
+        key = (t.id, lang)
+        busy = getattr(self, "translating", set())
+        self.translating = busy
+        if key in busy:
+            return web.json_response({"ok": False, "message": "a translation of this tutorial is already running"})
+        busy.add(key)
+        try:
+            r = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: translate.draft_one(t, lang, tr, self.root))
+        finally:
+            busy.discard(key)
+        return web.json_response({"ok": r.ok, "by": tr.name, "message": r.message,
+                                  "path": str(r.path.relative_to(self.root)) if r.path else None})
+
+    async def api_sync(self, request):
+        """`./tut sync` from the editor: fills tut:use / header / setup in the files."""
+        from .. import generate
+        changed, errors = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: generate.sync(self.root))
+        return web.json_response({"changed": [str(p.relative_to(self.root)) for p in changed],
+                                  "errors": errors})
+
+    async def api_stamp(self, request):
+        """Changes whenever a file that shapes a tutorial page changes (live preview)."""
+        latest = 0
+        for pattern in ("tutorials/*/README*.md", "tutorials/*/tutorial.yaml",
+                        "tutorials/*/manifests/*", "catalog/*.yaml", "catalog/collections/*.yaml"):
+            for p in self.root.glob(pattern):
+                try:
+                    latest = max(latest, p.stat().st_mtime_ns)
+                except OSError:
+                    pass
+        return web.json_response({"stamp": str(latest)})
+
+    async def api_problems(self, request):
+        """Lint findings for one tutorial (its directory), for the Problems panel."""
+        t = self.tutorial_or_404(request.match_info["tid"])
+        findings = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: tlint.Linter(self.root).run())
+        base = t.path.resolve()
+        out = []
+        for f in findings:
+            p = f.path if f.path.is_absolute() else self.root / f.path
+            if p.resolve().is_relative_to(base):
+                out.append({"severity": f.severity, "code": f.code, "line": f.line,
+                            "file": str(p.resolve().relative_to(self.root.resolve())),
+                            "message": f.message})
+        return web.json_response({"problems": out})
 
     async def api_env(self, request):
         t = self.tutorial_or_404(request.match_info["tid"])
@@ -183,7 +333,8 @@ class UI:
         if sess and sess.alive:
             await ws.send_str(json.dumps({"type": "output", "data": "".join(sess.scrollback)}))
             await ws.send_str(json.dumps({"type": "session", "state": "started",
-                                          "kserve_version": sess.kserve_version}))
+                                          "kserve_version": sess.kserve_version,
+                                          "collection": sess.collection, "vars": sess.extra_env}))
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -196,7 +347,8 @@ class UI:
                     if sess:
                         sess.stop()
                     self.block_states[tid] = {}
-                    sess = self.start_session(tid, version)
+                    col, _ = self.learning_path(tid, m.get("collection"))
+                    sess = self.start_session(tid, version, col)
                     if m.get("cols"):
                         sess.resize(m["cols"], m["rows"])
                     continue
@@ -222,11 +374,12 @@ class UI:
             self.clients.get(tid, set()).discard(ws)
         return ws
 
-    def start_session(self, tid: str, version: str | None) -> ShellSession:
+    def start_session(self, tid: str, version: str | None, col=None) -> ShellSession:
         sess = ShellSession(
             tid, self.root, version,
             on_output=lambda data: self.broadcast(tid, {"type": "output", "data": data}),
-            on_event=lambda ev: self.broadcast(tid, ev))
+            on_event=lambda ev: self.broadcast(tid, ev),
+            collection=col.id if col else None, extra_env=col.vars if col else None)
         self.sessions[tid] = sess
         sess.start()
         return sess
@@ -236,13 +389,19 @@ class UI:
             s.stop()
 
     def app(self) -> web.Application:
-        app = web.Application(middlewares=[self.auth])
+        app = web.Application(middlewares=[self.auth, self.no_stale_assets])
         app.add_routes([
             web.get("/", self.index),
             web.get("/api/tutorials", self.api_tutorials),
             web.get("/api/catalog", self.api_catalog),
             web.get("/api/tutorials/{tid}", self.api_tutorial),
             web.get("/api/tutorials/{tid}/env", self.api_env),
+            web.get("/api/tutorials/{tid}/problems", self.api_problems),
+            web.get("/api/stamp", self.api_stamp),
+            web.get("/api/tutorials/{tid}/source", self.api_source),
+            web.put("/api/tutorials/{tid}/source", self.api_source_save),
+            web.post("/api/sync", self.api_sync),
+            web.post("/api/tutorials/{tid}/translation", self.api_translate),
             web.get("/ws/{tid}", self.ws),
             web.get("/files/{path:.+}", self.files),
             web.static("/static", STATIC),

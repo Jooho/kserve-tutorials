@@ -1,0 +1,18 @@
+# PoC for shared steps (tut:define / tut:use) and learning paths. No cluster:
+# every step only writes files under ${TMPDIR:-/tmp}/tut-poc/$NS.
+id: poc-shared-2-config
+title:
+  en: "PoC 2 — Configure the model"
+summary:
+  en: Uses poc-model, defines poc-config.
+status: draft
+group: poc
+namespace: poc-shared-2-config
+kserve:
+  default: v0.18.0
+  tested: [v0.18.0]
+tags: [beginner]
+requires: {gpu: false, cpu: 1, memory: 1Gi}
+langs: [en]
+timeout_minutes: 5
+owners: [Jooho]

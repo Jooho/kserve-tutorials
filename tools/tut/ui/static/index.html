@@ -17,9 +17,6 @@
     <div class="seg" id="termpos" title="Terminal position">
       <button data-pos="bottom" aria-label="Terminal at the bottom">⬓ Bottom</button><button data-pos="right" aria-label="Terminal on the right">◨ Right</button>
     </div>
-    <label class="field">KServe
-      <select id="version"></select>
-    </label>
     <div class="seg" id="lang">
       <button data-lang="en" class="on">EN</button><button data-lang="ko">KO</button>
     </div>
@@ -28,11 +25,16 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="seg views" id="views" role="tablist">
-        <button data-view="collections" role="tab">Collections</button><button data-view="all" role="tab">All</button><button data-view="versions" role="tab">Versions</button>
+        <button data-view="groups" role="tab" title="Tutorials by kind; each one opens on its own">Groups</button><button data-view="collections" role="tab" title="Learning paths: several tutorials in order">Collections</button><button data-view="all" role="tab">All</button>
       </div>
       <input id="search" type="search" placeholder="Search title, summary, tags…" aria-label="Search tutorials">
       <div class="filters">
         <select id="addtag" aria-label="Filter by tag"><option value="">＋ tag</option></select>
+        <button id="showtags" class="icon-btn" aria-pressed="false" title="Show the tags of each tutorial">#&nbsp;tags</button>
+        <div class="verrow">
+          <select id="verfilter" aria-label="KServe version" title="Show only the tutorials tested on this KServe version"></select>
+          <button id="matrix-btn" class="icon-btn" title="Which tutorial is tested on which KServe version">▦</button>
+        </div>
         <select id="sort" aria-label="Sort"><option value="title">Sort: title</option><option value="status">Sort: status</option><option value="kserve">Sort: newest KServe</option></select>
       </div>
       <div id="tagchips"></div>
@@ -51,16 +53,33 @@
             </div>
             <div class="tb-actions">
               <span class="progress" id="progress"></span>
-              <button class="btn primary" id="next" title="Run the selected step, then select the next one (Shift+Enter). Click a step to select it.">▶ Next <kbd>⇧↵</kbd></button>
-              <button class="btn" id="continue" title="Run from the first step that has not passed yet to the end">⏵ Continue</button>
-              <button class="btn" id="run-all" title="Run every step again from the top, stop at the first failure">⏩ Run all</button>
-              <button class="btn" id="stop" title="Ctrl-C">■ Stop</button>
-              <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹 Cleanup</button>
-              <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻ New shell</button>
+              <button class="btn primary" id="next" title="Run the selected step, then select the next one (Shift+Enter). Click a step to select it.">▶<span class="lbl"> Next</span> <kbd>⇧↵</kbd></button>
+              <button class="btn" id="continue" title="Run from the first step that has not passed yet to the end">⏵<span class="lbl"> Continue</span></button>
+              <button class="btn" id="run-all" title="Run every step again from the top, stop at the first failure">⏩<span class="lbl"> Run all</span></button>
+              <button class="btn" id="stop" title="Ctrl-C">■<span class="lbl"> Stop</span></button>
+              <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹<span class="lbl"> Cleanup</span></button>
+              <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻<span class="lbl"> New shell</span></button>
+              <button class="btn" id="edit" title="Edit this README next to its preview (Ctrl+S saves)">✎<span class="lbl"> Edit</span></button>
             </div>
           </div>
+          <div class="problems" id="problems" hidden></div>
           <div class="envbar" id="envbar"></div>
-          <article class="doc" id="doc"></article>
+          <div class="docbody" id="docbody">
+            <aside class="editor" id="editor" hidden>
+              <div class="editor-head">
+                <select id="editor-pick" aria-label="File to edit" title="README (steps and prose) or tutorial.yaml (title, summary, tags, env ...)">
+                  <option value="readme">README</option><option value="tutorial.yaml">tutorial.yaml</option>
+                </select>
+                <span class="mono muted" id="editor-file"></span>
+                <span class="editor-state" id="editor-state"></span>
+                <button class="btn primary" id="editor-save" title="Ctrl+S">Save</button>
+                <button class="btn" id="editor-sync" title="Save, then ./tut sync: fills tut:use, header and setup in the files">Save &amp; sync</button>
+                <button class="btn" id="editor-close" title="Back to the rendered page (Esc)">Close</button>
+              </div>
+              <textarea id="editor-text" spellcheck="false" aria-label="README source"></textarea>
+            </aside>
+            <article class="doc" id="doc"></article>
+          </div>
         </div>
       </section>
 
