@@ -1,7 +1,16 @@
 # Thin wrapper around ./tut so people and CI run the same commands.
 # `make` or `make help` lists the targets.
+#
+# Two kinds of dependencies, kept apart:
+#   make setup   what ./tut itself needs: a .venv with the Python packages
+#   tutorials    each environment installs its own CLI tools (envs/*/tools.env)
+#                into .tools/<tool>/<version>/ when its setup step runs;
+#                `make tools` only downloads them ahead of time.
+# Docker, git and curl are yours to install; `make doctor` checks them.
 
-PY      ?= python3
+VENV    := .venv
+PY      ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
+ENV     ?=
 T       ?=
 V       ?=
 BASE    ?=
@@ -10,13 +19,23 @@ DRY_RUN ?= true
 
 export NO_MKDOCS_2_WARNING := 1
 .DEFAULT_GOAL := help
-.PHONY: help setup sync lint test site check ui list run run-keep matrix release-plan release
+.PHONY: help setup doctor tools sync lint test site check ui list run run-keep matrix release-plan release
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
-setup: ## Install the Python dependencies (Python 3.11+)
-	$(PY) -m pip install -r tools/requirements.txt
+setup: ## Prepare ./tut itself: .venv + Python packages (needs Python 3.11+)
+	@test -x $(VENV)/bin/python || python3 -m venv $(VENV)
+	$(VENV)/bin/python -m pip install -q --upgrade pip
+	$(VENV)/bin/python -m pip install -q -r tools/requirements.txt
+	@./tut doctor --toolkit
+	@echo "Next: make doctor   (can this machine run the tutorials?)"
+
+doctor: ## Check this machine: toolkit, Docker/host, environments (T=<id> for one tutorial)
+	./tut doctor $(if $(T),--tutorial $(T))
+
+tools: ## Download the CLI tools of an environment ahead of time (ENV=kind-llmisvc/v1; default all)
+	@for f in $(if $(ENV),envs/$(ENV)/tools.env,$(wildcard envs/*/*/tools.env)); do tools/install-tools.sh $$f; done
 
 sync: ## Regenerate the <!-- tut:... --> regions
 	./tut sync
@@ -29,7 +48,7 @@ test: ## Tests for the rules, the runner and the UI session
 
 site: ## Build the static site into build/site
 	./tut site
-	mkdocs build --strict
+	$(PY) -m mkdocs build --strict
 
 check: ## Everything CI checks without a cluster: lint, tests, site
 	@$(MAKE) --no-print-directory lint test site

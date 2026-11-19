@@ -2,6 +2,8 @@
 # Dump cluster state after a failed tutorial run (CI only; best effort).
 # Usage: diagnose.sh [namespace...]   default: namespaces with an LLMInferenceService or InferenceService
 set +e
+# prefer the environments' pinned kubectl (.tools/kubectl/<version>/)
+for d in "$(dirname "$0")"/../../.tools/kubectl/*/; do [ -x "$d/kubectl" ] && PATH="$d:$PATH"; done
 section() { echo; echo "::group::$*"; }
 end() { echo "::endgroup::"; }
 

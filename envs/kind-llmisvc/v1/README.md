@@ -20,9 +20,27 @@ KServe's own `hack/` scripts, checked out at the tag in `$KSERVE_VERSION`:
 
 ## Requirements
 
-Docker, kubectl, git and Go (to build `cloud-provider-kind`). `kind` is installed
-by the script if missing. Roughly 4 CPUs and 16 GiB of memory for the tutorials
-that use it.
+**You install:** Docker (running), git and curl. Roughly 4 CPUs and 16 GiB of
+memory available to Docker. `./tut doctor` checks all of this.
+
+**Installed for you:** the CLI tools listed in `tools.env` (kind, kubectl,
+helm, cloud-provider-kind) at pinned versions, into `<repo>/.tools/<tool>/<version>/`.
+Nothing is installed system-wide and no shell configuration changes; the
+tutorial's setup step puts those directories on `PATH` for that shell only.
+
+<!-- tut:include tools.env -->
+
+```text
+# CLI tools this environment needs, installed by setup.sh into
+# <repo>/.tools/<tool>/<version>/ (never system-wide) and put on PATH only by
+# the tutorial's setup step. kind and helm follow KServe's kserve-deps.env (v0.18.0).
+KIND=v0.30.0                  # default node image: kindest/node:v1.34.0
+KUBECTL=v1.34.13              # matches Kubernetes 1.34
+HELM=v3.16.3
+CLOUD_PROVIDER_KIND=v0.12.0   # LoadBalancer addresses for kind, like a cloud
+```
+
+<!-- /tut -->
 
 ## Run it by hand
 
@@ -73,7 +91,18 @@ PROFILE="kind-llmisvc/v1"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"
 TUT_CACHE="${TUT_CACHE:-$HOME/.cache/kserve-tutorials}"
 KSERVE_SRC="$TUT_CACHE/kserve-$KSERVE_VERSION"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/../../.." && pwd)"
 log() { echo "[env $PROFILE] $*"; }
+
+# 0. The CLI tools this environment needs (tools.env), installed into the
+#    repository and put on PATH for this script only. Docker is a prerequisite.
+command -v docker >/dev/null && docker info >/dev/null 2>&1 \
+  || { log "Docker is not running. Install/start Docker, then run ./tut doctor"; exit 1; }
+"$REPO/tools/install-tools.sh" "$HERE/tools.env"
+# shellcheck source=/dev/null
+source "$HERE/tools.env"
+export PATH="$REPO/.tools/kind/$KIND:$REPO/.tools/kubectl/$KUBECTL:$REPO/.tools/helm/$HELM:$REPO/.tools/cloud-provider-kind/$CLOUD_PROVIDER_KIND:$PATH"
 
 # 1. Reuse the cluster when it was built by this profile with the same KServe version.
 if kind get clusters 2>/dev/null | grep -qx "$KIND_CLUSTER_NAME"; then

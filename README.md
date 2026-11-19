@@ -22,18 +22,30 @@ CI recently checked that it does.
 
 ## Running tutorials locally (recommended)
 
+**You install:** Docker (running, ~4 CPU / 16 GiB for it), git, curl and
+Python 3.11+. Nothing else.
+
 ```bash skip
 git clone -b stable https://github.com/Jooho/kserve-tutorials.git && cd kserve-tutorials
-make setup
-make ui
 ```
 
+```bash skip
+make setup      # the toolkit only: a .venv with Python packages
+make doctor     # can this machine run the tutorials? (Docker, resources, platform)
+make ui         # opens the browser
+```
+
+Pick a KServe version and a tutorial, then press ▶ on each step (or ▶ Run
+all): the commands run in a terminal on your machine, shown in the page, and
+every check turns green or red. No copy and paste.
+
+The CLI tools a tutorial needs (kind, kubectl, helm, cloud-provider-kind) are
+installed by the tutorial's first step, at the versions its environment pins,
+into `.tools/` inside this repository. Nothing is installed system-wide and
+your shell configuration is not changed.
+
 `stable` is the last fully verified state (see [releases](../../releases));
-`main` is where tutorials are being written. A browser opens with every tutorial. Pick a KServe version and a tutorial,
-then press ▶ on each step (or ▶ Run all): the commands run in a terminal on
-your machine, shown in the page, and every check turns green or red. No
-copy and paste. You need what the tutorial's environment needs (for most:
-Docker, kubectl, Go).
+`main` is where tutorials are being written.
 
 ## Reading a tutorial without the UI
 

@@ -24,7 +24,9 @@ If the document and the code disagree, stop and report it; do not guess.
 tests + site, what CI checks without a cluster).
 
 ```bash skip
-pip install -r tools/requirements.txt        # Python 3.11+
+make setup                  # .venv with the toolkit's Python packages (Python 3.11+)
+make doctor                 # Docker / host / environment check
+make tools ENV=<name>/vN    # download an environment's CLI tools ahead of time (optional)
 ./tut sync                  # regenerate <!-- tut:... --> regions — after every edit
 ./tut lint                  # all rules; must end with "0 error(s)"
 ./tut run <id> --dry-run    # the exact script CI will execute
@@ -55,7 +57,11 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 8. **Do not set `status: stable`** unless CI (or `./tut run <id>`) passed
    with that exact README.
 9. **Never push to `Jooho/kserve-tutorials-legacy`** (read only).
-10. **Never push to `stable`.** Only the release workflow moves it, and only
+10. **Install nothing system-wide.** The toolkit lives in `.venv`; tutorial
+    CLI tools are pinned per environment in `envs/<name>/vN/tools.env` and
+    installed into `.tools/<tool>/<version>/` by the environment's setup.
+    Docker, git and curl are the user's; we only check them (`./tut doctor`).
+11. **Never push to `stable`.** Only the release workflow moves it, and only
     forward to a fully verified commit of `main` (docs/release.md).
 
 ## Leave the repository smarter than you found it

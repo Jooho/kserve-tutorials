@@ -7,7 +7,18 @@ PROFILE="kind-llmisvc/v1"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"
 TUT_CACHE="${TUT_CACHE:-$HOME/.cache/kserve-tutorials}"
 KSERVE_SRC="$TUT_CACHE/kserve-$KSERVE_VERSION"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/../../.." && pwd)"
 log() { echo "[env $PROFILE] $*"; }
+
+# 0. The CLI tools this environment needs (tools.env), installed into the
+#    repository and put on PATH for this script only. Docker is a prerequisite.
+command -v docker >/dev/null && docker info >/dev/null 2>&1 \
+  || { log "Docker is not running. Install/start Docker, then run ./tut doctor"; exit 1; }
+"$REPO/tools/install-tools.sh" "$HERE/tools.env"
+# shellcheck source=/dev/null
+source "$HERE/tools.env"
+export PATH="$REPO/.tools/kind/$KIND:$REPO/.tools/kubectl/$KUBECTL:$REPO/.tools/helm/$HELM:$REPO/.tools/cloud-provider-kind/$CLOUD_PROVIDER_KIND:$PATH"
 
 # 1. Reuse the cluster when it was built by this profile with the same KServe version.
 if kind get clusters 2>/dev/null | grep -qx "$KIND_CLUSTER_NAME"; then

@@ -183,6 +183,12 @@ do:
   Each PR runs only the tutorial being moved.
 - A profile receives the KServe version as an input and checks out KServe
   **at that tag**. It never uses master.
+- A profile pins the CLI tools it needs (`tools.env`: kind, kubectl, helm,
+  cloud-provider-kind). They are installed into `<repo>/.tools/<tool>/<version>/`
+  — side by side, so two profiles can pin different versions — and put on
+  `PATH` only by the tutorial's setup step. The toolkit itself (`make setup`)
+  is a separate `.venv`. Docker is a user prerequisite that `./tut doctor`
+  checks and nobody installs.
 - `setup.sh` is idempotent and records what built the cluster (a `tut-env`
   ConfigMap). It reuses a matching cluster and refuses to modify a cluster
   built by a different profile or version.

@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import generate, lint, plan, release, runner, site
+from . import doctor, generate, lint, plan, release, runner, site
 from .model import REPO_ROOT, load_tutorials
 
 
@@ -89,6 +89,11 @@ def cmd_release(a):
         sys.stdout.write(release.notes(a.version, a.sha, reports, repo=a.repo))
 
 
+def cmd_doctor(a):
+    return doctor.report(doctor.run_checks(tutorial=a.tutorial, toolkit_only=a.toolkit),
+                         as_json=a.json)
+
+
 def cmd_ui(a):
     try:
         from .ui.server import serve
@@ -159,6 +164,12 @@ def main(argv=None):
     r.add_argument("--reports")
     r.add_argument("--repo", default="<owner>/<repo>")
     s.set_defaults(fn=cmd_release)
+
+    s = sub.add_parser("doctor", help="is this machine ready to run the tutorials?")
+    s.add_argument("--tutorial", help="check the resources this tutorial asks for")
+    s.add_argument("--toolkit", action="store_true", help="only what ./tut itself needs")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_doctor)
 
     s = sub.add_parser("ui", help="local web UI: read and run tutorials in a real shell")
     s.add_argument("--port", type=int, default=8080)
