@@ -62,7 +62,7 @@ def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
     for env in load_envs(root).values():
         _copy_tree(env.path, out / "envs" / env.ref)
     for lang, name in (("en", "index.md"), ("ko", "index.ko.md")):
-        body = INTRO[lang] + "\n" + generate.render_catalog(tutorials, lang) + "\n"
+        body = INTRO[lang] + "\n" + generate.render_catalog(tutorials, lang, root) + "\n"
         (out / name).write_text(body)
     # Per-version pages: "what can I run on KServe vX?"
     versions = sorted({v for t in tutorials for v in t.kserve_tested}, key=version_key, reverse=True)

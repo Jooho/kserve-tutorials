@@ -34,6 +34,14 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "owners": {
+      "description": "GitHub handles; used for .github/CODEOWNERS.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9-]+(/[A-Za-z0-9._-]+)?$"
+      }
     }
   }
 }

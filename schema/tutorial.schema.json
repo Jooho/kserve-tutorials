@@ -30,24 +30,6 @@
         "archived"
       ]
     },
-    "series": {
-      "description": "Navigation only. Tutorials in a series must still run on their own.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "name",
-        "order"
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "order": {
-          "type": "integer",
-          "minimum": 0
-        }
-      }
-    },
     "env": {
       "type": "string",
       "pattern": "^[a-z0-9-]+/v[0-9]+$"
@@ -59,6 +41,15 @@
       "items": {
         "type": "string",
         "pattern": "^[a-z0-9-]+/v[0-9]+$"
+      }
+    },
+    "tags": {
+      "description": "Search tags; each must be listed in catalog/tags.yaml.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
       }
     },
     "namespace": {
@@ -84,14 +75,6 @@
             "$ref": "#/$defs/version"
           }
         }
-      }
-    },
-    "features": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "pattern": "^[a-z0-9-]+$"
       }
     },
     "requires": {

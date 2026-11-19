@@ -44,6 +44,8 @@ Status: ☐ open · ◐ in progress · ☑ done
 | C1 | ☐ | **Decide how tutorials handle version-specific content** (separate tutorial versions, per-version blocks, or `kserve.tested` ranges + new tutorial) | KServe master removed the scheduler's tokenizer sidecar; `llmisvc-anatomy` explains and verifies three containers |
 | C2 | ☐ | Update `llmisvc-anatomy` for the next KServe release once C1 is decided (the canary will flag it) | Same as C1 |
 | C3 | ☐ | Korean translation of `llmisvc-anatomy` | legacy had KO for some tutorials |
+| C5 | ☑ | **Catalog**: tags registry (`catalog/tags.yaml`, G001 with suggestions), collections as owned reading paths resolved per KServe version (archived → replacement), sidebar views Collections / All (sort) / Versions + matrix, tag filter, search; CODEOWNERS generated from `owners` | One flat list could not show paths, versions or tags as tutorials multiply |
+| D13 | ☐ | Turn on "Require review from Code Owners" and required checks (`check`, `e2e`) for `main` — repository setting | CODEOWNERS only takes effect then; PR #3 was merged before its e2e finished |
 | C4 | ☐ | **Migrate the remaining tutorials** (legacy repository + local ones) with docs/migration-guide.md, one PR each, done with local Claude Code | The point of the repository |
 
 ## D. Process and publishing

@@ -10,9 +10,14 @@ CI recently checked that it does.
 <!-- tut:catalog -->
 
 <!-- Generated from tutorials/*/tutorial.yaml by `./tut sync` — do not edit by hand. -->
-| Tutorial | Status | Tested KServe | Environment | GPU |
-|---|---|---|---|---|
-| [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `kind-llmisvc/v1` | no |
+| Tutorial | Status | Tested KServe | Tags | Environment | GPU |
+|---|---|---|---|---|---|
+| [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-llmisvc/v1` | no |
+
+**Collections** (reading paths)
+
+- **LLMInferenceService deep dive** — From one YAML to the resources it creates, how a request is routed, how to observe it and how it scales.
+  1. [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/)
 
 **By KServe version**
 

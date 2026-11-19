@@ -6,14 +6,13 @@ summary:
   en: Apply one LLMInferenceService and inspect the 10+ resources the controller creates.
   ko: LLMInferenceService 하나를 적용하고 컨트롤러가 만드는 10여 개의 리소스를 살펴봅니다.
 status: draft                 # -> stable after the first green CI run
-series: {name: llmisvc-deep-dive, order: 1}
 env: kind-llmisvc/v1
 uses: [llmisvc/v1]
 namespace: llmisvc-anatomy
 kserve:
   default: v0.18.0
   tested: [v0.18.0]
-features: [llmisvc, gateway-api-inference-extension, epp-scheduler]
+tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en]
 timeout_minutes: 60

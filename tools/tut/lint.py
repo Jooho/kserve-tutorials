@@ -27,6 +27,15 @@ Documents (README.md and translations)
        the block is marked `once`; warning for drafts
   D013 the UI terminal's aliases (k, kc) must not appear in README blocks
 
+Catalog (catalog/)
+  G001 every tag must be listed in catalog/tags.yaml (suggests the closest one)
+  G002 catalog/tags.yaml invalid (schema, unknown group)
+  C001 collection invalid (schema, id = file name)
+  C002 collection member is not a tutorial
+  C003 collection lists a tutorial twice
+  C004 collection member is archived and has no replacement (warning)
+  O001 .github/CODEOWNERS is stale -> run `./tut sync`
+
 Manifests
   M001 container images must be pinned (no `latest`, no missing tag)
 
@@ -54,7 +63,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from . import generate, markdown
+from . import catalog, generate, markdown
 from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
                     load_modules, load_schema, load_tutorials)
 
@@ -161,6 +170,7 @@ class Linter:
             self.lint_meta(t, schema)
             self.lint_docs(t)
             self.lint_manifests(t)
+        self.lint_catalog()
         self.lint_envs()
         self.lint_modules()
         if self.base:
@@ -364,6 +374,47 @@ class Linter:
             if ref not in used:
                 self.warn("E003", prof, "not used by any tutorial")
 
+    def lint_catalog(self):
+        import difflib
+        tags_file = self.root / catalog.CATALOG / "tags.yaml"
+        reg = catalog.load_tags(self.root)
+        if reg:
+            v = jsonschema.Draft202012Validator(load_schema("tags.schema.json"))
+            for e in v.iter_errors(reg):
+                self.err("G002", tags_file, f"{'/'.join(map(str, e.path)) or '(root)'}: {e.message}")
+            groups = set((reg.get("groups") or {}))
+            for name, tag in (reg.get("tags") or {}).items():
+                if isinstance(tag, dict) and tag.get("group") not in groups:
+                    self.err("G002", tags_file, f"tag {name!r}: unknown group {tag.get('group')!r}")
+        known = set((reg.get("tags") or {}))
+        for t in self.tutorials:
+            for tag in t.meta.get("tags", []) or []:
+                if tag not in known:
+                    near = difflib.get_close_matches(tag, known, n=1)
+                    hint = f" — did you mean {near[0]!r}?" if near else ""
+                    self.err("G001", t.path / "tutorial.yaml",
+                             f"tag {tag!r} is not in catalog/tags.yaml{hint} "
+                             "(add it there with a group and description if it is really new)")
+        by_id = {t.id: t for t in self.tutorials}
+        schema = load_schema("collection.schema.json")
+        for c in catalog.load_collections(self.root):
+            v = jsonschema.Draft202012Validator(schema)
+            for e in v.iter_errors(c.meta):
+                self.err("C001", c.path, f"{'/'.join(map(str, e.path)) or '(root)'}: {e.message}")
+            if c.meta.get("id") != c.id:
+                self.err("C001", c.path, f"id {c.meta.get('id')!r} != file name {c.id!r}")
+            seen = set()
+            for m in c.members:
+                if m in seen:
+                    self.err("C003", c.path, f"{m!r} is listed twice")
+                seen.add(m)
+                t = by_id.get(m)
+                if t is None:
+                    self.err("C002", c.path, f"member {m!r} is not a tutorial (tutorials/{m}/)")
+                elif t.status == "archived" and not (t.meta.get("deprecation") or {}).get("replacement"):
+                    self.warn("C004", c.path, f"member {m!r} is archived and has no replacement: "
+                              "readers of this collection hit a dead end")
+
     def lint_modules(self):
         schema = load_schema("module.schema.json")
         used = {u for t in self.tutorials for u in t.uses}
@@ -417,7 +468,10 @@ class Linter:
             path, _, msg = e.partition(": ")
             self.err("D002", self.root / path, msg)
         for p in changed:
-            self.err("D002", p, "generated regions are out of date; run `./tut sync`")
+            if p.name == "CODEOWNERS":
+                self.err("O001", p, "out of date with the owners fields; run `./tut sync`")
+            else:
+                self.err("D002", p, "generated regions are out of date; run `./tut sync`")
 
 
 def _images(node):
