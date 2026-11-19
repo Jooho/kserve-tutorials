@@ -94,8 +94,11 @@ PS1="$PS1\[\e]777;tut;ready;0\a\]"
 
 class ShellSession:
     def __init__(self, tid: str, repo: Path, kserve_version: str | None,
-                 on_output: Callable[[str], None], on_event: Callable[[dict], None]):
+                 on_output: Callable[[str], None], on_event: Callable[[dict], None],
+                 collection: str | None = None, extra_env: dict[str, str] | None = None):
         self.tid = tid
+        self.collection = collection          # learning path this shell was opened from
+        self.extra_env = dict(extra_env or {})  # its shared vars (e.g. NS)
         self.repo = repo
         self.kserve_version = kserve_version
         self.on_output = on_output
@@ -120,6 +123,7 @@ class ShellSession:
                                          tmpdir=shlex.quote(str(self.tmp))))
         env = {k: v for k, v in os.environ.items() if not k.startswith("TUT_")}
         env.update(TERM="xterm-256color", TUT_UI="1", HISTCONTROL="ignorespace")
+        env.update(self.extra_env)
         if self.kserve_version:
             env["KSERVE_VERSION"] = self.kserve_version
         else:
@@ -135,7 +139,8 @@ class ShellSession:
         os.set_blocking(master, False)
         asyncio.get_running_loop().add_reader(master, self._read)
         self.on_event({"type": "session", "state": "started",
-                       "kserve_version": self.kserve_version})
+                       "kserve_version": self.kserve_version, "collection": self.collection,
+                       "vars": self.extra_env})
 
     def stop(self):
         self.cancel_queue()

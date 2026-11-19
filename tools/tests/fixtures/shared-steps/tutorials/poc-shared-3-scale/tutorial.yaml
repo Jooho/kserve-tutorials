@@ -1,0 +1,18 @@
+# PoC for shared steps (tut:define / tut:use) and learning paths. No cluster:
+# every step only writes files under ${TMPDIR:-/tmp}/tut-poc/$NS.
+id: poc-shared-3-scale
+title:
+  en: "PoC 3 — Scale the model"
+summary:
+  en: Uses poc-model and poc-config, then scales.
+status: draft
+group: poc
+namespace: poc-shared-3-scale
+kserve:
+  default: v0.18.0
+  tested: [v0.18.0, v0.17.0]   # PoC: two versions, to show the version picker
+tags: [beginner]
+requires: {gpu: false, cpu: 1, memory: 1Gi}
+langs: [en]
+timeout_minutes: 5
+owners: [Jooho]

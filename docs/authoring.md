@@ -86,17 +86,23 @@ generated `<!-- tut:setup -->` region [D006]. Files are shown with
   If a tutorial needs a retry or a readiness wait because the platform was not
   really ready, fix the environment profile.
 
-## 5. Tags and collections (catalog/)
+## 5. Groups, tags and collections (catalog/)
+
+- **Group** (`group:` in tutorial.yaml, one per tutorial): what kind of
+  tutorial it is — `llmisvc`, `inferencegraph`, ... from `catalog/groups.yaml`
+  [G003]. The UI's **Groups** view lists every tutorial once under its group
+  and opens it on its own. Add a group only if none fits.
 
 - **Tags** make tutorials findable (search, filter in the UI, site). Use only
   tags listed in `catalog/tags.yaml` [G001]; lint suggests the closest one for a
   typo. If no tag fits, add one to `catalog/tags.yaml` in the same PR, with a
   group (`feature`, `topic`, `level`) and a one-line description. Prefer
   reusing a tag over adding a near-duplicate. Give every tutorial one `level`.
-- **Collections** (`catalog/collections/<id>.yaml`) are ordered reading
-  paths. They list tutorial ids; tutorials never refer to collections and stay
-  independent. A tutorial may be in several collections or in none (it then
-  shows under "Other tutorials").
+- **Collections** (`catalog/collections/<id>.yaml`) are learning paths: **two
+  or more** tutorials in order [C005 warns with one; the UI shows only real
+  paths]. They list tutorial ids; tutorials never refer to collections and stay
+  independent. A tutorial may be in several collections or in none. `vars:`
+  are shared shell variables for the path (see Shared steps and learning paths).
   - Order is the list order — no order numbers to renumber.
   - Each collection has `owners`; they review every change to it (generated
     `.github/CODEOWNERS`). To add your tutorial to someone's path, edit the
@@ -144,6 +150,28 @@ the code and regions exactly; then `mark` (it also adds `ko` to `langs`).
 translation has the same shell blocks in the same order [D011]. When README.md
 changes later, lint warns that the translation is behind [D010] and the UI shows
 it to readers. Translation lag never blocks English changes or releases.
+
+## Shared steps and learning paths
+
+- **Shared step:** wrap steps another tutorial may need in
+  `<!-- tut:define name -->` … `<!-- /tut -->`. Another tutorial writes
+  `<!-- tut:use name -->` + `<!-- /tut -->` and `./tut sync` copies the steps
+  in, so every README stays complete on its own (GitHub, CI) [D014: one
+  definition per name, `use` an existing name, no markers inside a definition].
+  Keep the state a shared step creates in the cluster or in files: in a
+  learning path its `run` blocks may be hidden, so they cannot hand shell
+  variables to later steps; every block sets the defaults it needs.
+- **Learning path** (a collection opened from the UI's Collections view): a
+  shared step an earlier member already has is "covered": its `run` blocks are
+  hidden, its `verify` blocks still run (a failing one offers to run the hidden
+  steps). Cleanup waits until the end of the path. `vars:` in the collection
+  (e.g. `NS`) are exported in every member's shell. CI always runs each
+  tutorial standalone.
+- **Writing in the UI:** `./tut ui` redraws the page when a file is saved, shows
+  the README as it will be after `./tut sync`, and lists this tutorial's lint
+  findings. ✎ Edit opens README or tutorial.yaml next to the preview (Ctrl+S,
+  Save & sync). The "no KO translation · ＋ create it" chip makes an AI draft
+  with `TUT_AI` (claude | copilot | codex).
 
 ## 8. Before you open a PR
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import markdown
+from . import markdown, shared
 from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, load_envs, load_modules, load_tutorials,
                     readme_name, version_key)
 
@@ -92,11 +92,9 @@ def render_setup(t: Tutorial) -> str:
         if settings:
             lines.append("# what this tutorial needs from the environment (env_options in tutorial.yaml)")
         lines.append(f'{prefix + " " if prefix else ""}"$REPO_ROOT/envs/{env}/setup.sh"')
-    lines += [
-        'kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -',
-        f'cd "$REPO_ROOT/tutorials/{t.id}"',
-        "```",
-    ]
+    if env:   # no env = no cluster (e.g. a tutorial that only runs local commands)
+        lines.append('kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -')
+    lines += [f'cd "$REPO_ROOT/tutorials/{t.id}"', "```"]
     return "\n".join(lines)
 
 
@@ -192,12 +190,22 @@ def sync_file(path: Path, t: Tutorial | None, lang: str, tutorials: list[Tutoria
             return render_header(t, lang)
         if r.kind == "catalog":
             return render_catalog(tutorials, lang, root)
+        if r.kind == "define":
+            return None                       # written by the author: left as it is
+        if r.kind == "use":
+            if t is None or len(r.args) != 1:
+                raise SyncError("tut:use takes one name and only works inside a tutorial")
+            try:
+                return shared.render_use(r.args[0], lang, tutorials)
+            except ValueError as e:
+                raise SyncError(str(e))
         raise SyncError(f"unknown region tut:{r.kind}")
 
     def padded(r: markdown.Region):
         # Blank lines around the body: MkDocs (Python-Markdown) would otherwise
         # swallow a code fence that directly follows an HTML comment.
-        return "\n" + render(r) + "\n"
+        body = render(r)
+        return None if body is None else "\n" + body + "\n"
 
     return markdown.replace_regions(text, padded)
 
