@@ -33,7 +33,13 @@ jobs:
         run: |
           ./tut run "${{ matrix.tutorial }}" \
             --kserve-version "${{ matrix.kserve_version }}" \
-            --teardown-env --report report.json
+            --keep-on-failure --report report.json
+      - name: Diagnostics (on failure)
+        if: failure()
+        run: .github/scripts/diagnose.sh
+      - name: Tear down environment
+        if: always() && matrix.env
+        run: envs/${{ matrix.env }}/teardown.sh
       - name: Summary
         if: always()
         run: |

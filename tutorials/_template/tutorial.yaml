@@ -10,6 +10,7 @@ summary:
 status: draft                   # draft -> stable -> deprecated -> archived
 # series: {name: llmisvc-deep-dive, order: 2}   # navigation only
 env: kind-llmisvc/v1            # a FROZEN profile under envs/ (required for stable)
+# uses: [llmisvc/v1]            # shared script modules under lib/, pinned
 namespace: my-tutorial          # defaults to the id
 kserve:
   default: v0.18.0              # what readers and PR CI use

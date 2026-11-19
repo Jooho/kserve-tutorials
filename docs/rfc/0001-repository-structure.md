@@ -68,6 +68,7 @@ problems.
 |---|---|---|
 | **Tutorial** | `tutorials/<id>/` | Its README(s), manifests, scripts, images and `tutorial.yaml`. Nothing outside the directory. |
 | **Environment profile** | `envs/<name>/v<N>/` | How to build a cluster for a range of KServe versions: `profile.yaml`, `setup.sh`, `teardown.sh`, `README.md`. |
+| **Script module** | `lib/<name>/v<N>/` | Scripts shared by tutorials (`module.yaml` + `*.sh`). Versioned and frozen like profiles (§4.6). |
 | **Tooling** | `tools/tut/`, `./tut` | The rules, the runner, the site generator. |
 
 ### 4.2 Layout
@@ -83,6 +84,9 @@ problems.
 │       ├── README.ko.md        # translation (optional)
 │       ├── manifests/          # real files, included into the README
 │       └── images/
+├── lib/<name>/v<N>/            # shared scripts, versioned
+│   ├── module.yaml
+│   └── *.sh
 ├── envs/<name>/v<N>/
 │   ├── profile.yaml
 │   ├── setup.sh                # idempotent
@@ -104,6 +108,7 @@ summary: {en: "...", ko: "..."}
 status: stable                      # draft | stable | deprecated | archived
 series: {name: llmisvc-deep-dive, order: 1}   # navigation only
 env: kind-llmisvc/v1                # a frozen profile (required for stable)
+uses: [llmisvc/v1]                  # script modules, pinned
 namespace: llmisvc-anatomy          # default: id
 kserve:
   default: v0.18.0                  # what readers and PR CI use
@@ -161,7 +166,11 @@ WVA tutorial only and opens an issue for it. The owner either:
 
 No other tutorial is touched in either case.
 
-### 4.6 Environment profiles and blast radius
+### 4.6 Environment profiles, script modules and blast radius
+
+Shared setup and shared scripts are necessary (most tutorials need the same
+cluster and the same helpers) and dangerous (one edit changes all of them).
+Both are versioned the same way.
 
 Shared setup is necessary (most tutorials need the same cluster) and dangerous
 (one edit changes all of them). Profiles resolve this the way package managers
@@ -184,7 +193,17 @@ What a change can reach:
 |---|---|
 | `tutorials/<id>/**` | `<id>` |
 | `envs/<name>/v<N>/**` | Tutorials whose `env` is `<name>/v<N>` (only allowed while not frozen) |
+| `lib/<name>/v<N>/**` | Tutorials that list `<name>/v<N>` in `uses` (only allowed while not frozen) |
 | anything else | None; lint and unit tests still run, the weekly run covers the rest |
+
+**Script modules** (`lib/<name>/v<N>/`) apply the same rule to reusable
+scripts. A tutorial declares the modules it calls (`uses: [llmisvc/v1]`) and
+calls them as `"$TUT_LIB/llmisvc/v1/gateway-url.sh"`. A script exists once, so
+it is reused instead of copied; it is pinned, so improving it means a new
+module version that tutorials adopt one at a time. Lint enforces that every
+call is declared (L002) and that frozen modules do not change (L003). Readers
+still see what a script does: the README can include it with `tut:include`,
+and the local UI shows it under the block that calls it.
 
 This mapping is tested in `tools/tests/test_rules.py`.
 
@@ -196,9 +215,11 @@ This mapping is tested in `tools/tests/test_rules.py`.
    (by copying A's manifest into B; see rule 3).
 2. **Series are navigation only.** `series` orders tutorials on the site; it
    never implies shared state.
-3. **No shared files across tutorials.** `tut:include` can only reference
-   files inside the tutorial's directory (D005). Copying a manifest is
-   intentional: it lets the two tutorials diverge safely.
+3. **Share through modules, not through other tutorials.** A tutorial never
+   reads another tutorial's files. Scripts worth sharing move into a
+   versioned module under `lib/`; manifests that two tutorials need are copied
+   (they are content that may diverge). `tut:include` can reference the
+   tutorial's own files and its declared modules (D005).
 4. **Own namespace.** Defaults to the tutorial id, so tutorials can run on the
    same cluster without colliding.
 5. **Cleanup leaves the environment as it found it.** The cluster belongs to
@@ -267,6 +288,11 @@ of `tools/tut/lint.py`.
 | D010 | Translations carry a source marker; a stale marker is a warning |
 | D011 | Translations have the same sequence of shell block roles as the source |
 | M001 | Container images are pinned (no `latest`, no missing tag) |
+| L001 | Modules are valid and their scripts executable |
+| L002 | Every `lib/<module>` call is declared in `uses`, and declared modules exist |
+| L003 | Frozen modules are not modified |
+| L004 | `stable` tutorials use frozen modules |
+| L005 | Unused module (warning) |
 | E001 | Profiles are valid and have executable `setup.sh`/`teardown.sh` and a README |
 | E002 | Frozen profiles are not modified |
 | E003 | Unused profile (warning) |
@@ -307,12 +333,45 @@ The site is MkDocs Material, generated, not written: `./tut site` mirrors
 generates the catalog and the "By KServe version" page from `tutorial.yaml`.
 GitHub remains a first-class way to read every tutorial.
 
-### 4.13 AI-assisted maintenance
+### 4.13 Local runner UI
+
+Copying commands from a page into a terminal is the main friction for
+readers and for authors testing their own tutorials. `./tut ui` starts a
+local web application (127.0.0.1 only, protected by a token printed at
+start-up) that:
+
+- lists tutorials, filtered by the KServe version selected at the top;
+- renders the README with a card per block: ▶ Run, ⏭ Run to here,
+  ▶ Run all, ■ Stop, 🧹 Cleanup; the state of each block (running, passed,
+  failed, stopped) is shown on the card and in the terminal;
+- runs blocks in one real bash per tutorial on the user's machine, so they
+  reach the user's Docker / Kind / kubectl, and variables and `cd` carry over;
+- shows that shell in an embedded terminal (xterm.js, vendored so it works
+  offline), where the user can also type;
+- shows the environment status (no cluster / built by which profile and
+  version) before the setup step runs;
+- expands module scripts under the block that calls them.
+
+It uses the same parser as lint and CI, and the same block semantics as the
+runner (verify blocks run with `set -Eeo pipefail` and honour
+`retry`/`delay`), so passing in the UI and passing in CI mean the same thing.
+The UI is a convenience for the reader; CI remains the authority.
+
+Why not Runme: it runs Markdown cells well, but has no notion of a check that
+must pass, no per-tutorial KServe version or environment, and its browser mode
+is a full VS Code (code-server). Those are the parts this project needs, so
+the UI is built on the existing `tut` parser instead.
+
+### 4.14 AI-assisted maintenance
 
 AI works on top of the rules, never instead of them:
 
-- `CLAUDE.md` gives coding agents the rules and commands, so a local agent
-  migrating or writing tutorials follows the same contract as a person.
+- `AGENTS.md` (imported by `CLAUDE.md`) is the entry point for every coding
+  agent: commands, hard rules, and which document to read for which task
+  (`docs/authoring.md`, `docs/ci-playbook.md`, `docs/migration-guide.md`).
+- Knowledge accumulates in the repository, not in a session: whoever fixes a
+  failure adds a lesson to `docs/authoring.md § Rules learned from CI`, and
+  promotes it to a lint rule with a test when it can be checked mechanically.
 - A canary issue is a precise task: tutorial, KServe version, failing block and
   log. An agent can propose a fix PR; that PR passes lint and executes the
   tutorial like any other.
@@ -325,9 +384,10 @@ AI works on top of the rules, never instead of them:
 | One branch per KServe version | Couples all tutorials; back-ports for every fix (§4.4). |
 | Shared, unversioned setup (`00-setup`) | Any edit changes every tutorial at once; the reason for §4.6. |
 | Scripts as the source, docs describe them | Two sources again; readers run something other than what CI runs. |
-| [Runme](https://runme.dev) / mdsh to execute Markdown | Viable, but the rules (roles, setup first, regions, translation structure) are the point, and they fit in a few hundred lines we control. Can be revisited. |
+| [Runme](https://runme.dev) / mdsh to execute Markdown | Runs cells well, but lacks verify semantics, version/env awareness and a light browser UI (§4.13). |
+| Copying shared scripts into each tutorial | Independence without reuse: every fix has to be repeated. Versioned modules give both (§4.6). |
 | Jupyter / Quarto | Good for Python-first content; most steps here are `kubectl` and YAML, and notebooks diff poorly in review. |
-| A custom web UI | Maintenance burden; a generated static site covers reading, and CI covers status. |
+| A hosted web UI | Commands must run where the user's cluster is; the UI is local (§4.13). The static site stays for reading. |
 
 ## 6. Open questions
 

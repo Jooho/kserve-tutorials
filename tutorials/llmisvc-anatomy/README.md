@@ -26,6 +26,7 @@ link above) and creates the namespace used below. It is safe to run again.
 export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
 export NS="${NS:-llmisvc-anatomy}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
+export TUT_LIB="$REPO_ROOT/lib"
 "$REPO_ROOT/envs/kind-llmisvc/v1/setup.sh"
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 cd "$REPO_ROOT/tutorials/llmisvc-anatomy"
@@ -241,8 +242,7 @@ kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-rout
 The scheduler Pod must have exactly the three containers above:
 
 ```bash verify
-POD=$(kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
-  -o jsonpath='{.items[0].metadata.name}')
+POD=$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")
 test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.initContainers[*].name}')" = "storage-initializer"
 test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.containers[*].name}' | wc -w)" -eq 2
 ```
@@ -287,8 +287,7 @@ The tokenizer and scheduler talk over a **Unix domain socket**
 kernel network stack:
 
 ```bash skip
-kubectl exec -n "$NS" "$(kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -o jsonpath='{.items[0].metadata.name}')" \
-  -c main -- ls -la /tmp/tokenizer/
+kubectl exec -n "$NS" "$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")" -c main -- ls -la /tmp/tokenizer/
 ```
 
 Configuration example: [precise-prefix-kv-cache-routing](https://github.com/kserve/kserve/tree/master/docs/samples/llmisvc/precise-prefix-kv-cache-routing)
@@ -361,22 +360,64 @@ test "$(count httproute)" -eq 1
 ## Step 6: Send a request
 
 Once the LLMInferenceService is `Ready`, send a completion request through the
-Gateway. In Kind the Gateway is reached through a NodePort on the worker node.
+Gateway. In Kind the Gateway is reached through a NodePort on the worker node;
+the shared `llmisvc/v1` module works out the URL.
 
 ```bash run
-NODE_IP=$(docker inspect kind-worker --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
-NODE_PORT=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name \
-  -o jsonpath='{.items[0].spec.ports[0].nodePort}')
-GATEWAY_URL="http://${NODE_IP}:${NODE_PORT}/${NS}/demo-model"
+GATEWAY_URL=$("$TUT_LIB/llmisvc/v1/gateway-url.sh" "$NS" demo-model)
 echo "$GATEWAY_URL"
 ```
 
 ```bash verify retry=10 delay=15
-curl -sf "${GATEWAY_URL}/v1/completions" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "facebook/opt-125m", "prompt": "Kubernetes is", "max_tokens": 20}' \
-  | python3 -c 'import json, sys; r = json.load(sys.stdin); print(json.dumps(r, indent=2)); assert r["choices"][0]["text"]'
+"$TUT_LIB/llmisvc/v1/completion.sh" "$GATEWAY_URL" facebook/opt-125m "Kubernetes is"
 ```
+
+<details>
+<summary>lib/llmisvc/v1/gateway-url.sh</summary>
+
+<!-- tut:include ../../lib/llmisvc/v1/gateway-url.sh -->
+
+```bash skip
+#!/usr/bin/env bash
+# Usage: gateway-url.sh <namespace> <llmisvc-name>
+# Prints the URL that reaches the LLMInferenceService through the Envoy Gateway.
+# In Kind there is no external load balancer, so we use the worker node IP and
+# the Gateway service NodePort.
+set -euo pipefail
+ns="${1:?namespace}"; name="${2:?llmisvc name}"
+node_ip=$(docker inspect "${KIND_CLUSTER_NAME:-kind}-worker" \
+  --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+node_port=$(kubectl get svc -n envoy-gateway-system \
+  -l gateway.envoyproxy.io/owning-gateway-name \
+  -o jsonpath='{.items[0].spec.ports[0].nodePort}')
+echo "http://${node_ip}:${node_port}/${ns}/${name}"
+```
+
+<!-- /tut -->
+
+</details>
+
+<details>
+<summary>lib/llmisvc/v1/completion.sh</summary>
+
+<!-- tut:include ../../lib/llmisvc/v1/completion.sh -->
+
+```bash skip
+#!/usr/bin/env bash
+# Usage: completion.sh <url> <model> [prompt] [max_tokens]
+# Sends POST <url>/v1/completions, prints the JSON answer and fails unless
+# the first choice contains text.
+set -euo pipefail
+url="${1:?url}"; model="${2:?model}"; prompt="${3:-Kubernetes is}"; max="${4:-20}"
+body=$(python3 -c 'import json,sys; print(json.dumps({"model":sys.argv[1],"prompt":sys.argv[2],"max_tokens":int(sys.argv[3])}))' \
+  "$model" "$prompt" "$max")
+curl -sf "${url}/v1/completions" -H "Content-Type: application/json" -d "$body" \
+  | python3 -c 'import json, sys; r = json.load(sys.stdin); print(json.dumps(r, indent=2)); assert r["choices"][0]["text"], "empty completion"'
+```
+
+<!-- /tut -->
+
+</details>
 
 ## Cleanup
 

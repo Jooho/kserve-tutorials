@@ -43,7 +43,8 @@ def cmd_lint(a):
 def cmd_run(a):
     return runner.run(_tutorial(a.id), kserve_version=a.kserve_version, keep=a.keep,
                       dry_run=a.dry_run, teardown_env=a.teardown_env,
-                      report=Path(a.report) if a.report else None)
+                      report=Path(a.report) if a.report else None,
+                      keep_on_failure=a.keep_on_failure)
 
 
 def cmd_affected(a):
@@ -69,6 +70,14 @@ def cmd_site(a):
     print(f"site source written to {out}")
 
 
+def cmd_ui(a):
+    try:
+        from .ui.server import serve
+    except ImportError as e:
+        sys.exit(f"{e}. Install the UI dependencies: pip install -r tools/requirements.txt")
+    serve(port=a.port, open_browser=not a.no_browser)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="tut", description="KServe tutorials toolkit")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -87,6 +96,8 @@ def main(argv=None):
     s.add_argument("id")
     s.add_argument("--kserve-version", help="override kserve.default")
     s.add_argument("--keep", action="store_true", help="skip cleanup blocks")
+    s.add_argument("--keep-on-failure", action="store_true",
+                   help="skip cleanup blocks only when a step failed (for debugging / CI diagnostics)")
     s.add_argument("--dry-run", action="store_true", help="print the generated script")
     s.add_argument("--teardown-env", action="store_true", help="run the env teardown.sh at the end")
     s.add_argument("--report", help="write a JSON result file")
@@ -114,6 +125,11 @@ def main(argv=None):
     s = sub.add_parser("site", help="assemble the MkDocs source tree")
     s.add_argument("--out", default=str(REPO_ROOT / "build" / "site-src"))
     s.set_defaults(fn=cmd_site)
+
+    s = sub.add_parser("ui", help="local web UI: read and run tutorials in a real shell")
+    s.add_argument("--port", type=int, default=8080)
+    s.add_argument("--no-browser", action="store_true", help="do not open a browser")
+    s.set_defaults(fn=cmd_ui)
 
     a = p.parse_args(argv)
     return a.fn(a) or 0

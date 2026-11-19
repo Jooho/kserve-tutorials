@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KServe Tutorials</title>
+  <link rel="stylesheet" href="/static/vendor/xterm.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">KServe Tutorials <span class="muted">local runner</span></div>
+    <label class="field">KServe
+      <select id="version"></select>
+    </label>
+    <div class="seg" id="lang">
+      <button data-lang="en" class="on">EN</button><button data-lang="ko">KO</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <input id="search" type="search" placeholder="Filter tutorials…" aria-label="Filter tutorials">
+      <ul id="list"></ul>
+    </aside>
+
+    <main class="main">
+      <section class="docpane" id="docpane">
+        <div class="empty" id="empty">Pick a tutorial on the left.</div>
+        <div id="doc-wrap" hidden>
+          <div class="toolbar">
+            <div class="tb-title">
+              <h1 id="doc-title"></h1>
+              <div class="chips" id="chips"></div>
+            </div>
+            <div class="tb-actions">
+              <span class="progress" id="progress"></span>
+              <button class="btn primary" id="run-all" title="Run every run/verify block in order, stop at the first failure">▶ Run all</button>
+              <button class="btn" id="stop" title="Ctrl-C">■ Stop</button>
+              <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹 Cleanup</button>
+              <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻ New shell</button>
+            </div>
+          </div>
+          <div class="envbar" id="envbar"></div>
+          <article class="doc" id="doc"></article>
+        </div>
+      </section>
+
+      <div class="splitter" id="splitter" title="Drag to resize"></div>
+
+      <section class="termpane">
+        <div class="termbar">
+          <span id="term-title">Terminal</span>
+          <span class="muted" id="term-note">You can also type here. Typed commands are not tracked as steps.</span>
+        </div>
+        <div id="term"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/vendor/xterm.js"></script>
+  <script src="/static/vendor/addon-fit.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

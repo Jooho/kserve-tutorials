@@ -7,6 +7,7 @@
 Blast radius rules (the reason envs are versioned):
   tutorials/<id>/**           -> <id>
   envs/<name>/<ver>/**        -> tutorials whose `env` is <name>/<ver>
+  lib/<name>/<ver>/**         -> tutorials that list <name>/<ver> in `uses`
   anything else               -> nothing (lint and unit tests still run)
 """
 from __future__ import annotations
@@ -34,6 +35,11 @@ def affected(paths: list[str], tutorials: list[Tutorial]) -> list[Tutorial]:
             ref = f"{parts[1]}/{parts[2]}"
             for t in tutorials:
                 if t.env_ref == ref:
+                    hit[t.id] = t
+        elif len(parts) >= 3 and parts[0] == "lib":
+            ref = f"{parts[1]}/{parts[2]}"
+            for t in tutorials:
+                if ref in t.uses:
                     hit[t.id] = t
     return [t for t in tutorials if t.id in hit]
 
