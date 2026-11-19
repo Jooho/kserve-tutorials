@@ -230,11 +230,20 @@ Rules for this run:
 
 # ------------------------------------------------------------------ checks
 _SKIP_LINE = re.compile(r"^(#|set -|\{|\}|fi$|done$|else$|then$|esac$|;;|do$|[A-Za-z_]+\(\)\s*\{?$|function )")
+# Script plumbing, not a step a reader runs: control flow, exits, prompts, tool checks.
+_PLUMBING = re.compile(r"^(if|elif|while|until|for|case)\b|^(exit|return|read|wait|shift|local|export -f|break|continue)\b"
+                       r"|^command -v\b|^(true|false|:)$")
 
 
 def script_commands(inp: Path) -> list[tuple[str, int, str]]:
     """(file, line, command) for the commands in the input shell scripts."""
     out = []
+    scripts = {p.name for p in inp.rglob("*.sh")}
+    call = re.compile(r'"?(?:[^\s"]*/)?([\w.-]+\.sh)"?(?:\s.*)?')   # "${DIR}/x.sh" args, ./scripts/x.sh
+
+    def calls_script(c: str) -> bool:
+        m = call.fullmatch(c)
+        return bool(m) and m.group(1) in scripts
     for p in sorted(inp.rglob("*.sh")):
         lines = p.read_text(errors="replace").split("\n")
         heredoc, buf, start = None, "", 0
@@ -254,8 +263,9 @@ def script_commands(inp: Path) -> list[tuple[str, int, str]]:
             m = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", cmd)
             if m:
                 heredoc = m.group(1)
-            if not cmd or _SKIP_LINE.match(cmd) or re.match(r"^(echo|printf|print_\w+)\b", cmd) \
-                    or re.match(r"^[A-Z_][A-Z0-9_]*=", cmd):
+            if not cmd or _SKIP_LINE.match(cmd) or _PLUMBING.match(cmd) \
+                    or re.match(r"^(echo|printf|print_\w+)\b", cmd) or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", cmd) \
+                    or calls_script(cmd):                    # a call to another input script: it gets inlined
                 continue
             out.append((str(p.relative_to(inp)), start, cmd))
     return out
@@ -265,12 +275,24 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s.replace("\\\n", " ")).strip()
 
 
+def _loose(s: str) -> str:
+    """Compare commands without caring how variables are named or quoted:
+    `${NAMESPACE}`, `$NS` and `"$NS"` all become `$`."""
+    s = re.sub(r'"?\$\{?[A-Za-z_][A-Za-z0-9_]*(:-[^}]*)?\}?"?', "$", s)
+    # files moved into the tutorial (k8s/x.yaml -> manifests/x.yaml): compare by name
+    s = re.sub(r"(?<![\w:/])(?:\.?/)?(?:[\w.-]+/)+([\w.-]+/?)", r"\1", s)
+    return _norm(s.replace("'", "").replace('"', ""))
+
+
 def coverage(inp: Path, tdir: Path) -> tuple[list, list]:
-    """(found, missing) input commands in the tutorial's files."""
-    corpus = _norm("\n".join(p.read_text(errors="replace") for p in tdir.rglob("*") if p.is_file()))
+    """(found, missing) input commands in the tutorial's files; a command counts
+    as found when it is there with only its variable names changed."""
+    texts = "\n".join(p.read_text(errors="replace") for p in tdir.rglob("*")
+                      if p.is_file() and not is_asset(p))
+    corpus, loose = _norm(texts), _loose(texts)
     found, missing = [], []
     for f, n, cmd in script_commands(inp):
-        (found if _norm(cmd) in corpus else missing).append((f, n, cmd))
+        (found if _norm(cmd) in corpus or _loose(cmd) in loose else missing).append((f, n, cmd))
     return found, missing
 
 
@@ -305,13 +327,13 @@ class Result:
 
 
 def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
-          root: Path = REPO_ROOT, timeout: int = 3600, log=print) -> Result:
+          root: Path = REPO_ROOT, timeout: int = 3600, log=print, owner: str | None = None) -> Result:
     src = src.expanduser().resolve()
     if not src.is_dir():
         raise DraftError(f"{src} is not a folder")
     tid = tid or slug(src.name)
     before = git_dirty(root)
-    tdir = scaffold.new_tutorial(tid, title=title, root=root)      # raises on a bad / existing id
+    tdir = scaffold.new_tutorial(tid, title=title, owner=owner, root=root)   # raises on a bad / existing id
     work = root / "build" / "draft" / tid
     if work.exists():
         shutil.rmtree(work)
@@ -334,6 +356,10 @@ def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
                                stdout=logf, stderr=subprocess.STDOUT, timeout=timeout)
     res = Result(tid, work, agent_rc=p.returncode)
     res.assets_removed = prune_assets(tdir, assets)
+    example = tdir / "manifests" / "example.yaml"      # template leftover the AI cannot delete
+    if example.exists() and "example.yaml" not in (tdir / "README.md").read_text():
+        example.unlink()
+        res.assets_removed.append("manifests/example.yaml (template)")
     res.assets_kept = [a for a in assets if a not in res.assets_removed]
     generate.sync(root)
     res.outside = changed_outside(before, tid, root)
@@ -352,7 +378,8 @@ def render_report(r: Result, src: Path, root: Path = REPO_ROOT) -> str:
            f"- AI notes: `{(r.work / 'notes.md').relative_to(root)}`"
            + ("" if (r.work / "notes.md").exists() else " — **missing**"),
            f"- lint: {len(errs)} error(s), {len(r.problems) - len(errs)} warning(s)",
-           f"- input script commands found in the tutorial as-is: {len(r.found)}/{total}",
+           f"- input script commands in the tutorial (variable names may differ): {len(r.found)}/{total}"
+           " (control flow, prompts, echo and tool checks are not counted)",
            f"- images / binary files copied in: {len(r.assets_kept)} used"
            + (f", {len(r.assets_removed)} unused removed ({', '.join(r.assets_removed)})" if r.assets_removed else ""),
            f"- files changed outside tutorials/{r.tid}/ and build/: {len(r.outside)}", ""]
@@ -362,7 +389,7 @@ def render_report(r: Result, src: Path, root: Path = REPO_ROOT) -> str:
     if r.problems:
         out += ["## Lint", ""] + [f"- {f.severity} {f.code} line {f.line or '-'}: {f.message}" for f in r.problems] + [""]
     if r.missing:
-        out += ["## Input commands not in the tutorial as-is",
+        out += ["## Input commands not in the tutorial",
                 "", "Changed or left out on purpose? The AI notes should say why; otherwise add them.", ""]
         out += [f"- `{f}:{n}` `{c[:140]}`" for f, n, c in r.missing] + [""]
     out += ["## Next", "", f"1. Read the AI notes and this report.",

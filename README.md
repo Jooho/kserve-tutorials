@@ -12,6 +12,7 @@ CI recently checked that it does.
 <!-- Generated from tutorials/*/tutorial.yaml by `./tut sync` — do not edit by hand. -->
 | Tutorial | Status | Tested KServe | Tags | Environment | GPU |
 |---|---|---|---|---|---|
+| [Two Models, One Answer — InferenceGraph Ensemble and Combiner](tutorials/inferencegraph-ensemble/) | 🚧 draft | v0.17.0 | `inferencegraph` `inferenceservice` `mlserver` `storage` `ensemble` `intermediate` | `—` | no |
 | [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-llmisvc/v1` | no |
 | [PoC 1 — Deploy a (fake) model](tutorials/poc-shared-1-deploy/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
 | [PoC 2 — Configure the model](tutorials/poc-shared-2-config/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
@@ -30,7 +31,7 @@ CI recently checked that it does.
 **By KServe version**
 
 - **v0.18.0**: [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [poc-shared-1-deploy](tutorials/poc-shared-1-deploy/), [poc-shared-2-config](tutorials/poc-shared-2-config/), [poc-shared-3-scale](tutorials/poc-shared-3-scale/)
-- **v0.17.0**: [poc-shared-3-scale](tutorials/poc-shared-3-scale/)
+- **v0.17.0**: [inferencegraph-ensemble](tutorials/inferencegraph-ensemble/), [poc-shared-3-scale](tutorials/poc-shared-3-scale/)
 
 <!-- /tut -->
 

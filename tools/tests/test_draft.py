@@ -56,7 +56,11 @@ def work(tmp_path_factory):
         print_ok() {
             echo -e "${GREEN}ok $1"
         }
-        kubectl apply -f manifests/model.yaml -n "$NS"
+        if ! command -v kubectl >/dev/null; then
+            exit 1
+        fi
+        "${SCRIPT_DIR}/deploy.sh" --help
+        kubectl apply -f manifests/model.yaml -n ${NAMESPACE}
         sleep 60
         kubectl get isvc -n "$NS" \\
           -o wide
@@ -80,7 +84,7 @@ def agent(*extra):
 
 def test_script_commands_skip_decoration_and_join_continuations(work):
     cmds = [c for _, _, c in draft.script_commands(work)]
-    assert cmds == ['kubectl apply -f manifests/model.yaml -n "$NS"', "sleep 60",
+    assert cmds == ["kubectl apply -f manifests/model.yaml -n ${NAMESPACE}", "sleep 60",
                     'kubectl get isvc -n "$NS" -o wide', "cat <<EOF | kubectl apply -f -"]
 
 
@@ -94,11 +98,12 @@ def test_draft_end_to_end_with_a_stand_in_ai(repo, work):
     assert "kind-llmisvc/v1" in (r.work / "parts.md").read_text()
     assert "./tut _draftcheck" in (r.work / "prompt.md").read_text()
     assert r.outside == [] and r.agent_rc == 0
-    assert [c for _, _, c in r.found] == ['kubectl apply -f manifests/model.yaml -n "$NS"']
+    assert [c for _, _, c in r.found] == ["kubectl apply -f manifests/model.yaml -n ${NAMESPACE}"]  # $NS in the tutorial
     assert {c for _, _, c in r.missing} == {"sleep 60", 'kubectl get isvc -n "$NS" -o wide',
                                             "cat <<EOF | kubectl apply -f -"}
     report = (r.work / "report.md").read_text()
-    assert "found in the tutorial as-is: 1/4" in report and "`sleep 60`" in report
+    assert "in the tutorial (variable names may differ): 1/4" in report and "`sleep 60`" in report
+    assert not (repo / "tutorials" / r.tid / "manifests" / "example.yaml").exists()   # template leftover removed
     assert not [f for f in r.problems if f.severity == "error"], r.problems
 
 
@@ -131,6 +136,6 @@ def test_images_and_binaries_are_copied_in_and_unused_ones_removed(repo, work):
     assert not (t / "images" / "old.png").exists()              # nothing refers to it: removed
     assert not (t / "models").exists()                          # unused binary: removed, empty dir too
     assert r.assets_kept == ["images/arch.svg"]
-    assert sorted(r.assets_removed) == ["images/old.png", "models/model.bst"]
+    assert sorted(r.assets_removed) == ["images/old.png", "manifests/example.yaml (template)", "models/model.bst"]
     assert "images/arch.svg" in (r.work / "prompt.md").read_text()
     assert not [f for f in r.problems if f.code == "D004"]       # no broken image link

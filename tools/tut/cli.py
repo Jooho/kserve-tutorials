@@ -170,14 +170,14 @@ def cmd_draft(a):
     if not agent.available:
         sys.exit(f"TUT_AI={agent.name}, but `{agent.argv[0]}` is not on PATH")
     try:
-        r = draft.draft(Path(a.folder), a.new_id, a.title, agent)
+        r = draft.draft(Path(a.folder), a.new_id, a.title, agent, owner=a.owner)
     except (draft.DraftError, ScaffoldError) as e:
         sys.exit(str(e))
     errs = sum(f.severity == "error" for f in r.problems)
     total = len(r.found) + len(r.missing)
     print(f"\n{'✓' if not errs and not r.outside else '!'} tutorials/{r.tid}/ drafted by {agent.name}"
           f" (exit {r.agent_rc})\n"
-          f"  lint: {errs} error(s) · input commands kept as-is: {len(r.found)}/{total}"
+          f"  lint: {errs} error(s) · input commands in the tutorial: {len(r.found)}/{total}"
           f" · changed outside: {len(r.outside)}\n"
           f"  report: {(r.work / 'report.md').relative_to(REPO_ROOT)}   AI notes: "
           f"{(r.work / 'notes.md').relative_to(REPO_ROOT)}\n"
@@ -440,6 +440,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("folder", help="the folder with your tested work")
     s.add_argument("--id", dest="new_id", help="tutorial id (default: from the folder name)")
     s.add_argument("--title", help="English title (default: the AI writes one)")
+    s.add_argument("--owner", help="your GitHub handle (owners, CODEOWNERS)")
     s.set_defaults(fn=cmd_draft)
 
     s = sub.add_parser("_draftcheck", help=argparse.SUPPRESS)       # the one command the AI may run
