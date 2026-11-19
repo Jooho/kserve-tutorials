@@ -128,3 +128,19 @@ def test_save_and_sync_fills_the_use_region(repo):
     st, r = ui_call(repo, "POST", "/api/sync")
     assert st == 200 and r["errors"] == [] and "tutorials/b/README.md" in r["changed"]
     assert "Copied from a (tut:define model)" in (repo / "tutorials" / "b" / "README.md").read_text()
+
+
+def test_page_and_scripts_are_always_revalidated(repo):
+    """After `git pull` the browser must not keep an old app.js with a new page."""
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    from tut.ui.server import UI
+
+    async def main():
+        ui = UI(repo)
+        async with TestClient(TestServer(ui.app())) as c:
+            h = {"X-Tut-Token": ui.token}
+            for path in ("/", "/static/app.js", "/static/app.css", "/static/index.html"):
+                r = await c.get(path, headers=h)
+                assert r.status == 200 and r.headers.get("Cache-Control") == "no-cache", path
+    asyncio.run(main())

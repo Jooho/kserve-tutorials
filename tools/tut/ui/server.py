@@ -98,6 +98,16 @@ class UI:
             resp.set_cookie("tut_token", self.token, httponly=True, samesite="Strict")
         return resp
 
+    @web.middleware
+    async def no_stale_assets(self, request: web.Request, handler):
+        """The page and its scripts change with every `git pull`: make the browser
+        revalidate them (ETag) instead of mixing a new index.html with a cached
+        old app.js, which left the tutorial list empty."""
+        resp = await handler(request)
+        if request.path == "/" or request.path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     # --------------------------------------------------------------- routes
     async def index(self, request):
         resp = web.FileResponse(STATIC / "index.html")
@@ -339,7 +349,7 @@ class UI:
             s.stop()
 
     def app(self) -> web.Application:
-        app = web.Application(middlewares=[self.auth])
+        app = web.Application(middlewares=[self.auth, self.no_stale_assets])
         app.add_routes([
             web.get("/", self.index),
             web.get("/api/tutorials", self.api_tutorials),
