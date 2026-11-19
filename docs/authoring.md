@@ -246,3 +246,18 @@ can be checked mechanically.
 - **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18),
   `README.md:444 (step 11/25 · verify) (exit 141)`; reproduced:
   `set -o pipefail; seq 1 200000 | grep -q 1` → 141.
+
+### CI-008 The runner killed itself with a tutorial's `pkill -f`
+- **What happened:** the second run of `inferencegraph-ensemble` passed steps
+  1–20, then died with exit -15 (SIGTERM) and no failing step. Step 21 ran
+  `pkill -f "[p]ort-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80"`.
+  The runner passed the whole tutorial as `bash -c <script>`, so the runner's
+  own command line contained the port-forward command of the same step, and
+  pkill matched it. (The `[p]` trick only keeps pkill from matching itself.)
+  In a reader's terminal this cannot happen, so it was a CI-only failure.
+- **Rule:** the runner executes the script from a file (`bash <file>`), so no
+  step can match the runner by its command line. Tutorials may still prefer
+  stopping background processes by PID.
+- **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
+  (`exit_code: -15`, `failed_at: null`, during README.md:712); reproduced and
+  guarded by `test_runner_survives_pkill_f_of_a_command_in_the_same_tutorial`.

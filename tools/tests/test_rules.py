@@ -474,3 +474,32 @@ def test_G003_every_tutorial_needs_a_known_group(repo):
     msgs = [f.message for f in lint.Linter(repo).run() if f.code == "G003"]
     assert any("group 'nope' is not in catalog/groups.yaml" in m for m in msgs)
     assert any("no `group:`" in m for m in msgs)
+
+
+def test_runner_survives_pkill_f_of_a_command_in_the_same_tutorial(tmp_path, monkeypatch):
+    """CI-008: `pkill -f "[p]ort-forward ..."` matched the runner's own bash when the
+    whole script was passed as `bash -c <script>` (its command line contained the
+    later port-forward command). A reader's terminal never has that problem."""
+    readme = textwrap.dedent("""\
+        # T
+
+        ```bash run
+        pkill -f "[s]leep 12345 tut-pkill-marker" || true
+        ```
+
+        ```bash run
+        (sleep 12345 tut-pkill-marker; true) >/dev/null 2>&1 &
+        echo started
+        ```
+
+        ```bash verify
+        pkill -f "[s]leep 12345 tut-pkill-marker" || true
+        ```
+        """)
+    make_tut(tmp_path, "pk", readme, env=None, status="draft")
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    t = next(t for t in load_tutorials(tmp_path) if t.id == "pk")
+    report = tmp_path / "r.json"
+    rc = runner.run(t, report=report)
+    res = json.loads(report.read_text())
+    assert rc == 0 and res["status"] == "passed", res
