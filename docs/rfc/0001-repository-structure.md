@@ -106,7 +106,8 @@ id: llmisvc-anatomy                 # == directory name
 title: {en: "...", ko: "..."}
 summary: {en: "...", ko: "..."}
 status: stable                      # draft | stable | deprecated | archived
-env: kind-llmisvc/v1                # a frozen profile (required for stable)
+env: kind-kserve/v1                 # a frozen profile (required for stable)
+env_options: {types: [llmisvc]}     # what the profile installs for this tutorial (T008)
 uses: [llmisvc/v1]                  # script modules, pinned
 namespace: llmisvc-anatomy          # default: id
 kserve:
@@ -463,9 +464,12 @@ AI works on top of the rules, never instead of them:
    If the weekly matrix gets slow, group tutorials that share a profile and
    version into one job; the namespace rule (§4.7) makes this safe.
 6. **Profile granularity.** Add-ons used by a few tutorials (Prometheus,
-   KEDA, ...) — separate profiles (`kind-llmisvc-monitoring/v1`) or installed by
-   the tutorial itself? Proposal: by the tutorial, until three tutorials need
-   the same add-on.
+   KEDA, ...) — separate profiles or installed by the tutorial itself?
+   Decided: one profile, `kind-kserve/v1`, whose `env_options` map to KServe's
+   own installer flags (`--type kserve,localmodel,llmisvc`, `--raw` /
+   `--serverless`, `--keda`); a cluster it built is reused and only missing
+   parts are added. Other add-ons stay in the tutorial until three tutorials
+   need the same one.
 
 7. **Site generator lifetime.** Material for MkDocs announces end of life on
    2027-05-05, with Zensical as its successor (reads `mkdocs.yml`). The site is

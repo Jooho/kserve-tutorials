@@ -4,7 +4,7 @@
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-llmisvc/v1`](../../envs/kind-llmisvc/v1/) · **GPU:** 불필요
+> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
 
@@ -27,7 +27,8 @@ source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
 export TUT_LIB="$REPO_ROOT/lib"
 # pinned CLI tools of the environment, for this shell only
 export PATH="$REPO_ROOT/.tools/kind/v0.30.0:$REPO_ROOT/.tools/kubectl/v1.34.13:$REPO_ROOT/.tools/helm/v3.16.3:$REPO_ROOT/.tools/cloud-provider-kind/v0.12.0:$PATH"
-"$REPO_ROOT/envs/kind-llmisvc/v1/setup.sh"
+# what this tutorial needs from the environment (env_options in tutorial.yaml)
+TUT_ENV_TYPES=kserve TUT_ENV_MODE=standard TUT_ENV_KEDA=false "$REPO_ROOT/envs/kind-kserve/v1/setup.sh"
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 cd "$REPO_ROOT/tutorials/_template"
 ```

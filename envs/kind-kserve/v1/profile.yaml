@@ -1,0 +1,33 @@
+id: kind-kserve/v1
+description: >
+  Kind cluster (control-plane + worker) with a local registry and the KServe
+  parts a tutorial asks for (env_options: InferenceService in standard or
+  serverless mode, LocalModel, LLMInferenceService, KEDA), installed with
+  KServe's own hack/kserve-install.sh checked out at the requested KServe tag.
+  A cluster it built is reused and only missing parts are added. CPU only.
+supersedes: kind-llmisvc/v1
+frozen: false          # -> true once a stable tutorial has passed on it
+kserve:
+  min: v0.17.1          # first tag that ships hack/kserve-install.sh with --type
+requires: [docker, git, curl]   # host prerequisites the user installs; CLI tools come from tools.env
+options:               # what a tutorial may set in env_options (passed as TUT_ENV_*)
+  types:
+    description: KServe parts to install (hack/kserve-install.sh --type)
+    allowed: [kserve, localmodel, llmisvc]
+    default: [kserve]
+  mode:
+    description: InferenceService deployment mode (for type kserve)
+    allowed: [standard, serverless]
+    default: standard
+  keda:
+    description: KEDA autoscaling (standard mode only)
+    allowed: [true, false]
+    default: false
+inputs:
+  KSERVE_VERSION: KServe tag to install (required, set by the tutorial's setup block)
+  TUT_ENV_TYPES: "From env_options.types (comma list; default: kserve)"
+  TUT_ENV_MODE: "From env_options.mode (default: standard)"
+  TUT_ENV_KEDA: "From env_options.keda (default: false)"
+  KIND_CLUSTER_NAME: "Kind cluster name (default: kind)"
+  TUT_CACHE: "Where KServe sources are cached (default: ~/.cache/kserve-tutorials)"
+  TUT_ENV_RECREATE: "Set to 1 to delete and recreate a cluster that cannot be reused"

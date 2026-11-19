@@ -34,10 +34,11 @@ Write down, before changing anything:
 - If an existing profile builds the cluster the tutorial needs, use it.
 - If the tutorial only needs a small add-on (Prometheus, a CRD, a Helm chart),
   install it **inside the tutorial** and remove it in its cleanup.
-- Only create a new profile (`envs/<name>/v1/`) when the cluster itself is
-  different (e.g. another ingress/gateway, another KServe install type). Copy
-  `envs/kind-llmisvc/v1/` as a starting point; keep `setup.sh` idempotent and
-  pinned to `$KSERVE_VERSION`.
+- Use `env: kind-kserve/v1` and pick the KServe parts in `env_options`
+  (`types: [kserve|localmodel|llmisvc]`, `mode: standard|serverless`, `keda`);
+  see `envs/kind-kserve/v1/README.md`. Only create a new profile
+  (`envs/<name>/v1/`) when the cluster itself must differ in a way an option
+  cannot express; keep `setup.sh` idempotent and pinned to `$KSERVE_VERSION`.
 - Never edit a frozen profile; create the next version instead.
 
 ## 3. Create the directory
