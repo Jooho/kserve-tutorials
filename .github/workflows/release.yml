@@ -1,0 +1,115 @@
+# Promote a commit of `main` to `stable` and tag a release (docs/release.md).
+#
+#   plan     resolve the commit, check it is on main and that stable can
+#            fast-forward to it, run rules and tests, pick the version
+#   verify   every runnable tutorial x every tested KServe version, at that commit
+#   publish  only if everything passed: move stable, tag, GitHub Release, site
+#
+# dry_run (default) does everything except moving stable, tagging and deploying.
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      ref: {description: "Commit or branch on main to promote", default: main}
+      dry_run: {description: "Verify and write notes only", type: boolean, default: true}
+
+permissions: {contents: read}
+concurrency: {group: release, cancel-in-progress: false}
+env: {NO_MKDOCS_2_WARNING: "1"}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.p.outputs.sha }}
+      version: ${{ steps.p.outputs.version }}
+      matrix: ${{ steps.p.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref }}", fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip, cache-dependency-path: tools/requirements.txt}
+      - run: pip install -r tools/requirements.txt
+      - id: p
+        name: Resolve commit, version and matrix
+        run: |
+          sha=$(git rev-parse HEAD)
+          git fetch --tags origin
+          git fetch origin main
+          git fetch origin stable 2>/dev/null || echo "no stable branch yet"
+          git merge-base --is-ancestor "$sha" origin/main \
+            || { echo "::error::$sha is not on main; only commits of main can be released"; exit 1; }
+          ./tut release can-ff "$sha"
+          version=$(./tut release next-version)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(./tut matrix --scheduled --json)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Release plan"
+            echo "- version: \`$version\`  · commit: \`${sha:0:7}\`  · dry run: \`${{ inputs.dry_run }}\`"
+            echo "- matrix:"; ./tut matrix --scheduled | sed 's/^/  - /'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Rules, tests and site at this commit
+        run: make check
+
+  verify:
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    uses: ./.github/workflows/run-tutorials.yml
+    with:
+      matrix: ${{ needs.plan.outputs.matrix }}
+      label: release
+      ref: ${{ needs.plan.outputs.sha }}
+
+  publish:
+    needs: [plan, verify]
+    if: >-
+      always() && needs.plan.result == 'success' &&
+      (needs.verify.result == 'success' || needs.verify.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions: {contents: write}
+    outputs:
+      published: ${{ steps.pub.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ needs.plan.outputs.sha }}", fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip, cache-dependency-path: tools/requirements.txt}
+      - run: pip install -r tools/requirements.txt
+      - uses: actions/download-artifact@v4
+        with: {pattern: "report-release-*", path: reports}
+      - name: Every matrix entry passed
+        run: |
+          mkdir -p reports
+          echo '${{ needs.plan.outputs.matrix }}' > expected.json
+          ./tut release check --reports reports --expected expected.json
+      - name: Release notes
+        run: |
+          ./tut release notes "${{ needs.plan.outputs.version }}" "${{ needs.plan.outputs.sha }}" \
+            --reports reports --repo "${{ github.repository }}" > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+      - id: pub
+        name: Move stable, tag and publish
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          sha="${{ needs.plan.outputs.sha }}"; version="${{ needs.plan.outputs.version }}"
+          git fetch --tags origin
+          git fetch origin stable 2>/dev/null || true
+          ./tut release can-ff "$sha"          # stable may have moved while we verified
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Dry run: would push $sha to stable and create release $version" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git push origin "$sha:refs/heads/stable"
+          gh release create "$version" --target "$sha" --title "KServe Tutorials $version" --notes-file notes.md
+          echo "published=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with: {name: release-notes, path: notes.md}
+
+  site:
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    permissions: {contents: read, pages: write, id-token: write}
+    uses: ./.github/workflows/site.yml
+    with: {ref: stable}

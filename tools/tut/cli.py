@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import generate, lint, plan, runner, site
+from . import generate, lint, plan, release, runner, site
 from .model import REPO_ROOT, load_tutorials
 
 
@@ -70,6 +70,25 @@ def cmd_site(a):
     print(f"site source written to {out}")
 
 
+def cmd_release(a):
+    if a.rcmd == "next-version":
+        print(release.next_version())
+    elif a.rcmd == "check":
+        expected = json.loads(Path(a.expected).read_text())
+        ok, problems = release.verdict(release.load_reports(Path(a.reports)), expected)
+        for p in problems:
+            print(f"✗ {p}", file=sys.stderr)
+        print(f"{len(expected) - len(problems)}/{len(expected)} passed")
+        return 0 if ok else 1
+    elif a.rcmd == "can-ff":
+        ok, msg = release.can_fast_forward(a.sha)
+        print(msg)
+        return 0 if ok else 1
+    elif a.rcmd == "notes":
+        reports = release.load_reports(Path(a.reports)) if a.reports else []
+        sys.stdout.write(release.notes(a.version, a.sha, reports, repo=a.repo))
+
+
 def cmd_ui(a):
     try:
         from .ui.server import serve
@@ -125,6 +144,21 @@ def main(argv=None):
     s = sub.add_parser("site", help="assemble the MkDocs source tree")
     s.add_argument("--out", default=str(REPO_ROOT / "build" / "site-src"))
     s.set_defaults(fn=cmd_site)
+
+    s = sub.add_parser("release", help="release helpers (see docs/release.md)")
+    rsub = s.add_subparsers(dest="rcmd", required=True)
+    rsub.add_parser("next-version", help="next YYYY.MM.N tag")
+    r = rsub.add_parser("check", help="fail unless every expected matrix entry has a passing report")
+    r.add_argument("--reports", required=True)
+    r.add_argument("--expected", required=True, help="JSON file from `tut matrix --scheduled --json`")
+    r = rsub.add_parser("can-ff", help="can `stable` fast-forward to this commit?")
+    r.add_argument("sha")
+    r = rsub.add_parser("notes", help="release notes (markdown)")
+    r.add_argument("version")
+    r.add_argument("sha")
+    r.add_argument("--reports")
+    r.add_argument("--repo", default="<owner>/<repo>")
+    s.set_defaults(fn=cmd_release)
 
     s = sub.add_parser("ui", help="local web UI: read and run tutorials in a real shell")
     s.add_argument("--port", type=int, default=8080)

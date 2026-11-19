@@ -23,12 +23,13 @@ CI recently checked that it does.
 ## Running tutorials locally (recommended)
 
 ```bash skip
-git clone https://github.com/Jooho/kserve-tutorials.git && cd kserve-tutorials
-python3 -m pip install -r tools/requirements.txt
-./tut ui
+git clone -b stable https://github.com/Jooho/kserve-tutorials.git && cd kserve-tutorials
+make setup
+make ui
 ```
 
-A browser opens with every tutorial. Pick a KServe version and a tutorial,
+`stable` is the last fully verified state (see [releases](../../releases));
+`main` is where tutorials are being written. A browser opens with every tutorial. Pick a KServe version and a tutorial,
 then press ▶ on each step (or ▶ Run all): the commands run in a terminal on
 your machine, shown in the page, and every check turns green or red. No
 copy and paste. You need what the tutorial's environment needs (for most:
@@ -40,7 +41,7 @@ Docker, kubectl, Go).
    "By KServe version" page).
 2. Clone this repository. Tutorials reference files by path.
    ```bash skip
-   git clone https://github.com/Jooho/kserve-tutorials.git && cd kserve-tutorials
+   git clone -b stable https://github.com/Jooho/kserve-tutorials.git && cd kserve-tutorials
    ```
 3. Open `tutorials/<id>/README.md` and copy the commands in order. The first
    block prepares the cluster for you (see the tutorial's **Environment**).

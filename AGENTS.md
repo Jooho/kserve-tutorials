@@ -13,11 +13,15 @@ you must read, not in anyone's memory. CI enforces them.
 | A CI run, scheduled run or canary failed | [docs/ci-playbook.md](docs/ci-playbook.md) |
 | Change `envs/`, `lib/` (shared parts) | docs/authoring.md § Shared parts, then RFC §4.6 |
 | Change `tools/`, `schema/`, rules or workflows | [docs/rfc/0001-repository-structure.md](docs/rfc/0001-repository-structure.md) |
+| Release, `stable` branch, Makefile or release workflow | [docs/release.md](docs/release.md) |
 | Plan or pick up structural work | [docs/backlog.md](docs/backlog.md) — known problems with evidence; update an item's status when you finish it |
 
 If the document and the code disagree, stop and report it; do not guess.
 
 ## Commands
+
+`make help` lists the same commands as make targets (`make check` = lint +
+tests + site, what CI checks without a cluster).
 
 ```bash skip
 pip install -r tools/requirements.txt        # Python 3.11+
@@ -51,6 +55,8 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 8. **Do not set `status: stable`** unless CI (or `./tut run <id>`) passed
    with that exact README.
 9. **Never push to `Jooho/kserve-tutorials-legacy`** (read only).
+10. **Never push to `stable`.** Only the release workflow moves it, and only
+    forward to a fully verified commit of `main` (docs/release.md).
 
 ## Leave the repository smarter than you found it
 

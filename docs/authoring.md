@@ -80,7 +80,7 @@ order [D011]; after translating run `./tut translation mark <id> <lang>` [D010].
 ## 7. Before you open a PR
 
 ```bash skip
-./tut sync && ./tut lint
+./tut sync && make check     # lint + tests + site
 ./tut run <id> --dry-run     # read what CI will execute
 ./tut run <id>               # or step through it with ./tut ui
 ```
