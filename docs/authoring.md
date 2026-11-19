@@ -115,16 +115,31 @@ being replaced) → `archived` (kept, not run). Deprecating or archiving needs a
 
 `README.md` is the source. `<id>` is the tutorial's directory name.
 
+**With an AI CLI** you are logged in to (Claude Code, GitHub Copilot CLI,
+Codex CLI, or any command) — no API keys in this repository:
+
 ```bash skip
-./tut translation                     # every translation's state and the next step
-./tut translation init <id> ko        # copies README.md to README.ko.md, adds ko to langs
-#   translate prose and code comments; keep the code blocks themselves
-./tut translation mark <id> ko        # only after the text really matches README.md
+export TUT_TRANSLATOR=claude                # or copilot, codex, cmd:<command>
+./tut translation draft <id> ko             # one tutorial
+./tut translation draft --all ko            # every missing or outdated translation
+#   review the Korean text (git diff), fix what reads badly
+./tut translation mark <id> ko              # only after a person or agent reviewed it
 ```
 
-A translation has the same shell blocks in the same order [D011]. When
-README.md changes later, lint warns that the translation is behind [D010] and
-the UI shows it to readers until someone updates it and marks it again.
+The AI only returns text; a program checks it before anything is written: code
+blocks, commands, generated regions, HTML comments and link targets must be
+unchanged (comments inside code may be translated). A rejected draft is kept in
+`build/translations/` for inspection and nothing changes. An accepted draft is
+marked `by=<tool> reviewed=no`: lint warns, the UI tells readers it is an AI
+translation, and `mark` turns it into a reviewed one.
+
+**By hand:** `./tut translation init <id> ko` copies README.md (same blocks and
+regions); translate prose and code comments, keep the code; then `mark`.
+
+`./tut translation` shows every translation's state and the next step. A
+translation has the same shell blocks in the same order [D011]. When README.md
+changes later, lint warns that the translation is behind [D010] and the UI shows
+it to readers. Translation lag never blocks English changes or releases.
 
 ## 8. Before you open a PR
 

@@ -31,7 +31,7 @@ def test_setup_block_puts_env_tools_on_path_before_env_setup():
 def test_doctor_toolkit_only_checks_python_side():
     sections = doctor.run_checks(toolkit_only=True)
     assert [n for n, _ in sections] == ["toolkit (./tut, make setup)"]
-    assert {c.name for c in sections[0][1]} == {"python", "python packages"}
+    assert {c.name for c in sections[0][1]} == {"python", "python packages", "translator"}
 
 
 def test_doctor_never_installs_docker():

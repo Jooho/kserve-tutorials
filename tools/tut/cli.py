@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -109,7 +110,7 @@ def cmd_list(a):
             print()
         return
     # one line per tutorial; columns shrink to the terminal width (tags last)
-    lang_mark = {"current": "✓", "behind": "!", "unmarked": "?", "missing": "-"}
+    lang_mark = {"current": "✓", "draft": "~", "behind": "!", "unmarked": "?", "missing": "-"}
     rows = []
     for t in ts:
         from .model import version_key
@@ -132,7 +133,7 @@ def cmd_list(a):
     for r in rows:
         print(line(r))
     print(f"\n{len(ts)} tutorial(s)")
-    print("KSERVE: newest tested, * = default, +n = more versions · TRANSL.: ✓ ok ! behind ? unmarked - none")
+    print("KSERVE: newest tested, * = default, +n = more versions · TRANSL.: ✓ ok ~ AI draft ! behind ? unmarked - none")
     print("Details: ./tut show <id> · filter: --tag --status --collection · step through: ./tut ui")
 
 
@@ -143,10 +144,10 @@ def cmd_completion(a):
     else:
         print(f'source "{path}"')
         if sys.stdout.isatty():
-            print(f"# Tab completion for ./tut. Enable it in this shell with:\n"
-                  f'#   eval "$(./tut completion)"\n'
-                  f"# zsh: run `autoload -U +X bashcompinit && bashcompinit` first.\n"
-                  f"# To keep it, add the source line above to your ~/.bashrc yourself.",
+            print("# Tab completion for ./tut. Enable it in this shell with:\n"
+                  '#   eval "$(./tut completion)"\n'
+                  "# zsh: run `autoload -U +X bashcompinit && bashcompinit` first.\n"
+                  "# To keep it, add the source line above to your ~/.bashrc yourself.",
                   file=sys.stderr)
 
 
@@ -201,16 +202,20 @@ def cmd_translation(a):
                 continue
             for l in langs:
                 st = lint.translation_state(t, l)
-                icon = {"current": "✅", "behind": "⚠️ ", "unmarked": "❌", "missing": "· "}[st]
+                icon = {"current": "✅", "draft": "🤖", "behind": "⚠️ ", "unmarked": "❌", "missing": "· "}[st]
                 print(f"  {icon} {t.id:32} {l}  {lint.TRANSLATION_STATES[st]}")
                 if st == "missing":
-                    todo.append(f"start:   ./tut translation init {t.id} {l}")
+                    todo.append(f"start:   ./tut translation draft {t.id} {l}   (AI)  or  init (by hand)")
+                elif st == "draft":
+                    todo.append(f"review tutorials/{t.id}/README.{l}.md, then: ./tut translation mark {t.id} {l}")
                 elif st in ("behind", "unmarked"):
                     todo.append(f"update tutorials/{t.id}/README.{l}.md, then: "
                                 f"./tut translation mark {t.id} {l}")
         if todo:
             print("\nNext steps:\n  " + "\n  ".join(todo))
         return
+    if a.tcmd == "draft":
+        return _translation_draft(a, langs)
     if a.lang not in langs:
         sys.exit(f"unknown language {a.lang!r}; supported: {', '.join(langs)}")
     t = _tutorial(a.id)
@@ -228,6 +233,60 @@ def cmd_translation(a):
                  f"  ./tut translation init {t.id} {a.lang}")
     p = lint.mark_translation(t, a.lang)
     print(f"marked {p.relative_to(REPO_ROOT)} as a translation of the current README.md")
+
+
+def _translation_draft(a, langs):
+    from . import translate
+    lang = a.lang if a.lang else a.id if a.all else None
+    if a.all:
+        lang, a.id = a.id, None
+    if lang not in langs:
+        sys.exit(f"unknown language {lang!r}; supported: {', '.join(langs)}")
+    try:
+        tr = translate.configured()
+    except translate.TranslationError as e:
+        sys.exit(str(e))
+    if tr is None:
+        sys.exit("No AI translator configured. Pick the CLI you are logged in to, e.g.\n"
+                 "  export TUT_TRANSLATOR=claude      # or copilot, codex, cmd:<command>\n"
+                 "  ./tut config TUT_TRANSLATOR=claude   # to remember it in .tut.env")
+    if not tr.available:
+        sys.exit(f"TUT_TRANSLATOR={tr.name}, but `{tr.argv[0]}` is not on PATH")
+    if a.all:
+        targets = [t for t in load_tutorials(REPO_ROOT) if not t.errors
+                   and lint.translation_state(t, lang) in ("missing", "behind", "unmarked")]
+    else:
+        targets = [_tutorial(a.id)]
+        st = lint.translation_state(targets[0], lang)
+        if st == "current" and not a.force:
+            sys.exit(f"{a.id} {lang} is up to date and reviewed; use --force to re-translate it")
+    if not targets:
+        print(f"Nothing to translate into {lang}.")
+        return 0
+    failed = 0
+    for t in targets:
+        src = t.readme("en").read_text()
+        print(f"→ {t.id} → {lang} with {tr.name} …", flush=True)
+        try:
+            text = translate.extract(translate.run(tr, translate.build_prompt(src, lang)))
+        except (translate.TranslationError, subprocess.TimeoutExpired) as e:
+            print(f"  ✗ {e}")
+            failed += 1
+            continue
+        problems = translate.check(src, text)
+        if problems:
+            rej = REPO_ROOT / "build" / "translations" / f"{t.id}.{lang}.rejected.md"
+            rej.parent.mkdir(parents=True, exist_ok=True)
+            rej.write_text(text)
+            print("  ✗ rejected, nothing written: " + "; ".join(problems)
+                  + f"\n    (the AI output is in {rej.relative_to(REPO_ROOT)})")
+            failed += 1
+            continue
+        path = lint.write_draft(t, lang, text, tr.name)
+        generate.sync(REPO_ROOT)
+        print(f"  ✓ wrote {path.relative_to(REPO_ROOT)} (AI draft, not reviewed)\n"
+              f"    review it, then: ./tut translation mark {t.id} {lang}")
+    return 1 if failed else 0
 
 
 def cmd_site(a):
@@ -257,7 +316,9 @@ def cmd_release(a):
 CONFIG_FILE = REPO_ROOT / ".tut.env"
 CONFIG_KEYS = {"KIND_CLUSTER_NAME": "name of the kind cluster tutorials create/use (default: kind)",
                "TUT_SKIP_TOOLS": "tools you provide yourself, e.g. \"helm\" (default: none)",
-               "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)"}
+               "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)",
+               "TUT_TRANSLATOR": "AI CLI for `translation draft`: claude | copilot | codex | cmd:<command>",
+               "TUT_TRANSLATOR_ARGS": "extra flags for that CLI, e.g. \"--model sonnet\""}
 
 
 def cmd_config(a):
@@ -361,6 +422,15 @@ def build_parser() -> argparse.ArgumentParser:
                                    "list); <lang> is a language code such as ko.")
     tsub = s.add_subparsers(dest="tcmd")
     tsub.add_parser("status", help="state of every translation (default)")
+    d = tsub.add_parser("draft", help="translate with your AI CLI (TUT_TRANSLATOR=claude|copilot|codex|cmd:...)",
+                        description="Translate README.md with the AI CLI set in TUT_TRANSLATOR. The result "
+                                    "is checked (code, commands, regions, links unchanged) and written as an "
+                                    "AI draft; review it, then `translation mark`.")
+    d.add_argument("id", help="tutorial id (or, with --all, the language)")
+    d.add_argument("lang", nargs="?", help="language code, e.g. ko")
+    d.add_argument("--all", action="store_true",
+                   help="every tutorial whose translation is missing or behind: ./tut translation draft --all ko")
+    d.add_argument("--force", action="store_true", help="re-translate a reviewed, up-to-date translation")
     for name, help_ in (("init", "start a translation: copy README.md and add the language to langs"),
                         ("mark", "after translating: record that it matches the current README.md")):
         m = tsub.add_parser(name, help=help_)

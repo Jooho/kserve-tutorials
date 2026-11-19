@@ -67,7 +67,8 @@ from . import catalog, generate, markdown
 from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
                     load_modules, load_schema, load_tutorials)
 
-TRANSLATION_RE = re.compile(r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)\s*-->")
+TRANSLATION_RE = re.compile(
+    r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)((?:\s+[a-z]+=\S+)*)\s*-->")
 HARDCODED_VERSION_RE = re.compile(r"kserve[^\n]{0,60}?\bv\d+\.\d+(\.\d+)?\b", re.I)
 NOT_IDEMPOTENT = [
     (re.compile(r"\bkubectl\s+create\s+(?!token\b)(?!.*--dry-run)"),
@@ -328,6 +329,9 @@ class Linter:
         elif m.group(2) != expected:
             self.warn("D010", tr_path, f"translation is behind {en_path.name} "
                       f"(translated from {m.group(2)}, source is now {expected})")
+        elif "reviewed=no" in (m.group(3) or ""):
+            self.warn("D010", tr_path, "AI draft translation, not reviewed yet: review it, then "
+                      f"`./tut translation mark {tr_path.parent.name} {tr_path.name.split('.')[1]}`")
         seq_en = [b.role for b in en_doc.blocks if b.is_shell]
         seq_tr = [b.role for b in tr_doc.blocks if b.is_shell]
         if seq_en != seq_tr:
@@ -488,6 +492,7 @@ def _images(node):
 
 TRANSLATION_STATES = {
     "current": "up to date",
+    "draft": "AI draft, not reviewed (review it, then `translation mark`)",
     "behind": "behind README.md (the English source changed since)",
     "unmarked": "file exists, never marked (run `translation mark` after translating)",
     "missing": "not translated",
@@ -502,7 +507,9 @@ def translation_state(t: Tutorial, lang: str) -> str:
     m = TRANSLATION_RE.search(p.read_text())
     if not m:
         return "unmarked"
-    return "current" if m.group(2) == source_hash(t.readme("en").read_text()) else "behind"
+    if m.group(2) != source_hash(t.readme("en").read_text()):
+        return "behind"
+    return "draft" if "reviewed=no" in (m.group(3) or "") else "current"
 
 
 def init_translation(t: Tutorial, lang: str) -> Path:
@@ -512,6 +519,13 @@ def init_translation(t: Tutorial, lang: str) -> Path:
     target = t.readme(lang)
     if target.exists():
         raise FileExistsError(f"tutorials/{t.id}/{target.name} already exists")
+    add_lang(t, lang)
+    target.write_text(t.readme("en").read_text())
+    return target
+
+
+def add_lang(t: Tutorial, lang: str) -> None:
+    """Add `lang` to `langs` in tutorial.yaml, editing text so comments survive."""
     meta_file = t.path / "tutorial.yaml"
     text = meta_file.read_text()
     if lang not in t.langs:
@@ -527,8 +541,17 @@ def init_translation(t: Tutorial, lang: str) -> Path:
         else:
             raise ValueError("tutorial.yaml: cannot find `langs`; add it, e.g. `langs: [en]`")
         meta_file.write_text(text)
-    target.write_text(t.readme("en").read_text())
-    return target
+
+
+def write_draft(t: Tutorial, lang: str, text: str, by: str) -> Path:
+    """Write a checked AI translation, marked as a draft nobody reviewed yet."""
+    add_lang(t, lang)
+    en = t.readme("en").read_text()
+    text = TRANSLATION_RE.sub("", text).lstrip("\n")
+    marker = f"<!-- tut-translation source=README.md sha={source_hash(en)} by={by} reviewed=no -->"
+    path = t.readme(lang)
+    path.write_text(marker + "\n" + text)
+    return path
 
 
 def mark_translation(t: Tutorial, lang: str) -> Path:

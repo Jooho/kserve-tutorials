@@ -6,6 +6,7 @@ index.md and README.ko.md becomes index.ko.md (mkdocs-static-i18n suffix mode).
 """
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -47,7 +48,11 @@ def _copy_tree(src: Path, dst: Path):
         target = dst / LANG_FILES.get(str(rel), str(rel))
         target.parent.mkdir(parents=True, exist_ok=True)
         if p.suffix == ".md":
-            target.write_text("\n".join(_site_fence_info(l) for l in p.read_text().split("\n")))
+            text = "\n".join(_site_fence_info(l) for l in p.read_text().split("\n"))
+            # The README's "🌐 English / 한국어" line links README*.md for GitHub; the
+            # site renames them to index pages and has its own language switcher.
+            text = re.sub(r"^>[ \t]*\n> 🌐 .*\n", "", text, flags=re.M)
+            target.write_text(text)
         else:
             shutil.copy2(p, target)
 

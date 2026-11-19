@@ -444,3 +444,12 @@ def test_list_is_one_line_per_tutorial_and_show_has_details(repo, monkeypatch, c
     cli.main(["show", "t01"])
     detail = capsys.readouterr().out
     assert "KServe       v0.18.0 (default)" in detail and "files        tutorials/t01/README.md" in detail
+
+
+def test_site_drops_the_github_language_links(tmp_path):
+    from tut import site
+    src = tmp_path / "src"; src.mkdir()
+    (src / "README.md").write_text("> **Status:** x\n>\n> 🌐 [한국어](README.ko.md)\n\nBody\n")
+    site._copy_tree(src, tmp_path / "out")
+    text = (tmp_path / "out" / "index.md").read_text()
+    assert "README.ko.md" not in text and "**Status:** x" in text and "Body" in text

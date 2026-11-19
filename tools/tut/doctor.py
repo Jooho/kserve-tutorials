@@ -87,12 +87,23 @@ def toolkit_checks() -> list[Check]:
     v = sys.version_info
     checks = [Check("python", OK if v >= (3, 11) else FAIL, platform.python_version(),
                     "" if v >= (3, 11) else "install Python 3.11+")]
+    from . import translate
+    try:
+        tr = translate.configured()
+        checks_tr = (Check("translator", OK, "not set (optional: TUT_TRANSLATOR=claude|copilot|codex)")
+                     if tr is None else
+                     Check("translator", OK if tr.available else WARN,
+                           f"{tr.name}" + ("" if tr.available else f": `{tr.argv[0]}` not on PATH"),
+                           "" if tr.available else f"install or log in to the {tr.name} CLI"))
+    except translate.TranslationError as e:
+        checks_tr = Check("translator", WARN, str(e))
     missing = [m for m in PY_MODULES if importlib.util.find_spec(m) is None]
     venv = sys.prefix != sys.base_prefix
     checks.append(Check("python packages", FAIL if missing else OK,
                         f"missing: {', '.join(missing)}" if missing else
                         ("installed in .venv" if venv else "installed (no venv)"),
                         "make setup" if missing else ""))
+    checks.append(checks_tr)
     return checks
 
 
