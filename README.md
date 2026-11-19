@@ -20,6 +20,9 @@ CI recently checked that it does.
 
 **Collections** (reading paths)
 
+- **InferenceGraph** — Chain InferenceServices into one endpoint — ensembles, sequences, switches and splitters.
+  1. [Two Models, One Answer — InferenceGraph Ensemble and Combiner](tutorials/inferencegraph-ensemble/)
+
 - **LLMInferenceService deep dive** — From one YAML to the resources it creates, how a request is routed, how to observe it and how it scales.
   1. [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/)
 

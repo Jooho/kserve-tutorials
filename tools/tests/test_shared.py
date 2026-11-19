@@ -144,3 +144,37 @@ def test_page_and_scripts_are_always_revalidated(repo):
                 r = await c.get(path, headers=h)
                 assert r.status == 200 and r.headers.get("Cache-Control") == "no-cache", path
     asyncio.run(main())
+
+
+ECHO_TRANSLATOR = (
+    "import sys; src = sys.stdin.read().split('=== README.md (English source) ===\\n', 1)[1];"
+    " print('<<<TUT-TRANSLATION-BEGIN>>>'); print(src); print('<<<TUT-TRANSLATION-END>>>')")
+
+
+def test_ui_creates_a_translation_with_the_users_ai(repo, monkeypatch, tmp_path):
+    from tut import lint
+    from tut.model import load_tutorials
+    monkeypatch.delenv("TUT_AI", raising=False)
+    monkeypatch.delenv("TUT_TRANSLATOR", raising=False)
+    st, r = ui_call(repo, "POST", "/api/tutorials/a/translation?lang=ko")
+    assert st == 200 and not r["ok"] and "TUT_AI" in r["message"]            # tells how to set it up
+    fake = tmp_path / "echo_tr.py"
+    fake.write_text(ECHO_TRANSLATOR)
+    monkeypatch.setenv("TUT_AI", f"cmd:python3 {fake}")
+    generate.sync(repo)
+    st, r = ui_call(repo, "POST", "/api/tutorials/a/translation?lang=ko")
+    assert st == 200 and r["ok"], r
+    t = next(x for x in load_tutorials(repo) if x.id == "a")
+    assert (t.path / "README.ko.md").exists() and "ko" in t.langs
+    assert lint.translation_state(t, "ko") == "draft"                         # AI draft until reviewed
+    assert ui_call(repo, "POST", "/api/tutorials/a/translation?lang=xx")[0] == 400
+
+
+def test_editor_also_opens_tutorial_yaml_and_nothing_else(repo):
+    st, r = ui_call(repo, "GET", "/api/tutorials/a/source?file=tutorial.yaml")
+    assert st == 200 and r["file"] == "tutorials/a/tutorial.yaml" and "title" in r["text"]
+    st, _ = ui_call(repo, "PUT", "/api/tutorials/a/source?file=tutorial.yaml",
+                    {"text": r["text"].replace("title:\n  en: a", "title:\n  en: New title"), "mtime": r["mtime"]})
+    assert st == 200
+    assert "New title" in (repo / "tutorials" / "a" / "tutorial.yaml").read_text()
+    assert ui_call(repo, "GET", "/api/tutorials/a/source?file=../../AGENTS.md")[0] == 400

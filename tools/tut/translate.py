@@ -174,3 +174,33 @@ def check(source: str, translated: str) -> list[str]:
         if a[key] != b[key]:
             problems.append(f"{what} changed")
     return problems
+
+
+@dataclass
+class DraftResult:
+    ok: bool
+    message: str
+    path: Path | None = None        # the draft written, or the rejected output
+
+
+def draft_one(t, lang: str, tr: Translator, root: Path | None = None) -> DraftResult:
+    """Translate one tutorial's README.md, check it, write it as an AI draft.
+    A rejected output is kept in build/translations/ and nothing is written."""
+    import subprocess
+    from . import generate, lint
+    from .model import REPO_ROOT
+    root = root or REPO_ROOT
+    src = t.readme("en").read_text()
+    try:
+        text = extract(run(tr, build_prompt(src, lang)))
+    except (TranslationError, subprocess.TimeoutExpired) as e:
+        return DraftResult(False, str(e))
+    problems = check(src, text)
+    if problems:
+        rej = root / "build" / "translations" / f"{t.id}.{lang}.rejected.md"
+        rej.parent.mkdir(parents=True, exist_ok=True)
+        rej.write_text(text)
+        return DraftResult(False, "rejected, nothing written: " + "; ".join(problems), rej)
+    path = lint.write_draft(t, lang, text, tr.name)
+    generate.sync(root)
+    return DraftResult(True, f"wrote {path.relative_to(root)} (AI draft, not reviewed)", path)

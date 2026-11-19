@@ -197,24 +197,30 @@ class UI:
                         if tid in self.sessions else None},
         })
 
-    def source_path(self, tid: str, lang: str) -> Path:
-        """The README the editor may read and write: README.md or README.<lang>.md
-        of this tutorial, nothing else."""
+    def source_path(self, tid: str, lang: str, file: str = "readme") -> Path:
+        """What the editor may read and write: this tutorial's README.md /
+        README.<lang>.md, or its tutorial.yaml (title, tags, env ...). Nothing else."""
         t = self.tutorial_or_404(tid)
+        if file == "tutorial.yaml":
+            return t.path / "tutorial.yaml"
+        if file != "readme":
+            raise web.HTTPBadRequest(text=f"the editor only opens README and tutorial.yaml, not {file!r}")
         if lang not in LANGS:
             raise web.HTTPBadRequest(text=f"unknown language {lang!r}")
         p = t.readme(lang)
         return p if p.exists() else t.readme("en")
 
     async def api_source(self, request):
-        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"))
+        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"),
+                             request.query.get("file", "readme"))
         return web.json_response({"file": str(p.relative_to(self.root)), "text": p.read_text(),
                                   "mtime": str(p.stat().st_mtime_ns)})
 
     async def api_source_save(self, request):
         """Save from the editor. `mtime` must match the file on disk, so a change
         made in another editor meanwhile is never overwritten silently (409)."""
-        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"))
+        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"),
+                             request.query.get("file", "readme"))
         data = await request.json()
         if str(data.get("mtime")) != str(p.stat().st_mtime_ns):
             return web.json_response({"error": "changed on disk", "text": p.read_text(),
@@ -222,6 +228,37 @@ class UI:
         text = str(data.get("text", ""))
         p.write_text(text if text.endswith("\n") else text + "\n")
         return web.json_response({"mtime": str(p.stat().st_mtime_ns)})
+
+    async def api_translate(self, request):
+        """Make (or update) README.<lang>.md with the user's AI CLI (TUT_AI), the
+        same checked flow as `./tut translation draft`. Takes a minute or more."""
+        from .. import translate
+        t = self.tutorial_or_404(request.match_info["tid"])
+        lang = request.query.get("lang", "")
+        if lang not in LANGS or lang == "en":
+            raise web.HTTPBadRequest(text=f"unknown translation language {lang!r}")
+        try:
+            tr = translate.configured()
+        except translate.TranslationError as e:
+            return web.json_response({"ok": False, "message": str(e)})
+        if tr is None or not tr.available:
+            return web.json_response({"ok": False, "message":
+                "No AI CLI is set up for translations. In the terminal you started ./tut ui from:\n"
+                "  ./tut config TUT_AI=claude      # or copilot, codex\nthen restart ./tut ui."
+                if tr is None else f"TUT_AI={tr.name}, but `{tr.argv[0]}` is not on PATH"})
+        key = (t.id, lang)
+        busy = getattr(self, "translating", set())
+        self.translating = busy
+        if key in busy:
+            return web.json_response({"ok": False, "message": "a translation of this tutorial is already running"})
+        busy.add(key)
+        try:
+            r = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: translate.draft_one(t, lang, tr, self.root))
+        finally:
+            busy.discard(key)
+        return web.json_response({"ok": r.ok, "by": tr.name, "message": r.message,
+                                  "path": str(r.path.relative_to(self.root)) if r.path else None})
 
     async def api_sync(self, request):
         """`./tut sync` from the editor: fills tut:use / header / setup in the files."""
@@ -361,6 +398,7 @@ class UI:
             web.get("/api/tutorials/{tid}/source", self.api_source),
             web.put("/api/tutorials/{tid}/source", self.api_source_save),
             web.post("/api/sync", self.api_sync),
+            web.post("/api/tutorials/{tid}/translation", self.api_translate),
             web.get("/ws/{tid}", self.ws),
             web.get("/files/{path:.+}", self.files),
             web.static("/static", STATIC),

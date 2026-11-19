@@ -313,13 +313,34 @@ SYNC_OUTPUTS = {".github/CODEOWNERS", "README.md", "README.ko.md"}
 def changed_outside(before: set[str], tid: str, root: Path = REPO_ROOT) -> list[str]:
     allowed = (f"tutorials/{tid}/", "build/")
     now = git_dirty(root)
-    return sorted(p for p in now - before if not p.startswith(allowed) and p not in SYNC_OUTPUTS)
+    return sorted(p for p in now - before if not p.startswith(allowed) and p not in SYNC_OUTPUTS
+                  and not p.startswith("catalog/collections/"))        # --collection, written by us
 
 
 def git_dirty(root: Path = REPO_ROOT) -> set[str]:
     r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=root,
                        capture_output=True, text=True)
     return {line[3:].split(" -> ")[-1] for line in r.stdout.splitlines() if line}
+
+
+def add_to_collection(col: str, tid: str, owner: str | None, root: Path = REPO_ROOT) -> Path:
+    """Append the tutorial to catalog/collections/<col>.yaml (created if missing).
+    Done by the program: the AI may not write outside the tutorial."""
+    if not scaffold.ID_RE.match(col):
+        raise DraftError(f"invalid collection id {col!r}")
+    p = root / "catalog" / "collections" / f"{col}.yaml"
+    if p.exists():
+        text = p.read_text()
+        if re.search(rf"^\s*-\s*{re.escape(tid)}\s*$", text, re.M):
+            return p
+        p.write_text(text.rstrip("\n") + f"\n  - {tid}\n")
+    else:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        title = col.replace("-", " ").title()
+        p.write_text(f"# A collection is an ordered reading path; tutorials stay independent.\n"
+                     f"id: {col}\ntitle:\n  en: \"{title}\"\ndescription:\n  en: \"TODO: one sentence.\"\n"
+                     f"owners: [{owner or 'your-github-handle'}]\nmembers:\n  - {tid}\n")
+    return p
 
 
 # ------------------------------------------------------------------ the run
@@ -334,10 +355,12 @@ class Result:
     agent_rc: int = 0
     assets_kept: list = field(default_factory=list)
     assets_removed: list = field(default_factory=list)
+    collection: str | None = None
 
 
 def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
-          root: Path = REPO_ROOT, timeout: int = 3600, log=print, owner: str | None = None) -> Result:
+          root: Path = REPO_ROOT, timeout: int = 3600, log=print, owner: str | None = None,
+          collection: str | None = None) -> Result:
     src = src.expanduser().resolve()
     if not src.is_dir():
         raise DraftError(f"{src} is not a folder")
@@ -365,6 +388,8 @@ def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
             p = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, text=True,
                                stdout=logf, stderr=subprocess.STDOUT, timeout=timeout)
     res = Result(tid, work, agent_rc=p.returncode)
+    if collection:
+        res.collection = str(add_to_collection(collection, tid, owner, root).relative_to(root))
     res.assets_removed = prune_assets(tdir, assets)
     example = tdir / "manifests" / "example.yaml"      # template leftover the AI cannot delete
     if example.exists() and "example.yaml" not in (tdir / "README.md").read_text():
@@ -392,7 +417,8 @@ def render_report(r: Result, src: Path, root: Path = REPO_ROOT) -> str:
            " (control flow, prompts, echo and tool checks are not counted)",
            f"- images / binary files copied in: {len(r.assets_kept)} used"
            + (f", {len(r.assets_removed)} unused removed ({', '.join(r.assets_removed)})" if r.assets_removed else ""),
-           f"- files changed outside tutorials/{r.tid}/ and build/: {len(r.outside)}", ""]
+           f"- files changed outside tutorials/{r.tid}/ and build/: {len(r.outside)}"]
+    out += ([f"- added to the collection `{r.collection}`"] if r.collection else []) + [""]
     if r.outside:
         out += ["## ✗ Changed outside the allowed folders (review, then restore with git)", ""]
         out += [f"- `{p}`" for p in r.outside] + [""]

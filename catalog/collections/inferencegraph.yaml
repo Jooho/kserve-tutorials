@@ -1,0 +1,12 @@
+# A collection is an ordered reading path; tutorials stay independent.
+# Order = list order. Owners review every change to this file (CODEOWNERS).
+id: inferencegraph
+title:
+  en: InferenceGraph
+  ko: InferenceGraph
+description:
+  en: Chain InferenceServices into one endpoint — ensembles, sequences, switches and splitters.
+  ko: 여러 InferenceService를 하나의 엔드포인트로 엮기 — 앙상블, 시퀀스, 스위치, 스플리터.
+owners: [Jooho]
+members:
+  - inferencegraph-ensemble

@@ -217,3 +217,5 @@ select.chip.verchip { background: var(--panel); color: var(--text); cursor: poin
 /* Versions view: the version filter gets its own full row above the tag filter */
 .filters { flex-wrap: wrap; }
 #verfilter { order: -1; flex: 1 1 100%; width: 100%; }
+.chip.act { cursor: pointer; text-decoration: none; }
+.chip.act:hover { background: var(--code-bg); }

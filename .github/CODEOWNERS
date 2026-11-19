@@ -3,6 +3,7 @@
 
 *  @Jooho
 
+/catalog/collections/inferencegraph.yaml  @Jooho
 /catalog/collections/llmisvc-deep-dive.yaml  @Jooho
 /catalog/collections/poc-shared-steps.yaml  @Jooho
 /tutorials/inferencegraph-ensemble/  @Jooho

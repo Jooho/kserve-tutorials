@@ -64,7 +64,10 @@
           <div class="docbody" id="docbody">
             <aside class="editor" id="editor" hidden>
               <div class="editor-head">
-                <span class="mono" id="editor-file"></span>
+                <select id="editor-pick" aria-label="File to edit" title="README (steps and prose) or tutorial.yaml (title, summary, tags, env ...)">
+                  <option value="readme">README</option><option value="tutorial.yaml">tutorial.yaml</option>
+                </select>
+                <span class="mono muted" id="editor-file"></span>
                 <span class="editor-state" id="editor-state"></span>
                 <button class="btn primary" id="editor-save" title="Ctrl+S">Save</button>
                 <button class="btn" id="editor-sync" title="Save, then ./tut sync: fills tut:use, header and setup in the files">Save &amp; sync</button>

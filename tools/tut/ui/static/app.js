@@ -241,6 +241,26 @@ async function loadDoc() {
   loadProblems();
 }
 
+// ------------------------------------------------------------- translation (AI)
+// The chip "no KO translation" asks, then lets the server run `./tut translation
+// draft` with the user's AI CLI. The result is a checked AI draft (not reviewed).
+async function createTranslation() {
+  const lang = S.lang, id = S.current, name = { ko: "Korean (한국어)" }[lang] || lang;
+  const update = S.doc.lang === lang;
+  if (!confirm(`${update ? "Update" : "Create"} the ${name} translation of this tutorial with your AI CLI?\n\n` +
+               `It takes a minute or more. Code blocks, commands and links are checked; the result is ` +
+               `marked as an AI draft until someone reviews it (./tut translation mark ${id} ${lang}).`)) return;
+  S.translating = true; renderChips();
+  let r;
+  try {
+    r = await fetch(`/api/tutorials/${id}/translation?lang=${lang}`, { method: "POST" }).then((x) => x.json());
+  } catch (err) { r = { ok: false, message: String(err) }; }
+  S.translating = false;
+  if (id === S.current) { await loadDoc(); }
+  alert(r.ok ? `✓ ${r.message}\n\nRead it, fix what reads badly (✎ Edit), then mark it reviewed:\n  ./tut translation mark ${id} ${lang}`
+             : `✗ Translation not written.\n\n${r.message}${r.path ? `\n\nThe AI output is in ${r.path}.` : ""}`);
+}
+
 // ------------------------------------------------------------- live preview (authoring)
 // Save README.md in your editor: the page redraws within a second. The server
 // shows it as it will be after `./tut sync` (tut:use filled in), and the
@@ -271,6 +291,7 @@ async function pollChanges() {
     const { stamp } = await fetch("/api/stamp").then((r) => r.json());
     if (S.stamp && stamp !== S.stamp && S.current && !$("#doc-wrap").hidden) {
       S.stamp = stamp;
+      await reloadMeta();                       // tutorial.yaml / collections may have changed
       await refreshPreview();
       await editorSyncFromDisk();
     }
@@ -282,15 +303,17 @@ setInterval(pollChanges, 1000);
 // ------------------------------------------------------------- editor (split view)
 // ✎ Edit opens the README next to its preview. Save (Ctrl+S) writes the file and
 // redraws the preview; editing the file elsewhere still works the same way.
-const ED = { open: false, tid: null, lang: null, mtime: null, saved: "" };
+const ED = { open: false, tid: null, lang: null, file: "readme", mtime: null, saved: "" };
+const srcUrl = () => `/api/tutorials/${ED.tid}/source?lang=${ED.lang}&file=${encodeURIComponent(ED.file)}`;
 const edText = $("#editor-text");
 const dirty = () => ED.open && edText.value !== ED.saved;
 const edState = (msg, cls = "") => { $("#editor-state").className = "editor-state " + cls; $("#editor-state").textContent = msg; };
 
 async function openEditor() {
   if (!S.current) return;
-  const r = await fetch(`/api/tutorials/${S.current}/source?lang=${S.lang}`).then((r) => r.json());
-  Object.assign(ED, { open: true, tid: S.current, lang: S.lang, mtime: r.mtime, saved: r.text });
+  Object.assign(ED, { tid: S.current, lang: S.lang, file: $("#editor-pick").value });
+  const r = await fetch(srcUrl()).then((r) => r.json());
+  Object.assign(ED, { open: true, mtime: r.mtime, saved: r.text });
   edText.value = r.text;
   $("#editor-file").textContent = r.file;
   $("#editor").hidden = false; $("#docbody").classList.add("editing"); $("#edit").classList.add("on");
@@ -315,7 +338,7 @@ function closeEditor() {
 async function saveEditor() {
   if (!ED.open) return;
   const text = edText.value;
-  const r = await fetch(`/api/tutorials/${ED.tid}/source?lang=${ED.lang}`, {
+  const r = await fetch(srcUrl(), {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, mtime: ED.mtime }) });
   const d = await r.json().catch(() => ({}));
   if (r.status === 409) {           // someone saved the file elsewhere: keep our text, ask to save again
@@ -327,13 +350,21 @@ async function saveEditor() {
   ED.mtime = d.mtime; ED.saved = text.endsWith("\n") ? text : text + "\n";
   if (edText.value === text) edText.value = ED.saved;
   edState("saved", "ok");
+  if (ED.file === "tutorial.yaml") await reloadMeta();   // title, tags, env ... changed
   await refreshPreview();
+}
+
+// tutorial.yaml changed: the sidebar and the title come from it.
+async function reloadMeta() {
+  const r = await fetch("/api/tutorials").then((x) => x.json());
+  S.tutorials = r.tutorials; S.versions = r.versions;
+  await loadCatalog();
 }
 
 // The file changed outside (another editor, git checkout): follow it unless we have unsaved text.
 async function editorSyncFromDisk() {
   if (!ED.open) return;
-  const r = await fetch(`/api/tutorials/${ED.tid}/source?lang=${ED.lang}`).then((r) => r.json());
+  const r = await fetch(srcUrl()).then((r) => r.json());
   if (r.mtime === ED.mtime) return;
   if (!dirty()) { ED.mtime = r.mtime; ED.saved = r.text; edText.value = r.text; edState("reloaded from disk", "ok"); }
   else edState("the file changed on disk too — Save will ask before overwriting", "bad");
@@ -350,6 +381,11 @@ new ResizeObserver(sizeEditor).observe($("#docpane"));
 
 $("#edit").onclick = () => (ED.open ? closeEditor() : openEditor());
 $("#editor-close").onclick = () => closeEditor();
+$("#editor-pick").addEventListener("change", async (e) => {
+  const want = e.target.value;
+  if (dirty() && !confirm("Discard the unsaved changes in the editor?")) { e.target.value = ED.file; return; }
+  ED.file = want; await openEditor();
+});
 $("#editor-save").onclick = () => saveEditor();
 $("#editor-sync").onclick = async () => {
   if (dirty()) await saveEditor();
@@ -439,6 +475,7 @@ $("#chips").addEventListener("click", (e) => {
   if (open) { e.preventDefault(); openTutorial(open.dataset.open, S.group); return; }
   if (e.target.closest('[data-act="toggle-hidden"]')) { S.showAll = !S.showAll; renderDoc(); }
   if (e.target.closest('[data-act="standalone"]')) openTutorial(S.current, null);
+  if (e.target.closest('[data-act="translate"]')) { e.preventDefault(); createTranslation(); }
   const p = e.target.closest("[data-path]");
   if (p) { e.preventDefault(); openTutorial(S.current, p.dataset.path); }
 });
@@ -456,9 +493,11 @@ function renderChips() {
     verChip,
     t.env ? `<span class="chip">env ${t.env}</span>` : "",
     ...t.uses.map((u) => `<span class="chip">lib ${u}</span>`),
-    S.doc && S.doc.lang !== S.lang ? `<span class="chip warn">no ${S.lang.toUpperCase()} translation — showing English</span>` : "",
-    S.doc && S.doc.translation === "behind" ? `<span class="chip warn" title="The English README changed after this translation was made">${S.lang.toUpperCase()} translation is behind the English version</span>` : "",
+    S.translating ? `<span class="chip warn">⏳ translating to ${S.lang.toUpperCase()} with your AI… (a minute or more)</span>`
+    : S.doc && S.doc.lang !== S.lang ? `<a href="#" class="chip warn act" data-act="translate" title="Create README.${S.lang}.md with your AI CLI (TUT_AI)">no ${S.lang.toUpperCase()} translation — showing English · ＋ create it</a>`
+    : S.doc && S.doc.translation === "behind" ? `<a href="#" class="chip warn act" data-act="translate" title="The English README changed after this translation was made. Click to translate it again with your AI CLI.">${S.lang.toUpperCase()} translation is behind the English version · ↻ update it</a>` : "",
     S.doc && S.doc.translation === "unmarked" ? `<span class="chip warn">${S.lang.toUpperCase()} translation not reviewed yet</span>` : "",
+    S.doc && S.doc.translation === "draft" ? `<span class="chip warn" title="Made by an AI and checked by a program (code, commands, links unchanged), not yet by a person. After reviewing: ./tut translation mark ${S.current} ${S.lang}">🤖 ${S.lang.toUpperCase()}: AI translation, not reviewed yet</span>` : "",
     S.doc?.preview?.error ? `<span class="chip bad" title="${esc(S.doc.preview.error)}">✗ sync: ${esc(S.doc.preview.error)}</span>` : "",
     S.doc?.preview?.stale ? `<span class="chip warn" title="The page shows the README as it will be after ./tut sync; the file itself is not updated yet">preview · file not synced — run make precommit</span>` : "",
     ...(S.group ? [] : pathsOf(S.current).map((c) =>

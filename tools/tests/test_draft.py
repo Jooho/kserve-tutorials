@@ -139,3 +139,14 @@ def test_images_and_binaries_are_copied_in_and_unused_ones_removed(repo, work):
     assert sorted(r.assets_removed) == ["images/old.png", "manifests/example.yaml (template)", "models/model.bst"]
     assert "images/arch.svg" in (r.work / "prompt.md").read_text()
     assert not [f for f in r.problems if f.code == "D004"]       # no broken image link
+
+
+def test_collection_is_created_or_extended_by_the_program(repo, work):
+    r = draft.draft(work, "in-a-path", None, agent(), root=repo, log=lambda *_: None,
+                    owner="someone", collection="my-path")
+    col = repo / "catalog" / "collections" / "my-path.yaml"
+    assert r.collection == "catalog/collections/my-path.yaml" and "  - in-a-path" in col.read_text()
+    assert r.outside == []
+    draft.add_to_collection("my-path", "second", None, root=repo)
+    draft.add_to_collection("my-path", "second", None, root=repo)         # no duplicate
+    assert col.read_text().count("  - second") == 1
