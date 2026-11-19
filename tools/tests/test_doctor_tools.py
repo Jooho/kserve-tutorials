@@ -38,3 +38,17 @@ def test_doctor_never_installs_docker():
     src = (REPO_ROOT / "tools" / "install-tools.sh").read_text()
     wanted = [l.split()[2] for l in src.splitlines() if l.startswith("if want ")]
     assert wanted == ["kind", "kubectl", "helm", "cloud-provider-kind"]   # Docker is the user's
+
+
+def test_python_packages_follow_requirements_txt(tmp_path):
+    """A .venv made before a package was added (e.g. pyte) must be reported."""
+    from importlib import metadata
+    from tut import doctor
+    req = tmp_path / "requirements.txt"
+    req.write_text(f"pytest=={metadata.version('pytest')}\n"
+                   "pyyaml==0.0.1\n"
+                   "# a comment\n"
+                   "surely-not-installed-pkg==1.0\n")
+    missing, other = doctor.python_packages(req)
+    assert missing == ["surely-not-installed-pkg"]
+    assert len(other) == 1 and other[0].startswith("pyyaml ") and "pinned 0.0.1" in other[0]

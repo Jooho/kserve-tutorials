@@ -55,6 +55,7 @@ lint: ## Check every rule (BASE=origin/main also checks frozen parts)
 	./tut lint $(if $(BASE),--base $(BASE))
 
 test: ## Tests for the rules, the runner and the UI session
+	@./tut doctor --toolkit >/dev/null || { ./tut doctor --toolkit; echo "fix the toolkit first (missing Python packages: make setup)"; exit 1; }
 	PYTHONPATH=tools $(PY) -m pytest -q tools/tests
 
 site: ## Build the static site into build/site
