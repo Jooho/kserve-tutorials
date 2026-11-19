@@ -104,7 +104,8 @@ function renderList() {
       const shown = rows.filter((r) => r.html);
       if (!shown.length) return;
       const closed = S.collapsed.has(id);
-      html.push(`<li class="group" data-group="${id}" title="${esc(desc)}">${closed ? "▸" : "▾"} ${esc(title)}
+      const isPath = !id.startsWith("_");                       // a collection (learning path)
+      html.push(`<li class="group ${isPath ? "path" : ""}" data-group="${id}" title="${esc(desc)}">${closed ? "▸" : "▾"} ${isPath ? "📚 " : ""}${esc(title)}
         <span class="count">${shown.length}</span></li>`);
       if (!closed) shown.forEach((r) => html.push(r.html));
     };
@@ -307,7 +308,7 @@ function groupBar() {
   const n = S.doc.blocks.filter((b) => (b.covered_by && b.role === "run") || b.group_skip).length;
   const vars = Object.entries(g.vars).map(([k, v]) => `${k}=${v}`).join(" ");
   return `<div class="pathbar">
-    📚 <b>${esc(g.title[S.lang] || g.title.en)}</b> · step ${g.n}/${g.total}
+    <span class="path-name">📚 ${esc(g.title[S.lang] || g.title.en)}</span> step ${g.n}/${g.total}
     ${g.prev ? `<a href="#" data-open="${g.prev}">← ${esc(titleOf(g.prev))}</a>` : ""}
     ${g.next ? `<a href="#" data-open="${g.next}">${esc(titleOf(g.next))} →</a>` : ""}
     ${vars ? `<span class="mono" title="exported in this shell">${esc(vars)}</span>` : ""}
@@ -473,6 +474,8 @@ $("#restart").onclick = () => { if (confirm("Start a new shell? Variables in the
 // ------------------------------------------------------------- environment
 async function loadEnv() {
   const t = currentMeta();
+  if (!t.env) { $("#envbar").className = "envbar"; $("#envbar").innerHTML = ""; $("#envbar").hidden = true; return; }
+  $("#envbar").hidden = false;
   const e = await fetch(`/api/tutorials/${S.current}/env`).then((r) => r.json());
   const want = `${t.env}@${sessionVersionFor(t)}`;
   const bar = $("#envbar");

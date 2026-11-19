@@ -163,3 +163,10 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 .block .hint { margin: 6px 10px 10px; padding: 6px 10px; border-radius: 6px;
   border: 1px solid var(--bad); color: var(--text); }
 .block .hint a { color: var(--accent); }
+/* learning path = purple everywhere: sidebar heading, its items, the path bar */
+:root { --path: #7048e8; --path-bg: #f3f0ff; }
+@media (prefers-color-scheme: dark) { :root { --path: #9775fa; --path-bg: #231d3a; } }
+#list li.group.path { color: var(--path); }
+#list li[data-col] { border-left: 3px solid var(--path); }
+.pathbar { border-color: var(--path); background: var(--path-bg); }
+.pathbar .path-name { background: var(--path); color: #fff; font-weight: 650; padding: 1px 10px; border-radius: 999px; }
