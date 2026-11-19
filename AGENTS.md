@@ -22,7 +22,8 @@ If the document and the code disagree, stop and report it; do not guess.
 ## Commands
 
 `make help` lists the same commands as make targets (`make check` = lint +
-tests + site, what CI checks without a cluster).
+tests + site, what CI checks without a cluster; `make precommit` = `./tut sync`
+first, then `make check`).
 
 ```bash skip
 make setup                  # .venv with the toolkit's Python packages (Python 3.11+)
@@ -92,5 +93,5 @@ When you fix a failure that a rule could have prevented:
 2. If the rule can be checked mechanically, add it to `tools/tut/lint.py` with
    a test in `tools/tests/`, and reference the rule code in the lesson.
 
-Before finishing any task: `./tut sync && ./tut lint` and, if you changed
-`tools/`, the tests.
+Before finishing any task: `make precommit` (`./tut sync`, then lint, tests
+and site: the checks CI runs without a cluster).
