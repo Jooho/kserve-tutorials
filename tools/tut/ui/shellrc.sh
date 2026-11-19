@@ -3,6 +3,11 @@
 # rely on it — lint rule D013 rejects the aliases inside README blocks.
 # Works with bash 3.2 (macOS /bin/bash): no `source <(...)`, no negative indexes.
 
+# ./tut completion (static file; candidates are computed on Tab)
+__tut_cfile="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tut-completion.bash"
+[ -r "$__tut_cfile" ] && . "$__tut_cfile"
+unset __tut_cfile
+
 alias k=kubectl
 alias kc='kubectl config set-context --current --namespace'
 

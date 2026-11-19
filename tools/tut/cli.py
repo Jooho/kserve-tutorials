@@ -136,6 +136,20 @@ def cmd_list(a):
     print("Details: ./tut show <id> · filter: --tag --status --collection · step through: ./tut ui")
 
 
+def cmd_completion(a):
+    path = REPO_ROOT / "tools" / "tut-completion.bash"
+    if a.print_script:
+        sys.stdout.write(path.read_text())
+    else:
+        print(f'source "{path}"')
+        if sys.stdout.isatty():
+            print(f"# Tab completion for ./tut. Enable it in this shell with:\n"
+                  f'#   eval "$(./tut completion)"\n'
+                  f"# zsh: run `autoload -U +X bashcompinit && bashcompinit` first.\n"
+                  f"# To keep it, add the source line above to your ~/.bashrc yourself.",
+                  file=sys.stderr)
+
+
 def cmd_show(a):
     from . import catalog
     _show(_tutorial(a.id), catalog.load_collections(REPO_ROOT))
@@ -287,7 +301,7 @@ def cmd_ui(a):
     serve(port=a.port, open_browser=not a.no_browser)
 
 
-def main(argv=None):
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="tut", description="KServe tutorials toolkit")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -299,6 +313,10 @@ def main(argv=None):
     s.add_argument("--long", "-l", action="store_true", help="the detailed view for every tutorial")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("completion", help="Tab completion for ./tut: eval \"$(./tut completion)\"")
+    s.add_argument("--print-script", action="store_true", help="print the bash script itself")
+    s.set_defaults(fn=cmd_completion)
 
     s = sub.add_parser("show", help="everything about one tutorial")
     s.add_argument("id", help="tutorial id (directory name under tutorials/)")
@@ -384,5 +402,70 @@ def main(argv=None):
     s.add_argument("--no-browser", action="store_true", help="do not open a browser")
     s.set_defaults(fn=cmd_ui)
 
-    a = p.parse_args(argv)
+    return p
+
+
+# --------------------------------------------------------------- completion
+def _values(dest: str) -> list[str]:
+    """Dynamic values for an argument, by its argparse dest."""
+    from . import catalog
+    from .model import version_key
+    if dest == "id":
+        return [t.id for t in load_tutorials(REPO_ROOT)]
+    if dest == "lang":
+        return [l for l in LANG_NAME if l != "en"]
+    if dest == "tag":
+        return sorted(catalog.load_tags(REPO_ROOT).get("tags") or {})
+    if dest == "collection":
+        return [c.id for c in catalog.load_collections(REPO_ROOT)]
+    if dest == "kserve_version":
+        return sorted({v for t in load_tutorials(REPO_ROOT) for v in t.kserve_tested},
+                      key=version_key, reverse=True)
+    if dest == "set":
+        return [f"{k}=" for k in CONFIG_KEYS]
+    return []
+
+
+def complete(words: list[str]) -> list[str]:
+    """Candidates for the word after `words` (the words already typed after
+    `tut`). Walks the real argparse parser, so it never drifts from the CLI."""
+    def subparsers(p):
+        return next((a for a in p._actions if isinstance(a, argparse._SubParsersAction)), None)
+
+    p, rest = build_parser(), list(words)
+    while (spa := subparsers(p)) is not None:
+        positional = [w for w in rest if not w.startswith("-")]
+        if not positional:
+            return sorted(c for c in spa.choices if not c.startswith("_"))
+        if positional[0] not in spa.choices:
+            return []
+        rest = rest[rest.index(positional[0]) + 1:]
+        p = spa.choices[positional[0]]
+    opts = {o: a for a in p._actions for o in a.option_strings}
+    if rest and rest[-1] in opts and opts[rest[-1]].nargs != 0:      # value of an option
+        act = opts[rest[-1]]
+        return [str(c) for c in act.choices] if act.choices else _values(act.dest)
+    given, skip = 0, False
+    for w in rest:
+        if skip:
+            skip = False
+        elif w in opts and opts[w].nargs != 0:
+            skip = True
+        elif not w.startswith("-"):
+            given += 1
+    positionals = [a for a in p._actions if not a.option_strings]
+    out = []
+    if given < len(positionals):
+        out += _values(positionals[given].dest)
+    elif positionals and positionals[-1].nargs == "*":
+        out += _values(positionals[-1].dest)
+    return out + sorted(o for o in opts if o.startswith("--"))
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["__complete"]:          # used by tools/tut-completion.bash
+        print("\n".join(complete(argv[1:])))
+        return 0
+    a = build_parser().parse_args(argv)
     return a.fn(a) or 0

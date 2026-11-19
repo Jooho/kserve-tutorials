@@ -40,6 +40,10 @@ make doctor     # can this machine run the tutorials? (Docker, resources, platfo
 make ui         # opens the browser
 ```
 
+Tab completion for `./tut` (tutorial ids, tags, collections, versions) in your
+shell: `eval "$(./tut completion)"` (zsh: run `autoload -U +X bashcompinit &&
+bashcompinit` first). The UI terminal has it already.
+
 Already using a kind cluster called `kind` for something else? Let the
 tutorials use their own, once (remembered in `.tut.env`, not in git):
 
