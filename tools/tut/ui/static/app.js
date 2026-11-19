@@ -118,8 +118,8 @@ async function openTutorial(id) {
 
 async function loadDoc() {
   const d = await fetch(`/api/tutorials/${S.current}?lang=${S.lang}`).then((r) => r.json());
-  S.doc = d; S.states = {};
-  for (const [k, v] of Object.entries(d.states || {})) S.states[k] = v.state;
+  S.doc = d; S.states = {}; S.times = {};
+  for (const [k, v] of Object.entries(d.states || {})) { S.states[k] = v.state; S.times[k] = v.ts; }
   const t = currentMeta();
   $("#doc-title").textContent = t.title[S.lang] || t.title.en;
   renderChips();
@@ -165,7 +165,7 @@ function renderBlock(b) {
       ${attrs ? `<span class="attrs mono">${esc(attrs)}</span>` : ""}
       <span class="head-actions">
         <span class="state"></span>
-        ${RUNNABLE.has(b.role) ? `<button class="btn" data-act="to-here" title="Run every step from the top down to this one">⏭ To here</button>` : ""}
+        ${RUNNABLE.has(b.role) ? `<button class="btn" data-act="to-here" title="Run the steps that have not passed yet, up to this one">⏭ To here</button>` : ""}
         <button class="btn" data-act="run" title="Run this block in the terminal">▶ Run</button>
       </span>
     </div>
@@ -174,23 +174,52 @@ function renderBlock(b) {
       <pre><code>${esc(s.content ?? "(file not found)")}</code></pre></details>`).join("")}`;
   el.addEventListener("click", (e) => {
     const act = e.target.closest("button")?.dataset.act;
-    if (act === "run") run([b.idx], false);
-    if (act === "to-here") run(S.doc.blocks.filter((x) => RUNNABLE.has(x.role) && x.idx <= b.idx).map((x) => x.idx));
+    if (act === "run") {
+      if (b.attrs.once && S.states[b.idx] === "passed" &&
+          !confirm("This step is marked `once`: it is not meant to run twice. Run it again anyway?")) return;
+      run([b.idx], false);
+    }
+    if (act === "to-here") run(pendingSteps(b.idx));
   });
   paint(el, S.states[b.idx]);
   return el;
 }
 
+// Steps from the first one that has not passed in this shell, up to `last`
+// (a new shell starts with nothing passed, so this then means "from the top").
+function pendingSteps(last = Infinity) {
+  const steps = S.doc.blocks.filter((x) => RUNNABLE.has(x.role) && x.idx <= last);
+  const first = steps.findIndex((x) => S.states[x.idx] !== "passed");
+  if (first === -1) return Number.isFinite(last) ? [last] : [];
+  return steps.slice(first).map((x) => x.idx);
+}
+
+function ago(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
+  return s < 60 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;
+}
+
 function paint(el, state) {
-  el.classList.remove("st-running", "st-failed", "st-passed");
+  const idx = +el.dataset.idx;
+  el.classList.remove("st-running", "st-failed", "st-passed", "st-stopped");
   if (state) el.classList.add("st-" + state);
   const s = el.querySelector(".state");
   s.className = "state " + (state || "");
-  s.innerHTML = { running: `<span class="spinner"></span> running`, queued: "queued", passed: "✓ passed", failed: "✗ failed", stopped: "■ stopped" }[state] || "";
+  const when = ["passed", "failed", "stopped"].includes(state) && S.times?.[idx] ? ` · ${ago(S.times[idx])}` : "";
+  s.innerHTML = ({ running: `<span class="spinner"></span> running`, queued: "queued", passed: "✓ passed",
+                   failed: "✗ failed", stopped: "■ stopped" }[state] || "") + when;
+  const btn = el.querySelector('button[data-act="run"]');
+  if (btn) btn.textContent = ["passed", "failed", "stopped"].includes(state) ? "↻ Run again" : "▶ Run";
 }
+setInterval(() => document.querySelectorAll(".block").forEach((el) => {
+  const st = S.states[+el.dataset.idx];
+  if (["passed", "failed", "stopped"].includes(st)) paint(el, st);
+}), 30000);
 
-function setState(idx, state) {
+function setState(idx, state, ts) {
   S.states[idx] = state;
+  if (ts) (S.times ||= {})[idx] = ts;
   const el = document.querySelector(`.block[data-idx="${idx}"]`);
   if (el) {
     paint(el, state);
@@ -213,6 +242,11 @@ function run(idxs, stopOnFail = true) {
   term.focus();
 }
 
+$("#continue").onclick = () => {
+  const todo = pendingSteps();
+  if (!todo.length) { alert("Every step has passed in this shell. Use ▶ Run all to start over."); return; }
+  run(todo);
+};
 $("#run-all").onclick = () => run(S.doc.blocks.filter((b) => RUNNABLE.has(b.role)).map((b) => b.idx));
 $("#cleanup").onclick = () => run(S.doc.blocks.filter((b) => b.role === "cleanup").map((b) => b.idx), false);
 $("#stop").onclick = () => send({ type: "interrupt" });
@@ -243,7 +277,7 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "output") term.write(m.data);
-    else if (m.type === "block") setState(m.idx, m.state === "idle" ? null : m.state);
+    else if (m.type === "block") setState(m.idx, m.state === "idle" ? null : m.state, m.ts);
     else if (m.type === "session") {
       if (m.state === "started") {
         started = true; S.sessionVersion = m.kserve_version;

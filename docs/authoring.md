@@ -42,6 +42,15 @@ generated `<!-- tut:setup -->` region [D006]. Files are shown with
 - **Verify what the reader is meant to learn**, not just that a command ran:
   counts, names, field values, a request that returns a real answer. If the
   prose says "you should see X", a `verify` checks X.
+- **Every step is safe to run twice** [D012]. Readers re-run steps after a
+  failure, in a new shell, or with "To here"; CI runs every tutorial twice in
+  the same cluster (`./tut run --twice`). Use `kubectl apply`,
+  `kubectl create … --dry-run=client -o yaml | kubectl apply -f -`,
+  `helm upgrade --install`, `kubectl delete … --ignore-not-found`, `>` not
+  `>>`. A step that truly cannot repeat is fenced ` ```bash run once `: CI
+  runs it once and the UI asks before running it again.
+- **No UI aliases in tutorials** [D013]: `k` and `kc` exist only in the UI
+  terminal; tutorials always write `kubectl`.
 - **Interactive commands** (`watch`, `port-forward` in the foreground,
   editors, `kubectl exec -it`) are `skip`, followed by a non-interactive
   `verify` equivalent when it matters.

@@ -22,6 +22,10 @@ Documents (README.md and translations)
   D009 malformed markup (unclosed fence / region, unknown fence tokens)
   D010 translation marker missing or translation is stale (stale = warning)
   D011 translation must have the same sequence of shell block roles as README.md
+  D012 steps must be safe to run twice (no `kubectl create` without --dry-run,
+       `helm install`, `>>`, `kubectl delete` without --ignore-not-found) unless
+       the block is marked `once`; warning for drafts
+  D013 the UI terminal's aliases (k, kc) must not appear in README blocks
 
 Manifests
   M001 container images must be pinned (no `latest`, no missing tag)
@@ -56,6 +60,16 @@ from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
 
 TRANSLATION_RE = re.compile(r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)\s*-->")
 HARDCODED_VERSION_RE = re.compile(r"kserve[^\n]{0,60}?\bv\d+\.\d+(\.\d+)?\b", re.I)
+NOT_IDEMPOTENT = [
+    (re.compile(r"\bkubectl\s+create\s+(?!token\b)(?!.*--dry-run)"),
+     "`kubectl create` fails with AlreadyExists the second time; use `kubectl apply` "
+     "or `kubectl create ... --dry-run=client -o yaml | kubectl apply -f -`"),
+    (re.compile(r"\bhelm\s+install\b"), "`helm install` fails the second time; use `helm upgrade --install`"),
+    (re.compile(r"(?<![0-9&])>>"), "`>>` appends again on every run; write the whole file with `>`"),
+    (re.compile(r"\bkubectl\s+delete\b(?!.*--ignore-not-found)"),
+     "`kubectl delete` fails with NotFound the second time; add --ignore-not-found"),
+]
+UI_ALIAS_RE = re.compile(r"(?:^|[|;&(]\s*|\$\(\s*)(k|kc)\s")
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|(?:src|href)=\"([^\"]+)\"")
 
 
@@ -81,6 +95,24 @@ def source_hash(en_text: str) -> str:
     alone never makes a translation stale."""
     stripped = markdown.replace_regions(en_text, lambda r: "")
     return hashlib.sha256(stripped.encode()).hexdigest()[:12]
+
+
+def _logical_lines(code: str):
+    """(1-based offset of the first physical line, text) with `\\` continuations
+    joined and comment lines dropped."""
+    buf, start = [], None
+    for n, raw in enumerate(code.split("\n"), 1):
+        if raw.lstrip().startswith("#") and not buf:
+            continue
+        start = start or n
+        if raw.rstrip().endswith("\\"):
+            buf.append(raw.rstrip()[:-1])
+            continue
+        buf.append(raw)
+        yield start, " ".join(buf)
+        buf, start = [], None
+    if buf:
+        yield start, " ".join(buf)
 
 
 def _strip_code(text: str) -> list[tuple[int, str]]:
@@ -208,6 +240,21 @@ class Linter:
                          "(add run | verify | cleanup | skip)", b.line)
             if not b.is_shell and b.role:
                 self.err("D001", path, f"role {b.role!r} on a non-shell ```{b.lang} block", b.line)
+        # D012 safe to run twice, D013 no UI-only aliases
+        for b in doc.blocks:
+            if not b.is_shell or b.role == "skip":
+                continue
+            for off, line in _logical_lines(b.code):
+                if UI_ALIAS_RE.search(line):
+                    self.err("D013", path, "`k`/`kc` are aliases of the UI terminal only; write "
+                             "`kubectl` in tutorials (CI has no aliases)", b.line + off)
+                if b.attrs.get("once"):
+                    continue
+                for rx, why in NOT_IDEMPOTENT:
+                    if rx.search(line):
+                        (self.warn if t.status == "draft" else self.err)(
+                            "D012", path, f"not safe to run twice: {why} (or mark the block `once`)",
+                            b.line + off)
         # D003 hard-coded versions
         region_lines = _region_lines(doc)
         for n, line in enumerate(text.split("\n"), 1):

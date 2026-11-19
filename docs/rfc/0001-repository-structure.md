@@ -357,7 +357,14 @@ start-up) that:
   offline), where the user can also type;
 - shows the environment status (no cluster / built by which profile and
   version) before the setup step runs;
-- expands module scripts under the block that calls them.
+- expands module scripts under the block that calls them;
+- resumes where the reader left off (⏵ Continue, ⏭ To here start at the first
+  step that has not passed in this shell) instead of re-running setup;
+- offers Tab completion for kubectl/helm/kind and the aliases `k`, `kc <ns>`
+  in its terminal only (never in tutorials, D013).
+
+Because readers re-run steps, every step must be safe to run twice (D012), and
+CI proves it by running each tutorial twice in the same cluster.
 
 It uses the same parser as lint and CI, and the same block semantics as the
 runner (verify blocks run with `set -Eeo pipefail` and honour

@@ -111,6 +111,14 @@ def host_checks(root: Path, tutorial: str | None) -> list[Check]:
     else:
         checks.append(Check("platform", FAIL, f"{osname}/{arch}", "use Linux, macOS or WSL2"))
 
+    from .ui.session import pick_bash
+    rc, out = _run([pick_bash(), "-c", "echo $BASH_VERSION"])
+    major = int(out.split(".")[0]) if rc == 0 and out[:1].isdigit() else 0
+    checks.append(Check("bash (UI terminal)", OK if major >= 4 else WARN,
+                        f"{pick_bash()} {out if rc == 0 else '?'}",
+                        "" if major >= 4 else "bash 3.2 (macOS default) works, but Tab completion is "
+                        "limited: brew install bash"))
+
     for tool in ("git", "curl"):
         checks.append(Check(tool, OK if shutil.which(tool) else FAIL,
                             "found" if shutil.which(tool) else "not found",

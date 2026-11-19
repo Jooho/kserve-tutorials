@@ -9,7 +9,9 @@ Two constructs make a README executable and verifiable:
        ```bash cleanup    always executed at the end (even after a failure)
        ```bash skip       shown to readers only (interactive, optional, ...)
 
-   Extra attributes: `retry=N delay=S` on verify blocks.
+   Extra attributes: `retry=N delay=S` on verify blocks; the flag `once` marks
+   a block that is intentionally not safe to run twice (lint D012 skips it,
+   the UI asks before running it again).
 
 2. Generated regions, owned by `./tut sync` and never edited by hand:
 
@@ -24,6 +26,7 @@ from dataclasses import dataclass, field
 
 SHELL_LANGS = {"bash", "sh", "shell"}
 ROLES = {"run", "verify", "cleanup", "skip"}
+FLAGS = {"once"}   # bare flags: `bash run once` = intentionally not safe to repeat
 
 FENCE_RE = re.compile(r"^(?P<indent>\s*)(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 REGION_OPEN_RE = re.compile(r"^\s*<!--\s*tut:(?P<kind>[a-z-]+)(?P<args>[^>]*?)\s*-->\s*$")
@@ -75,6 +78,8 @@ def parse_info(info: str) -> tuple[str, str | None, dict[str, str], list[str]]:
             attrs[k] = v
         elif p in ROLES and role is None:
             role = p
+        elif p in FLAGS:
+            attrs[p] = "true"
         else:
             unknown.append(p)
     return lang, role, attrs, unknown

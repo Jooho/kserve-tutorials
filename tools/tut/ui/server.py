@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import re
+import time
 import secrets
 import shutil
 import webbrowser
@@ -47,6 +48,7 @@ class UI:
 
     def broadcast(self, tid: str, msg: dict):
         if msg.get("type") == "block":
+            msg = {**msg, "ts": time.time()}
             self.block_states.setdefault(tid, {})[msg["idx"]] = msg
         data = json.dumps(msg)
         for ws in list(self.clients.get(tid, ())):

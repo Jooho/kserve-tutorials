@@ -28,7 +28,20 @@ import termios
 from pathlib import Path
 from typing import Callable
 
-MARKER_RE = re.compile(r"\x1b\]777;tut;(start|end);(\d+)(?:;(\d+))?\x07")
+SHELLRC = Path(__file__).parent / "shellrc.sh"
+
+
+def pick_bash() -> str:
+    """Prefer a modern bash (macOS ships 3.2); TUT_BASH overrides."""
+    if os.environ.get("TUT_BASH"):
+        return os.environ["TUT_BASH"]
+    for cand in ("/opt/homebrew/bin/bash", "/usr/local/bin/bash"):
+        if os.access(cand, os.X_OK):
+            return cand
+    return "bash"
+
+
+MARKER_RE = re.compile(r"\x1b\]777;tut;(start|end|ready);(\d+)(?:;(\d+))?\x07")
 MARKER_PREFIX = "\x1b]777;"
 # Result lines are written by the server, which is the only party that knows
 # whether a block was stopped by the user (a command may exit 0 on Ctrl-C).
@@ -41,6 +54,7 @@ RESULT_TEXT = {
 RC_TEMPLATE = r"""
 [ -f /etc/bash.bashrc ] && . /etc/bash.bashrc >/dev/null 2>&1
 PS1='\[\e[36m\]tut:{tid}\[\e[0m\] \[\e[2m\]\W\[\e[0m\] $ '
+. {shellrc}
 cd {repo}
 __tut_run() {{
   local idx=$1 role=$2 file=$3 retry=${{4:-1}} delay=${{5:-10}} label=$6 rc=0 try
@@ -65,6 +79,10 @@ __tut_run() {{
   done
   printf '\e]777;tut;end;%s;%s\a' "$idx" "$rc"
 }}
+# Last in PROMPT_COMMAND: tells the UI that bash is at a prompt and reading
+# input, so the next block is not typed ahead (typed-ahead text gets echoed).
+__tut_ready() {{ printf '\e]777;tut;ready;0\a'; }}
+PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}__tut_ready"
 """
 
 
@@ -85,21 +103,24 @@ class ShellSession:
         self.queue_task: asyncio.Task | None = None
         self.running: int | None = None
         self.stopped: set[int] = set()   # blocks the user interrupted
+        self.prompt_ready: asyncio.Event | None = None
         self.scrollback: list[str] = []
 
     # ------------------------------------------------------------ lifecycle
     def start(self):
         rc = self.tmp / "rc.sh"
-        rc.write_text(RC_TEMPLATE.format(tid=self.tid, repo=shlex.quote(str(self.repo))))
+        rc.write_text(RC_TEMPLATE.format(tid=self.tid, repo=shlex.quote(str(self.repo)),
+                                         shellrc=shlex.quote(str(SHELLRC))))
         env = {k: v for k, v in os.environ.items() if not k.startswith("TUT_")}
         env.update(TERM="xterm-256color", TUT_UI="1", HISTCONTROL="ignorespace")
         if self.kserve_version:
             env["KSERVE_VERSION"] = self.kserve_version
         else:
             env.pop("KSERVE_VERSION", None)
+        self.prompt_ready = asyncio.Event()
         master, slave = pty.openpty()
         self.proc = subprocess.Popen(
-            ["bash", "--noprofile", "--rcfile", str(rc), "-i"],
+            [pick_bash(), "--noprofile", "--rcfile", str(rc), "-i"],
             stdin=slave, stdout=slave, stderr=slave, cwd=self.repo, env=env,
             start_new_session=True, close_fds=True)
         os.close(slave)
@@ -157,6 +178,10 @@ class ShellSession:
             out.append(text[pos:m.start()])
             pos = m.end()
             kind, idx = m.group(1), int(m.group(2))
+            if kind == "ready":
+                if self.prompt_ready:
+                    self.prompt_ready.set()
+                continue
             if kind == "start":
                 self.running = idx
                 self.on_event({"type": "block", "idx": idx, "state": "running"})
@@ -197,6 +222,12 @@ class ShellSession:
         delay = int(attrs.get("delay", 10))
         fut = asyncio.get_running_loop().create_future()
         self.waiters[idx] = fut
+        # wait until bash shows a prompt, so the command is not typed ahead
+        try:
+            await asyncio.wait_for(self.prompt_ready.wait(), timeout=30)
+        except asyncio.TimeoutError:
+            pass  # e.g. a foreground program still running; type anyway
+        self.prompt_ready.clear()
         # Ctrl-U clears anything half-typed at the prompt; the leading space keeps
         # the call out of the shell history.
         label = shlex.quote(label or f"{role} block {idx}")

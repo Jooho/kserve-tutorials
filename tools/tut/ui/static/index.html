@@ -35,7 +35,8 @@
             </div>
             <div class="tb-actions">
               <span class="progress" id="progress"></span>
-              <button class="btn primary" id="run-all" title="Run every run/verify block in order, stop at the first failure">▶ Run all</button>
+              <button class="btn primary" id="continue" title="Run from the first step that has not passed yet to the end">⏵ Continue</button>
+              <button class="btn" id="run-all" title="Run every step again from the top, stop at the first failure">▶ Run all</button>
               <button class="btn" id="stop" title="Ctrl-C">■ Stop</button>
               <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹 Cleanup</button>
               <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻ New shell</button>
@@ -51,7 +52,7 @@
       <section class="termpane">
         <div class="termbar">
           <span id="term-title">Terminal</span>
-          <span class="muted" id="term-note">You can also type here. Typed commands are not tracked as steps.</span>
+          <span class="muted" id="term-note">You can type here too (Tab completion; aliases <code>k</code>=kubectl, <code>kc &lt;ns&gt;</code>=switch namespace). Typed commands are not tracked as steps.</span>
         </div>
         <div id="term"></div>
       </section>
