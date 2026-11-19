@@ -144,7 +144,7 @@ it to readers. Translation lag never blocks English changes or releases.
 ## 8. Before you open a PR
 
 ```bash skip
-./tut sync && make check     # lint + tests + site
+make precommit               # ./tut sync, then lint + tests + site (CI checks the same)
 ./tut run <id> --dry-run     # read what CI will execute
 ./tut run <id>               # or step through it with ./tut ui
 ```

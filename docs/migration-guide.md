@@ -127,6 +127,6 @@ On failure the runner prints the README line of the failing block.
 - [ ] No inline copies of files; `tut:include` instead
 - [ ] No hard-coded KServe versions; images pinned
 - [ ] No internal hostnames, registries, tokens
-- [ ] `./tut sync && ./tut lint` clean
+- [ ] `make precommit` clean (sync, lint, tests, site)
 - [ ] `./tut run <id>` passes locally (or CI is green)
 - [ ] Translation marked, if any

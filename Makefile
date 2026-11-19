@@ -23,7 +23,7 @@ ifneq ($(CLUSTER),)
 export KIND_CLUSTER_NAME := $(CLUSTER)
 endif
 .DEFAULT_GOAL := help
-.PHONY: help setup config doctor tools sync lint test site check ui list run run-keep matrix release-plan release
+.PHONY: help setup config doctor tools sync lint test site check precommit ui list run run-keep matrix release-plan release
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -59,6 +59,11 @@ site: ## Build the static site into build/site
 
 check: ## Everything CI checks without a cluster: lint, tests, site
 	@$(MAKE) --no-print-directory lint test site
+
+precommit: ## Before every commit: ./tut sync, then make check (CI runs the same checks, without sync)
+	./tut sync
+	@$(MAKE) --no-print-directory check
+	@if [ -n "$$(git status --short)" ]; then printf '\nNot committed yet (./tut sync may have updated some):\n'; git status --short; fi
 
 ui: ## Start the local runner UI
 	./tut ui
