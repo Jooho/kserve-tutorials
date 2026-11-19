@@ -172,6 +172,15 @@ $("#list").addEventListener("click", (e) => {
 $("#tagchips").addEventListener("click", (e) => {
   const t = e.target.closest("[data-untag]"); if (t) { S.tagFilter.delete(t.dataset.untag); renderList(); }
 });
+// Tags under each tutorial: hidden by default, one click to show (remembered).
+S.showTags = store.get("tut.showTags", "0") === "1";
+function applyShowTags() {
+  $("#list").classList.toggle("show-tags", S.showTags);
+  $("#showtags").classList.toggle("on", S.showTags);
+  $("#showtags").setAttribute("aria-pressed", String(S.showTags));
+}
+$("#showtags").onclick = () => { S.showTags = !S.showTags; store.set("tut.showTags", S.showTags ? "1" : "0"); applyShowTags(); };
+applyShowTags();
 $("#addtag").addEventListener("change", (e) => { if (e.target.value) S.tagFilter.add(e.target.value); e.target.value = ""; renderList(); });
 $("#sort").addEventListener("change", (e) => { S.sort = e.target.value; store.set("tut.sort", S.sort); renderList(); });
 $("#views").addEventListener("click", (e) => {

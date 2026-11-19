@@ -170,3 +170,7 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 #list li[data-col] { border-left: 3px solid var(--path); }
 .pathbar { border-color: var(--path); background: var(--path-bg); }
 .pathbar .path-name { background: var(--path); color: #fff; font-weight: 650; padding: 1px 10px; border-radius: 999px; }
+/* tags under each tutorial: hidden until the "# tags" toggle is on */
+#list .tags { display: none; }
+#list.show-tags .tags { display: flex; }
+#showtags.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
