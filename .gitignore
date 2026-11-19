@@ -1,8 +1,38 @@
-build/
-site/
-__pycache__/
-.pytest_cache/
-*.pyc
+# --- made by the toolkit (make setup / ./tut) -------------------------------
+# Python toolkit (make setup)
 .venv/
+# tutorial CLI tools, per env (envs/<name>/vN/tools.env)
 .tools/
+# ./tut run scripts and reports, rejected translations, site source
+build/
+# mkdocs output
+site/
+
+# --- personal settings and secrets: never commit ----------------------------
+# ./tut config / make config (cluster name, translator, ...)
 .tut.env
+.env
+.env.*
+*.kubeconfig
+kubeconfig
+*.token
+*.pem
+*.key
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- editors, OS, local AI agent settings -----------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+.claude/settings.local.json
+CLAUDE.local.md
