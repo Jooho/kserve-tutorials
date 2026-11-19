@@ -429,3 +429,18 @@ def test_translation_flow_init_mark_behind(repo):
     import pytest
     with pytest.raises(FileExistsError):
         lint.init_translation(t, "ko")
+
+
+def test_list_is_one_line_per_tutorial_and_show_has_details(repo, monkeypatch, capsys):
+    from tut import cli
+    for i in range(12):
+        make_tut(repo, f"t{i:02d}", tags=None, status="stable" if i % 2 else "draft")
+    monkeypatch.setattr(cli, "REPO_ROOT", repo)
+    monkeypatch.setenv("COLUMNS", "100")
+    cli.main(["list", "--status", "stable"])
+    out = capsys.readouterr().out.splitlines()
+    rows = [l for l in out if l.startswith("t")]
+    assert len(rows) == 6 and all(len(l) <= 100 for l in out[:7])     # one line each, fits
+    cli.main(["show", "t01"])
+    detail = capsys.readouterr().out
+    assert "KServe       v0.18.0 (default)" in detail and "files        tutorials/t01/README.md" in detail

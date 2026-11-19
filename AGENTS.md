@@ -34,7 +34,9 @@ make tools ENV=<name>/vN    # download an environment's CLI tools ahead of time 
 ./tut run <id> --dry-run    # the exact script CI will execute
 ./tut run <id>              # execute for real (Docker + kubectl + Kind)
 ./tut ui                    # local web UI: run a tutorial step by step
-./tut list [--tag T] [--status S]   # tutorials with versions, env, languages, collections, tags
+./tut list [--tag T] [--status S] [--collection C]   # one line per tutorial
+./tut show <id>                     # everything about one tutorial
+eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
 ./tut translation init <id> ko # start one (copies README.md, adds ko to langs)
 ./tut translation mark <id> ko # after translating: matches the current README.md
