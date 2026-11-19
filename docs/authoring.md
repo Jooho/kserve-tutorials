@@ -15,7 +15,10 @@ tutorials/<id>/
   images/
 ```
 
-Start from `tutorials/_template/`. New tutorials start as `status: draft`.
+Start with `make new T=<id> [TITLE="..."] [OWNER=<github-handle>]` (or
+`./tut new <id>`): it copies `tutorials/_template/`, fills in id and namespace,
+and starts as `status: draft`, English only (translate later with
+`./tut translation draft`).
 
 ## 2. Blocks
 

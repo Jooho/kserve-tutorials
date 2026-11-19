@@ -14,7 +14,7 @@ Quick start:
 
 ```bash skip
 make setup
-cp -r tutorials/_template tutorials/<id>     # then edit tutorial.yaml and README.md
+make new T=<id> OWNER=<github-handle>        # from the template; then edit tutorial.yaml and README.md
 make precommit                               # ./tut sync, then lint + tests + site
 make ui                                      # run it step by step
 make help                                    # everything else

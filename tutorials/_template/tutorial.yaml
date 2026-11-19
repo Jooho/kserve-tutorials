@@ -1,4 +1,4 @@
-# Copy this directory to tutorials/<your-id>/ and fill in every field.
+# Start a tutorial with `make new T=<id>` (copies this directory), then fill in every field.
 # Schema: schema/tutorial.schema.json  ·  Rules: ./tut lint  ·  Guide: CONTRIBUTING.md
 id: my-tutorial                 # must equal the directory name
 title:

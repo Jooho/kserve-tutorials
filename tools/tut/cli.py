@@ -156,6 +156,23 @@ def cmd_show(a):
     _show(_tutorial(a.id), catalog.load_collections(REPO_ROOT))
 
 
+def cmd_new(a):
+    from . import scaffold
+    try:
+        d = scaffold.new_tutorial(a.new_id, title=a.title, owner=a.owner)
+    except scaffold.ScaffoldError as e:
+        sys.exit(str(e))
+    generate.sync(REPO_ROOT)
+    rel = d.relative_to(REPO_ROOT)
+    todo = [] if a.title else ["title and summary"]
+    todo += [] if a.owner else ["owners (your GitHub handle)"]
+    print(f"created {rel}/ from the template (status: draft)\n\nNext:\n"
+          f"  1. edit {rel}/tutorial.yaml: {', '.join(todo + ['tags', 'kserve', 'requires'])}\n"
+          f"  2. write {rel}/README.md (guide: docs/authoring.md); replace manifests/example.yaml\n"
+          f"  3. once the English is done, translate: ./tut translation draft {a.new_id} ko\n"
+          f"  4. make precommit, then ./tut ui (or ./tut run {a.new_id})")
+
+
 def cmd_sync(a):
     changed, errors = generate.sync(REPO_ROOT, check=a.check)
     for e in errors:
@@ -382,6 +399,14 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("show", help="everything about one tutorial")
     s.add_argument("id", help="tutorial id (directory name under tutorials/)")
     s.set_defaults(fn=cmd_show)
+
+    s = sub.add_parser("new", help="start a tutorial from tutorials/_template/",
+                       description="Copy tutorials/_template/ to tutorials/<id>/ (English only), fill "
+                                   "in id and namespace (and the title / owner if given), then ./tut sync.")
+    s.add_argument("new_id", metavar="id", help="new tutorial id, e.g. llmisvc-autoscaling")
+    s.add_argument("--title", help='English title, e.g. "Autoscaling an LLMInferenceService"')
+    s.add_argument("--owner", help="your GitHub handle (goes to owners and CODEOWNERS)")
+    s.set_defaults(fn=cmd_new)
 
     s = sub.add_parser("sync", help="regenerate <!-- tut:... --> regions")
     s.add_argument("--check", action="store_true", help="fail instead of writing")
