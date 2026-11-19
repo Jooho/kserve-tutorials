@@ -168,3 +168,14 @@ can be checked mechanically.
   watch), never in individual tutorials. Diagnostics must show image pull
   errors (they did: `ImagePullBackOff` + the 403 in events).
 - **Evidence:** [PR #1, third e2e run](https://github.com/Jooho/kserve-tutorials/actions/runs/44406969077).
+
+### CI-005 Do no work before the first prompt
+- **What happened:** a UI shell test timed out on GitHub but never here. The
+  UI shell loaded Tab completion before each prompt by running
+  `kubectl/helm/kind completion bash`; runners have those tools preinstalled,
+  so the first prompt waited for cold Go binaries. This container had none, so
+  it never showed up locally.
+- **Rule:** interactive conveniences must be lazy (completion now loads on the
+  first Tab). Tests that wait on a shell print its output when they time out,
+  so a CI-only failure can be diagnosed from the log.
+- **Evidence:** [PR #7 check](https://github.com/Jooho/kserve-tutorials/actions/runs/44447042731).
