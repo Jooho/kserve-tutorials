@@ -298,8 +298,14 @@ async function openEditor() {
 
 function closeEditor() {
   if (dirty() && !confirm("Discard the unsaved changes in the editor?")) return false;
+  // Back to the rendered page, at the part you were looking at: the preview
+  // doubles in width when the editor closes, so keep the element at the top.
+  const pane = $("#docpane"), top = pane.getBoundingClientRect().top + ($(".toolbar")?.offsetHeight || 0);
+  const anchor = [...document.querySelectorAll("#doc > *")].find((el) => el.getBoundingClientRect().bottom > top);
   ED.open = false;
   $("#editor").hidden = true; $("#docbody").classList.remove("editing"); $("#edit").classList.remove("on");
+  if (anchor) anchor.scrollIntoView({ block: "start" });
+  refreshPreview();                                   // show the last saved text
   return true;
 }
 
@@ -359,6 +365,7 @@ edText.addEventListener("keydown", (e) => {
 });
 addEventListener("keydown", (e) => {
   if (ED.open && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveEditor(); }
+  if (ED.open && e.key === "Escape") { e.preventDefault(); closeEditor(); }   // Esc = Close
 });
 addEventListener("beforeunload", (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
 
