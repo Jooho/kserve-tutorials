@@ -200,6 +200,7 @@ What a change can reach:
 | `tutorials/<id>/**` | `<id>` |
 | `envs/<name>/v<N>/**` | Tutorials whose `env` is `<name>/v<N>` (only allowed while not frozen) |
 | `lib/<name>/v<N>/**` | Tutorials that list `<name>/v<N>` in `uses` (only allowed while not frozen) |
+| how tutorials are executed (runner, parser, setup generator, tool installer, local config, `run-tutorials.yml`) | every tutorial |
 | anything else | None; lint and unit tests still run, the weekly run covers the rest |
 
 **Script modules** (`lib/<name>/v<N>/`) apply the same rule to reusable
@@ -357,7 +358,16 @@ start-up) that:
   offline), where the user can also type;
 - shows the environment status (no cluster / built by which profile and
   version) before the setup step runs;
-- expands module scripts under the block that calls them.
+- expands module scripts under the block that calls them;
+- resumes where the reader left off (⏵ Continue, ⏭ To here start at the first
+  step that has not passed in this shell) instead of re-running setup;
+- lets the reader arrange it: full-width document, terminal at the bottom or
+  on the right, collapsible tutorial list, text size (remembered per browser);
+- offers Tab completion for kubectl/helm/kind and the aliases `k`, `kc <ns>`
+  in its terminal only (never in tutorials, D013).
+
+Because readers re-run steps, every step must be safe to run twice (D012), and
+CI proves it by running each tutorial twice in the same cluster.
 
 It uses the same parser as lint and CI, and the same block semantics as the
 runner (verify blocks run with `set -Eeo pipefail` and honour

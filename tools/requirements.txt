@@ -5,3 +5,4 @@ mkdocs-material==9.5.44
 mkdocs-static-i18n==1.2.3
 aiohttp==3.10.10
 markdown==3.7
+pyte==0.8.2

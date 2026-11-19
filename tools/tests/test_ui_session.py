@@ -51,3 +51,47 @@ def test_run_block_fails_if_any_command_fails(tmp_path):
 def test_markers_are_not_shown(tmp_path):
     _, out, _ = run_session(tmp_path, [{"idx": 0, "role": "run", "code": "echo hi"}])
     assert "\x1b]777" not in out and "hi" in out
+
+
+def test_ui_shell_has_aliases_and_lazy_kubectl_completion(tmp_path, monkeypatch):
+    # A fake kubectl that only "appears" once a block puts it on PATH, like the
+    # pinned kubectl after a tutorial's setup step.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "kubectl").write_text(
+        "#!/bin/sh\n[ \"$1\" = completion ] && echo '__start_kubectl() { :; }; __tut_fake_loaded=yes'\n")
+    (bin_dir / "kubectl").chmod(0o755)
+    blocks = [
+        {"idx": 0, "role": "run", "code": f'export PATH="{bin_dir}:$PATH"'},
+        # the prompt shown after block 0 loads the completion before block 1 runs
+        {"idx": 1, "role": "verify", "code": 'test "$__tut_fake_loaded" = yes\n'
+                                              'alias k | grep -q kubectl\n'
+                                              'alias kc | grep -q "set-context --current --namespace"\n'
+                                              'complete -p k | grep -q __start_kubectl\n'
+                                              'complete -p kc | grep -q __tut_complete_kc'},
+    ]
+    final, out, _ = run_session(tmp_path, blocks)
+    assert final == {0: "passed", 1: "passed"}, out
+
+
+def test_internal_commands_never_show_on_screen(tmp_path):
+    """Render the session through a real terminal emulator at a narrow width:
+    the internal `__tut_run` call must not be visible, for many quick blocks."""
+    import pyte
+    cols, rows = 60, 400
+    screen = pyte.Screen(cols, rows)
+    stream = pyte.Stream(screen)
+    events = []
+
+    async def main():
+        s = ShellSession("t", tmp_path, "v0.18.0", stream.feed, events.append)
+        s.start()
+        s.resize(cols, rows)
+        s.run_queue([{"idx": i, "role": "run", "code": f"echo block-{i}"} for i in range(25)])
+        await asyncio.wait_for(s.queue_task, 60)
+        s.stop()
+
+    asyncio.run(main())
+    shown = "\n".join(line.rstrip() for line in screen.display)
+    assert "block-24" in shown
+    assert "__tut_run" not in shown, shown

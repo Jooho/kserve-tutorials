@@ -35,6 +35,13 @@ make doctor     # can this machine run the tutorials? (Docker, resources, platfo
 make ui         # opens the browser
 ```
 
+Already using a kind cluster called `kind` for something else? Let the
+tutorials use their own, once (remembered in `.tut.env`, not in git):
+
+```bash skip
+make config CLUSTER=tut
+```
+
 Pick a KServe version and a tutorial, then press ▶ on each step (or ▶ Run
 all): the commands run in a terminal on your machine, shown in the page, and
 every check turns green or red. No copy and paste.

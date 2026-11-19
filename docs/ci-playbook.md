@@ -11,6 +11,10 @@ The job log names the exact block:
 ✗ FAILED in tutorials/<id>/README.md:<line> (step <n>/<total> · <role>)
 ```
 
+CI runs every tutorial twice in the same shell and cluster (`--twice`); a
+failure labelled `pass 2/2` means the step works on a clean cluster but not
+when repeated: make it idempotent (docs/authoring.md, D012) or mark it `once`.
+
 `<total>` counts `run` + `verify` blocks; `cleanup` and `skip` are not
 numbered (cleanup runs last, after the numbered steps). The JSON report (`report.json` artifact) has the same `failed_at`.
 

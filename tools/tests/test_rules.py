@@ -33,7 +33,7 @@ kubectl get cm x -n "$NS"
 ```
 
 ```bash cleanup
-kubectl delete ns "$NS"
+kubectl delete ns "$NS" --ignore-not-found
 ```
 """
 
@@ -202,6 +202,9 @@ def test_affected_env_change_hits_only_its_users(repo):
     assert [t.id for t in plan.affected(["envs/kind-x/v2/setup.sh"], ts)] == ["b"]
     assert [t.id for t in plan.affected(["tutorials/c/README.md"], ts)] == ["c"]
     assert plan.affected(["tools/tut/lint.py", "README.md"], ts) == []
+    # changing how tutorials are executed runs all of them
+    assert [t.id for t in plan.affected(["tools/tut/runner.py"], ts)] == ["a", "b", "c"]
+    assert len(plan.affected([".github/workflows/run-tutorials.yml"], ts)) == 3
 
 
 def test_E002_frozen_env_cannot_change(repo):
@@ -347,3 +350,62 @@ def test_runner_keep_on_failure_skips_cleanup_only_on_failure(tmp_path, monkeypa
     assert not (tmp_path / "out").exists()            # failed: resources kept for diagnostics
     assert runner.run(ts["ok"], keep_on_failure=True) == 0
     assert (tmp_path / "out").exists()                # passed: cleaned up as usual
+
+
+# ------------------------------------------------------- rerun safety, UI aliases
+def with_run(code, flags=""):
+    return GOOD_README.replace('kubectl apply -f manifests/cm.yaml -n "$NS"', code).replace(
+        "```bash run\n" + code, f"```bash run{(' ' + flags) if flags else ''}\n" + code)
+
+
+def test_D012_not_safe_to_run_twice(repo):
+    for code in ('kubectl create -f manifests/cm.yaml', 'helm install x ./chart',
+                 'echo hi >> out.txt', 'kubectl delete cm x'):
+        make_tut(repo, "t", with_run(code))
+        assert "D012" in codes(repo), code
+        import shutil; shutil.rmtree(repo / "tutorials" / "t")
+
+
+def test_D012_accepts_idempotent_forms_and_continuations(repo):
+    ok = ('kubectl create ns x --dry-run=client -o yaml | kubectl apply -f -\n'
+          'helm upgrade --install x ./chart\n'
+          'kubectl create token default\n'
+          'kubectl delete cm x \\\n  --ignore-not-found\n'
+          'cmd 2>>err.log\n'
+          '# kubectl create in a comment')
+    make_tut(repo, "t", with_run(ok))
+    assert "D012" not in codes(repo)
+
+
+def test_D012_once_flag_and_draft_warning(repo):
+    make_tut(repo, "t", with_run("kubectl create -f manifests/cm.yaml", flags="once"))
+    make_tut(repo, "d", with_run("helm install x ./chart"), status="draft")
+    generate.sync(repo)
+    found = {(f.code, f.severity, f.path.parent.name) for f in lint.Linter(repo).run()}
+    assert not any(c == "D012" and n == "t" for c, _, n in found)
+    assert ("D012", "warning", "d") in found
+
+
+def test_D013_ui_aliases_are_rejected(repo):
+    make_tut(repo, "t", with_run('k get pods -n "$NS"\nkc "$NS"'))
+    assert "D013" in codes(repo)
+    make_tut(repo, "u", with_run('echo k is fine; kubectl get pods'))
+    errs = {(f.code, f.path.parent.name) for f in lint.Linter(repo).run() if f.severity == "error"}
+    assert ("D013", "u") not in errs
+
+
+def test_runner_twice_catches_steps_that_break_on_repeat(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("M", str(tmp_path / "made"))
+    fragile = "```bash run\nmkdir \"$M\"\n```\n\n```bash cleanup\nrm -rf \"$M\"\n```\n"
+    robust = fragile.replace('mkdir "$M"', 'mkdir -p "$M"')
+    once = fragile.replace("```bash run\n", "```bash run once\n")
+    for name, readme in (("fragile", fragile), ("robust", robust), ("once", once)):
+        make_tut(tmp_path, name, readme)
+    ts = {t.id: t for t in load_tutorials(tmp_path)}
+    report = tmp_path / "r.json"
+    assert runner.run(ts["fragile"]) == 0                         # passes once...
+    assert runner.run(ts["fragile"], twice=True, report=report) != 0  # ...not twice
+    assert "pass 2/2" in json.loads(report.read_text())["failed_at"]
+    assert runner.run(ts["robust"], twice=True) == 0
+    assert runner.run(ts["once"], twice=True) == 0                # once-blocks are not repeated

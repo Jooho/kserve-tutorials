@@ -23,6 +23,7 @@
 export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
 export NS="${NS:-my-tutorial}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
 export TUT_LIB="$REPO_ROOT/lib"
 # pinned CLI tools of the environment, for this shell only
 export PATH="$REPO_ROOT/.tools/kind/v0.30.0:$REPO_ROOT/.tools/kubectl/v1.34.13:$REPO_ROOT/.tools/helm/v3.16.3:$REPO_ROOT/.tools/cloud-provider-kind/v0.12.0:$PATH"

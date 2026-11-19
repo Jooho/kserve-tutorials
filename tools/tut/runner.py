@@ -23,7 +23,7 @@ from .model import REPO_ROOT, Tutorial
 
 
 def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
-                 keep_on_failure: bool = False) -> tuple[str, list[markdown.Block]]:
+                 keep_on_failure: bool = False, passes: int = 1) -> tuple[str, list[markdown.Block]]:
     doc = markdown.parse(t.readme("en").read_text())
     blocks = [b for b in doc.blocks if b.is_shell and b.role in ("run", "verify", "cleanup")]
     readme = f"tutorials/{t.id}/README.md"
@@ -61,8 +61,13 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
         out.append("}")
         out.append("trap __tut_cleanup EXIT")
     steps = [b for b in blocks if b.role in ("run", "verify")]
-    for n, b in enumerate(steps, 1):
-        label = f"{readme}:{b.line} (step {n}/{len(steps)} · {b.role})"
+    # passes=2 (--twice): every step again in the same shell and cluster, before
+    # cleanup — a step that only works on a clean cluster fails here (D012).
+    plan = [(p, n, b) for p in range(1, passes + 1) for n, b in enumerate(steps, 1)
+            if not (p > 1 and b.attrs.get("once"))]
+    for p, n, b in plan:
+        tag = f"pass {p}/{passes} · " if passes > 1 else ""
+        label = f"{readme}:{b.line} ({tag}step {n}/{len(steps)} · {b.role})"
         out.append("")
         out.append(f"TUT_BLOCK={shlex.quote(label)}")
         out.append(f"echo {shlex.quote('::group::' + label)}")
@@ -99,8 +104,8 @@ def _indent(code: str, n: int) -> str:
 
 def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
         dry_run: bool = False, teardown_env: bool = False,
-        report: Path | None = None, keep_on_failure: bool = False) -> int:
-    script, steps = build_script(t, kserve_version, keep, keep_on_failure)
+        report: Path | None = None, keep_on_failure: bool = False, twice: bool = False) -> int:
+    script, steps = build_script(t, kserve_version, keep, keep_on_failure, 2 if twice else 1)
     if dry_run:
         sys.stdout.write(script)
         return 0

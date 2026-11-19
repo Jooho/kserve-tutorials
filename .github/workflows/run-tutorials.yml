@@ -41,7 +41,7 @@ jobs:
         run: |
           ./tut run "${{ matrix.tutorial }}" \
             --kserve-version "${{ matrix.kserve_version }}" \
-            --keep-on-failure --report report.json
+            --twice --keep-on-failure --report report.json
       - name: Diagnostics (on failure)
         if: failure()
         run: .github/scripts/diagnose.sh

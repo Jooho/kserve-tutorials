@@ -11,6 +11,7 @@
 VENV    := .venv
 PY      ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 ENV     ?=
+CLUSTER ?=
 T       ?=
 V       ?=
 BASE    ?=
@@ -18,8 +19,11 @@ REF     ?= main
 DRY_RUN ?= true
 
 export NO_MKDOCS_2_WARNING := 1
+ifneq ($(CLUSTER),)
+export KIND_CLUSTER_NAME := $(CLUSTER)
+endif
 .DEFAULT_GOAL := help
-.PHONY: help setup doctor tools sync lint test site check ui list run run-keep matrix release-plan release
+.PHONY: help setup config doctor tools sync lint test site check ui list run run-keep matrix release-plan release
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -30,6 +34,9 @@ setup: ## Prepare ./tut itself: .venv + Python packages (needs Python 3.11+)
 	$(VENV)/bin/python -m pip install -q -r tools/requirements.txt
 	@./tut doctor --toolkit
 	@echo "Next: make doctor   (can this machine run the tutorials?)"
+
+config: ## Remember personal settings in .tut.env: make config CLUSTER=tut (no args: show)
+	./tut config $(if $(CLUSTER),KIND_CLUSTER_NAME=$(CLUSTER))
 
 doctor: ## Check this machine: toolkit, Docker/host, environments (T=<id> for one tutorial)
 	./tut doctor $(if $(T),--tutorial $(T))
