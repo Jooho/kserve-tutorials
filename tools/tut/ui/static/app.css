@@ -216,6 +216,10 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 select.chip.verchip { background: var(--panel); color: var(--text); cursor: pointer; padding: 1px 6px; }
 /* Versions view: the version filter gets its own full row above the tag filter */
 .filters { flex-wrap: wrap; }
-#verfilter { order: -1; flex: 1 1 100%; width: 100%; }
+#verfilter { width: auto; }
 .chip.act { cursor: pointer; text-decoration: none; }
 .chip.act:hover { background: var(--code-bg); }
+/* Groups (kind of tutorial) vs Collections (learning paths, purple) */
+#list li.group.group { color: var(--text); }
+.verrow { display: flex; gap: 6px; flex: 1 1 100%; order: -1; }
+.verrow select { flex: 1; }

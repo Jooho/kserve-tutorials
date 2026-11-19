@@ -86,17 +86,25 @@ generated `<!-- tut:setup -->` region [D006]. Files are shown with
   If a tutorial needs a retry or a readiness wait because the platform was not
   really ready, fix the environment profile.
 
-## 5. Tags and collections (catalog/)
+## 5. Groups, tags and collections (catalog/)
+
+- **Group** (`group:` in tutorial.yaml, one per tutorial): what kind of
+  tutorial it is — `llmisvc`, `inferencegraph`, ... from `catalog/groups.yaml`
+  [G003]. The UI's **Groups** view lists every tutorial once under its group
+  and opens it on its own (standalone). Add a group to `catalog/groups.yaml`
+  only if none fits.
 
 - **Tags** make tutorials findable (search, filter in the UI, site). Use only
   tags listed in `catalog/tags.yaml` [G001]; lint suggests the closest one for a
   typo. If no tag fits, add one to `catalog/tags.yaml` in the same PR, with a
   group (`feature`, `topic`, `level`) and a one-line description. Prefer
   reusing a tag over adding a near-duplicate. Give every tutorial one `level`.
-- **Collections** (`catalog/collections/<id>.yaml`) are ordered reading
-  paths. They list tutorial ids; tutorials never refer to collections and stay
-  independent. A tutorial may be in several collections or in none (it then
-  shows under "Other tutorials").
+- **Collections** (`catalog/collections/<id>.yaml`) are learning paths: **two
+  or more** tutorials in order [C005: with one member a collection is not shown
+  yet]. They list tutorial ids; tutorials never refer to collections and stay
+  independent. A tutorial may be in several collections or in none. Opened from
+  the **Collections** view, a tutorial runs as a step of the path (shared steps
+  already done are hidden, the collection's `vars` are shared).
   - Order is the list order — no order numbers to renumber.
   - Each collection has `owners`; they review every change to it (generated
     `.github/CODEOWNERS`). To add your tutorial to someone's path, edit the

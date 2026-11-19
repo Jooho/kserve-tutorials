@@ -11,7 +11,7 @@ you must read, not in anyone's memory. CI enforces them.
 | Write or edit a tutorial | [docs/authoring.md](docs/authoring.md) |
 | Migrate a tutorial from `Jooho/kserve-tutorials-legacy` | [docs/migration-guide.md](docs/migration-guide.md), then docs/authoring.md |
 | A CI run, scheduled run or canary failed | [docs/ci-playbook.md](docs/ci-playbook.md) |
-| Tags, collections, owners (`catalog/`) | docs/authoring.md § Tags and collections |
+| Groups, tags, collections, owners (`catalog/`) | docs/authoring.md § Groups, tags and collections |
 | Change `envs/`, `lib/` (shared parts) | docs/authoring.md § Shared parts, then RFC §4.6 |
 | Change `tools/`, `schema/`, rules or workflows | [docs/rfc/0001-repository-structure.md](docs/rfc/0001-repository-structure.md) |
 | Release, `stable` branch, Makefile or release workflow | [docs/release.md](docs/release.md) |
@@ -70,7 +70,7 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
     CLI tools are pinned per environment in `envs/<name>/vN/tools.env` and
     installed into `.tools/<tool>/<version>/` by the environment's setup.
     Docker, git and curl are the user's; we only check them (`./tut doctor`).
-11. **Tags come from `catalog/tags.yaml`** (add a new one there, with group and
+11. **Tags come from `catalog/tags.yaml`, groups from `catalog/groups.yaml`** (add a new one there, with group and
     description, only if none fits). `.github/CODEOWNERS` is generated from
     `owners` fields by `./tut sync`: never edit it by hand.
 12. **Never push to `stable`.** Only the release workflow moves it, and only

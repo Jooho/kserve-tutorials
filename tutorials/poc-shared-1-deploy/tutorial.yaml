@@ -6,6 +6,7 @@ title:
 summary:
   en: Defines the shared step poc-model.
 status: draft
+group: poc
 namespace: poc-shared-1-deploy
 kserve:
   default: v0.18.0

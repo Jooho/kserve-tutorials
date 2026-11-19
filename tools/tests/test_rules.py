@@ -41,7 +41,7 @@ kubectl delete ns "$NS" --ignore-not-found
 def meta(tid, **kw):
     m = {"id": tid, "title": {"en": tid}, "summary": {"en": "s"}, "status": "stable",
          "env": "kind-x/v1", "kserve": {"default": "v0.18.0", "tested": ["v0.18.0"]},
-         "langs": ["en"]}
+         "langs": ["en"], "group": "g"}
     m.update(kw)
     return m
 
@@ -55,6 +55,8 @@ def make_env(root: Path, ref="kind-x/v1", frozen=True, kmin="v0.17.0"):
         (d / s).write_text("#!/bin/sh\n")
         (d / s).chmod(0o755)
     (d / "README.md").write_text("# env\n")
+    (root / "catalog").mkdir(exist_ok=True)
+    (root / "catalog" / "groups.yaml").write_text("groups:\n  g: {title: {en: G}}\n")
 
 
 def make_tut(root: Path, tid, readme=GOOD_README, **kw):
@@ -464,3 +466,11 @@ def test_site_points_folder_links_at_index_pages(tmp_path):
     site._link_dir_indexes(tmp_path)
     assert page.read_text() == ("[b](../b/index.md) [b2](../b/index.md#part) [files](../files/) "
                                 "[ext](https://x.io/y/) [top](#top) [missing](../gone/index.md)\n")
+
+
+def test_G003_every_tutorial_needs_a_known_group(repo):
+    make_tut(repo, "t1", group="nope")
+    make_tut(repo, "t2", group=None)
+    msgs = [f.message for f in lint.Linter(repo).run() if f.code == "G003"]
+    assert any("group 'nope' is not in catalog/groups.yaml" in m for m in msgs)
+    assert any("no `group:`" in m for m in msgs)

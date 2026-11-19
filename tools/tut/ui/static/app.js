@@ -56,12 +56,12 @@ async function loadList() {
 // ------------------------------------------------------------- catalog views
 // Collections are resolved on the server for the selected KServe version
 // (tools/tut/catalog.py); this code only displays them.
-Object.assign(S, { view: store.get("tut.view", "collections"), sort: store.get("tut.sort", "title"),
+Object.assign(S, { view: ["groups", "collections", "all"].includes(store.get("tut.view", "")) ? store.get("tut.view") : "groups", sort: store.get("tut.sort", "title"),
                    tagFilter: new Set(), catalog: null, collapsed: new Set(JSON.parse(store.get("tut.collapsed", "[]"))) });
 
 async function loadCatalog() {
-  // Collections show each member at its own default version (no version filter there).
-  S.catalog = await fetch("/api/catalog").then((r) => r.json());
+  // Collections are resolved for the selected version (replacements, "not on vX").
+  S.catalog = await fetch(`/api/catalog?version=${encodeURIComponent(S.version)}`).then((r) => r.json());
   const groups = S.catalog.groups;
   const byGroup = {};
   for (const [name, t] of Object.entries(S.catalog.tags)) (byGroup[t.group] ||= []).push(name);
@@ -98,49 +98,51 @@ function item(t, { n = null, note = "", dim = false, extra = "", col = "" } = {}
 function renderList() {
   document.querySelectorAll("#views button").forEach((b) => b.classList.toggle("on", b.dataset.view === S.view));
   $("#sort").hidden = S.view !== "all";
-  $("#verfilter").hidden = S.view !== "versions";
   $("#sort").value = S.sort;
   $("#tagchips").innerHTML = [...S.tagFilter].map((x) =>
     `<span class="tag on" data-untag="${x}" title="Remove filter">#${x} ✕</span>`).join("");
-  const v = S.view === "versions" ? S.version : "", html = [];   // the filter belongs to Versions
+  const v = S.version, html = [];                      // the version filter applies to every view
+  const onVersion = (t) => !v || t.kserve.tested.includes(v);
   if (!S.catalog) return;
-  if (S.view === "collections") {
-    const group = (id, title, desc, rows) => {
-      const shown = rows.filter((r) => r.html);
-      if (!shown.length) return;
-      const closed = S.collapsed.has(id);
-      const isPath = !id.startsWith("_");                       // a collection (learning path)
-      html.push(`<li class="group ${isPath ? "path" : ""}" data-group="${id}" title="${esc(desc)}">${closed ? "▸" : "▾"} ${isPath ? "📚 " : ""}${esc(title)}
-        <span class="count">${shown.length}</span></li>`);
-      if (!closed) shown.forEach((r) => html.push(r.html));
-    };
+  const heading = (id, title, desc, rows, kind) => {      // a collapsible section of the list
+    const shown = rows.filter(Boolean);
+    if (!shown.length) return;
+    const closed = S.collapsed.has(id);
+    const icon = kind === "path" ? "📚 " : kind === "group" ? "🗂 " : "";
+    html.push(`<li class="group ${kind}" data-group="${id}" title="${esc(desc)}">${closed ? "▸" : "▾"} ${icon}${esc(title)}
+      <span class="count">${shown.length}</span></li>`);
+    if (!closed) shown.forEach((r) => html.push(r));
+  };
+  const tx = (o) => (o && (o[S.lang] || o.en)) || "";
+  if (S.view === "groups") {
+    // What kind of tutorial: every tutorial once, opened on its own (standalone).
+    const groups = S.catalog.tutorial_groups || [];
+    const known = new Set(groups.map((g) => g.id));
+    const rows = (pred) => S.tutorials.filter((t) => pred(t) && matches(t) && onVersion(t))
+      .sort((a, b) => (a.title[S.lang] || a.title.en).localeCompare(b.title[S.lang] || b.title.en))
+      .map((t) => item(t));
+    for (const g of groups) heading("g:" + g.id, tx(g.title), tx(g.description), rows((t) => t.group === g.id), "group");
+    heading("g:_none", S.lang === "ko" ? "그룹 없음" : "Ungrouped", "No group in tutorial.yaml",
+            rows((t) => !known.has(t.group)), "group");
+  } else if (S.view === "collections") {
+    // Learning paths: two or more tutorials in order, opened as steps of the path.
     for (const c of S.catalog.collections) {
-      group(c.id, c.title[S.lang] || c.title.en, c.description[S.lang] || c.description.en,
-        c.items.filter((r) => r.state !== "missing").map((r) => {
-          const t = byId(r.shown); if (!t || !matches(t)) return {};
-          const note = { unavailable: `not on ${v}`, replaced: `replaces ${r.member}`, archived: "archived" }[r.state] || "";
-          return { html: item(t, { n: r.n, note, col: c.id, dim: r.state === "unavailable" || r.state === "archived" }) };
-        }));
+      const items = c.items.filter((r) => r.state !== "missing");
+      if (items.length < 2) continue;                         // one tutorial is not a path (lint C005)
+      heading(c.id, tx(c.title), tx(c.description), items.map((r) => {
+        const t = byId(r.shown); if (!t || !matches(t)) return null;
+        const note = { unavailable: `not on ${v}`, replaced: `replaces ${r.member}`, archived: "archived" }[r.state] || "";
+        return item(t, { n: r.n, note, col: c.id, dim: r.state === "unavailable" || r.state === "archived" });
+      }), "path");
     }
-    group("_other", S.lang === "ko" ? "기타" : "Other tutorials", "Not in any collection",
-      S.catalog.other.map(byId).filter((t) => t && matches(t)).map((t) =>
-        ({ html: item(t, { dim: v && !t.kserve.tested.includes(v), note: v && !t.kserve.tested.includes(v) ? `not on ${v}` : "" }) })));
-  } else if (S.view === "all") {
+    if (!html.length) html.push(`<li class="muted">${S.lang === "ko" ? "아직 학습 경로가 없습니다 (튜토리얼 2개 이상)." : "No learning paths yet (2 or more tutorials)."}</li>`);
+  } else {
     const order = { stable: 0, deprecated: 1, draft: 2, archived: 3 };
-    const ts = S.tutorials.filter(matches).sort((a, b) =>
+    const ts = S.tutorials.filter((t) => matches(t) && onVersion(t)).sort((a, b) =>
       S.sort === "status" ? (order[a.status] - order[b.status]) || a.title.en.localeCompare(b.title.en)
       : S.sort === "kserve" ? vcmp(b.kserve.tested.slice().sort(vcmp).at(-1) || "v0.0.0", a.kserve.tested.slice().sort(vcmp).at(-1) || "v0.0.0")
       : (a.title[S.lang] || a.title.en).localeCompare(b.title[S.lang] || b.title.en));
-    ts.forEach((t) => html.push(item(t, { dim: v && !t.kserve.tested.includes(v), note: v && !t.kserve.tested.includes(v) ? `not on ${v}` : "" })));
-  } else {
-    html.push(`<li class="group" data-matrix="1">▦ ${S.lang === "ko" ? "버전 매트릭스 보기" : "Open the version matrix"}</li>`);
-    for (const ver of S.versions) {
-      if (v && ver !== v) continue;
-      const ts = S.tutorials.filter((t) => t.status !== "archived" && t.kserve.tested.includes(ver) && matches(t));
-      if (!ts.length) continue;
-      html.push(`<li class="group" data-group="v:${ver}">KServe ${ver}<span class="count">${ts.length}</span></li>`);
-      ts.forEach((t) => html.push(item(t)));
-    }
+    ts.forEach((t) => html.push(item(t)));
   }
   $("#list").innerHTML = html.join("") || `<li class="muted">No tutorials match.</li>`;
 }
@@ -166,7 +168,7 @@ $("#list").addEventListener("click", (e) => {
   if (tag) { e.stopPropagation(); S.tagFilter.add(tag.dataset.tag); renderList(); return; }
   if (e.target.closest("[data-matrix]")) { renderMatrix(); return; }
   const g = e.target.closest("li.group[data-group]");
-  if (g && S.view === "collections") {
+  if (g) {
     const id = g.dataset.group;
     S.collapsed.has(id) ? S.collapsed.delete(id) : S.collapsed.add(id);
     store.set("tut.collapsed", JSON.stringify([...S.collapsed])); renderList(); return;
@@ -193,11 +195,12 @@ $("#views").addEventListener("click", (e) => {
   S.view = b.dataset.view; store.set("tut.view", S.view); renderList();
 });
 $("#search").addEventListener("input", () => { renderList(); if (!$("#matrix").hidden) renderMatrix(); });
-$("#verfilter").addEventListener("change", (e) => {
+$("#verfilter").addEventListener("change", async (e) => {
   S.version = e.target.value; store.set("tut.verfilter", S.version);
-  renderList();
+  await loadCatalog();                                   // collections are resolved per version
   if (!$("#matrix").hidden) renderMatrix();
 });
+$("#matrix-btn").onclick = () => renderMatrix();
 $("#lang").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   const reopen = ED.open;
@@ -505,7 +508,8 @@ function renderChips() {
   ].join("") + groupBar();
 }
 
-const pathsOf = (id) => (S.catalog?.collections || []).filter((c) => c.items.some((r) => r.shown === id || r.member === id));
+const pathsOf = (id) => (S.catalog?.collections || []).filter((c) =>
+  c.items.length >= 2 && c.items.some((r) => r.shown === id || r.member === id));   // a path has 2+ tutorials
 
 function groupBar() {
   const g = S.doc?.group;

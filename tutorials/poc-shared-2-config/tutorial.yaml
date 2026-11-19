@@ -6,6 +6,7 @@ title:
 summary:
   en: Uses poc-model, defines poc-config.
 status: draft
+group: poc
 namespace: poc-shared-2-config
 kserve:
   default: v0.18.0

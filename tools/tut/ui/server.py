@@ -124,6 +124,7 @@ class UI:
                 "status": t.status, "env": t.env_ref, "uses": t.uses,
                 "kserve": {"default": t.kserve_default, "tested": t.kserve_tested},
                 "tags": t.meta.get("tags", []) or [], "gpu": t.needs_gpu, "langs": t.langs,
+                "group": t.meta.get("group"),
                 "replacement": (t.meta.get("deprecation") or {}).get("replacement"),
             })
         versions = sorted({v for t in out for v in t["kserve"]["tested"]}, key=version_key,
@@ -145,6 +146,8 @@ class UI:
             "version": version, "collections": cols,
             "other": [t.id for t in catalog.uncollected(tutorials, catalog.load_collections(self.root))],
             "tags": reg.get("tags") or {}, "groups": reg.get("groups") or {},
+            "tutorial_groups": [{"id": gid, "title": g.get("title", {}), "description": g.get("description", {})}
+                                for gid, g in catalog.load_groups(self.root).items()],
         })
 
     async def api_tutorial(self, request):

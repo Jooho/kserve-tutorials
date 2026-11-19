@@ -6,6 +6,7 @@ title:
 summary:
   en: Uses poc-model and poc-config, then scales.
 status: draft
+group: poc
 namespace: poc-shared-3-scale
 kserve:
   default: v0.18.0

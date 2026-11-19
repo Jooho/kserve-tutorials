@@ -161,6 +161,11 @@
           }
         ]
       }
+    },
+    "group": {
+      "description": "What kind of tutorial it is: an id from catalog/groups.yaml (G003).",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
     }
   },
   "$defs": {

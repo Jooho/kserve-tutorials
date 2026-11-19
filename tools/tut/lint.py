@@ -37,6 +37,9 @@ Catalog (catalog/)
   C002 collection member is not a tutorial
   C003 collection lists a tutorial twice
   C004 collection member is archived and has no replacement (warning)
+  C005 a collection (learning path) needs at least 2 members; until then the UI
+       does not show it (warning)
+  G003 every tutorial needs a group from catalog/groups.yaml
   O001 .github/CODEOWNERS is stale -> run `./tut sync`
 
 Manifests
@@ -443,6 +446,17 @@ class Linter:
                     self.err("G001", t.path / "tutorial.yaml",
                              f"tag {tag!r} is not in catalog/tags.yaml{hint} "
                              "(add it there with a group and description if it is really new)")
+        groups = catalog.load_groups(self.root)
+        for t in self.tutorials:
+            g = t.meta.get("group")
+            if not g:
+                self.err("G003", t.path / "tutorial.yaml",
+                         f"no `group:` — pick one of {', '.join(groups) or '(catalog/groups.yaml is empty)'}")
+            elif g not in groups:
+                near = difflib.get_close_matches(g, list(groups), n=1)
+                hint = f" — did you mean {near[0]!r}?" if near else ""
+                self.err("G003", t.path / "tutorial.yaml",
+                         f"group {g!r} is not in catalog/groups.yaml{hint} (add it there if it is really new)")
         by_id = {t.id: t for t in self.tutorials}
         schema = load_schema("collection.schema.json")
         for c in catalog.load_collections(self.root):
@@ -451,6 +465,9 @@ class Linter:
                 self.err("C001", c.path, f"{'/'.join(map(str, e.path)) or '(root)'}: {e.message}")
             if c.meta.get("id") != c.id:
                 self.err("C001", c.path, f"id {c.meta.get('id')!r} != file name {c.id!r}")
+            if len(c.members) < 2:
+                self.warn("C005", c.path, f"a learning path needs at least 2 tutorials; with "
+                          f"{len(c.members)} it is not shown in the UI yet (browse by group instead)")
             seen = set()
             for m in c.members:
                 if m in seen:
