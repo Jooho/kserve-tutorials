@@ -19,7 +19,10 @@ def run_session(tmp_path, blocks, stop_on_fail=True, timeout=20):
         finally:
             s.stop()
 
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (TimeoutError, asyncio.TimeoutError):
+        raise AssertionError("shell session timed out; output so far:\n" + "".join(output)[-3000:])
     final = {e["idx"]: e["state"] for e in events if e["type"] == "block"}
     return final, "".join(output), events
 
@@ -53,25 +56,28 @@ def test_markers_are_not_shown(tmp_path):
     assert "\x1b]777" not in out and "hi" in out
 
 
-def test_ui_shell_has_aliases_and_lazy_kubectl_completion(tmp_path, monkeypatch):
+def test_ui_shell_has_aliases_and_lazy_kubectl_completion(tmp_path):
     # A fake kubectl that only "appears" once a block puts it on PATH, like the
-    # pinned kubectl after a tutorial's setup step.
+    # pinned kubectl after a tutorial's setup step. Its completion is loaded on
+    # the first Tab (here: calling the stub), never before a prompt.
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     (bin_dir / "kubectl").write_text(
-        "#!/bin/sh\n[ \"$1\" = completion ] && echo '__start_kubectl() { :; }; __tut_fake_loaded=yes'\n")
+        "#!/bin/sh\n[ \"$1\" = completion ] && echo '__start_kubectl() { :; }; complete -F __start_kubectl kubectl'\n")
     (bin_dir / "kubectl").chmod(0o755)
     blocks = [
-        {"idx": 0, "role": "run", "code": f'export PATH="{bin_dir}:$PATH"'},
-        # the prompt shown after block 0 loads the completion before block 1 runs
-        {"idx": 1, "role": "verify", "code": 'test "$__tut_fake_loaded" = yes\n'
+        {"idx": 0, "role": "verify", "code": 'complete -p kubectl | grep -q __tut_lazy_complete\n'
                                               'alias k | grep -q kubectl\n'
                                               'alias kc | grep -q "set-context --current --namespace"\n'
-                                              'complete -p k | grep -q __start_kubectl\n'
                                               'complete -p kc | grep -q __tut_complete_kc'},
+        {"idx": 1, "role": "run", "code": f'export PATH="{bin_dir}:$PATH"'},
+        # first Tab: the stub loads the real completion and asks bash to retry (124)
+        {"idx": 2, "role": "run", "code": 'rc=0; __tut_lazy_complete kubectl || rc=$?; test "$rc" -eq 124'},
+        {"idx": 3, "role": "verify", "code": 'complete -p kubectl | grep -q __start_kubectl\n'
+                                              'complete -p k | grep -q __start_kubectl'},
     ]
     final, out, _ = run_session(tmp_path, blocks)
-    assert final == {0: "passed", 1: "passed"}, out
+    assert final == {0: "passed", 1: "passed", 2: "passed", 3: "passed"}, out
 
 
 def test_internal_commands_never_show_on_screen(tmp_path):

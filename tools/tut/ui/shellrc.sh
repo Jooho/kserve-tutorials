@@ -37,20 +37,19 @@ __tut_complete_kc() {
 }
 complete -F __tut_complete_kc kc
 
-# The pinned kubectl/helm/kind only appear on PATH after a tutorial's setup
-# step, so load their completion lazily: before each prompt, (re)load it for any
-# of them that appeared or moved.
-__tut_completion_seen=""
-__tut_load_completion() {
-  local t p
-  for t in kubectl helm kind; do
-    p=$(command -v "$t" 2>/dev/null) || continue
-    case " $__tut_completion_seen " in *" $t=$p "*) continue ;; esac
-    eval "$("$p" completion bash 2>/dev/null)" 2>/dev/null || continue
-    __tut_completion_seen="$__tut_completion_seen $t=$p"
-    if [ "$t" = kubectl ] && declare -F __start_kubectl >/dev/null 2>&1; then
-      complete -o default -F __start_kubectl k
-    fi
-  done
+# Completion for kubectl/helm/kind (and k) is loaded on the first Tab, not at
+# start-up: running `<tool> completion bash` before a prompt delays every new
+# shell (seconds for cold Go binaries). The stub resolves the tool from the PATH
+# of that moment, so the pinned tools a setup step put on PATH are used.
+__tut_lazy_complete() {
+  local cmd="$1" real="$1"
+  [ "$cmd" = k ] && real=kubectl
+  command -v "$real" >/dev/null 2>&1 || return 1
+  complete -r "$cmd" 2>/dev/null
+  eval "$("$real" completion bash 2>/dev/null)" 2>/dev/null || return 1
+  if [ "$real" = kubectl ] && declare -F __start_kubectl >/dev/null 2>&1; then
+    complete -o default -F __start_kubectl k
+  fi
+  return 124   # tells bash to retry completion with the function just registered
 }
-PROMPT_COMMAND="__tut_load_completion${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+complete -F __tut_lazy_complete kubectl helm kind k
