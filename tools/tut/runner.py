@@ -55,7 +55,7 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
         for b in cleanups:
             out.append(f"  # --- {readme}:{b.line} (cleanup)")
             out.append("  (")
-            out.append(_indent(b.code, 4))
+            out.append(b.code)          # never indented: it would change heredocs and quoted text (CI-009)
             out.append("  )")
         out.append("  echo '::endgroup::'")
         out.append("}")
@@ -79,7 +79,7 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
                 "  set +e; trap - ERR",
                 "  (",
                 "    set -Eeuo pipefail; trap - ERR",
-                _indent(b.code, 4),
+                b.code,                 # byte for byte, see above
                 "  )",
                 "  __tut_rc=$?",
                 "  set -e; trap __tut_on_err ERR",
@@ -96,10 +96,6 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
     out.append("echo '✓ all steps passed'")
     return "\n".join(out) + "\n", steps
 
-
-def _indent(code: str, n: int) -> str:
-    pad = " " * n
-    return "\n".join(pad + l if l.strip() else l for l in code.split("\n"))
 
 
 def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,

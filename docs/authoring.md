@@ -261,3 +261,16 @@ can be checked mechanically.
 - **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
   (`exit_code: -15`, `failed_at: null`, during README.md:712); reproduced and
   guarded by `test_runner_survives_pkill_f_of_a_command_in_the_same_tutorial`.
+
+### CI-009 The runner changed a block's code by indenting it
+- **What happened:** the third run of `inferencegraph-ensemble` reached step 22
+  (the first InferenceGraph request) and failed all 12 retries with
+  `IndentationError: unexpected indent`. The runner wrapped `retry=` verify
+  blocks (and cleanup blocks) in a loop and indented their code for
+  readability; that also indented the lines inside the `python3 -c '...'`
+  string. Heredocs would break the same way. The UI and a reader's terminal
+  run the code unchanged, so it only failed in CI.
+- **Rule:** the runner pastes block code byte for byte, never re-indented.
+- **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
+  (README.md:722, step 22/25); reproduced and guarded by
+  `test_runner_keeps_block_code_byte_for_byte`.

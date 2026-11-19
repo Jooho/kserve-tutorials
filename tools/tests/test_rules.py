@@ -503,3 +503,35 @@ def test_runner_survives_pkill_f_of_a_command_in_the_same_tutorial(tmp_path, mon
     rc = runner.run(t, report=report)
     res = json.loads(report.read_text())
     assert rc == 0 and res["status"] == "passed", res
+
+
+def test_runner_keeps_block_code_byte_for_byte(tmp_path, monkeypatch):
+    """CI-009: the runner indented retry and cleanup blocks, which also indented
+    the inside of multi-line strings (python3 -c '...') and heredocs."""
+    readme = textwrap.dedent("""\
+        # T
+
+        ```bash verify retry=2 delay=0
+        python3 -c '
+        import sys
+        sys.exit(0)
+        '
+        cat <<EOF > "$OUT"
+        verify-heredoc
+        EOF
+        ```
+
+        ```bash cleanup
+        python3 -c '
+        import os
+        open(os.environ["OUT"] + ".cleanup", "w").write("ok")
+        '
+        ```
+        """)
+    make_tut(tmp_path, "ind", readme, env=None, status="draft")
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("OUT", str(tmp_path / "out"))
+    t = next(t for t in load_tutorials(tmp_path) if t.id == "ind")
+    assert runner.run(t) == 0
+    assert (tmp_path / "out").read_text() == "verify-heredoc\n"
+    assert (tmp_path / "out.cleanup").read_text() == "ok"
