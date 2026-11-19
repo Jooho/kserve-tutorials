@@ -14,6 +14,6 @@ kserve:
   tested: [v0.18.0]
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
-langs: [en]
+langs: [en, ko]
 timeout_minutes: 60
 owners: [Jooho]

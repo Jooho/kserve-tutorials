@@ -326,15 +326,17 @@ KServe ships a release, each tutorial either passes (add the version to
 ### 4.11 Translations
 
 - English is the source; other languages are translations of it.
-- A translation starts with `<!-- tut-translation source=README.md sha=<hash> -->`,
-  written by `./tut translation mark <id> <lang>` after translating.
-- The hash ignores generated regions, so `./tut sync` alone never makes a
-  translation stale.
-- Stale translation → warning (D010). The block structure must match → error
-  (D011), because a translation that skips or adds a step is wrong, not just
-  old.
-- CI only executes the English README. Code blocks in translations are
-  expected to be identical except for comments.
+- A translation starts with `<!-- tut-translation source=README.md sha=<hash> -->`;
+  the hash ignores generated regions, so `./tut sync` alone never makes a
+  translation stale. AI drafts add `by=<tool> reviewed=no`.
+- `./tut translation draft` runs the AI CLI the user chose (`TUT_TRANSLATOR`:
+  Claude Code, Copilot CLI, Codex CLI or any command) with fixed rules, then
+  checks the result mechanically (code, commands, regions, comments, link
+  targets unchanged) before writing it. No API keys live in the repository.
+- States: up to date, AI draft (warning), behind (warning), never marked
+  (error), missing. The block structure must match the source (D011, error).
+  Translation lag never blocks English changes or releases.
+- CI only executes the English README.
 
 ### 4.12 Publishing
 

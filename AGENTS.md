@@ -38,7 +38,8 @@ make tools ENV=<name>/vN    # download an environment's CLI tools ahead of time 
 ./tut show <id>                     # everything about one tutorial
 eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
-./tut translation init <id> ko # start one (copies README.md, adds ko to langs)
+./tut translation draft <id> ko   # AI draft via TUT_TRANSLATOR=claude|copilot|codex|cmd:...
+./tut translation init <id> ko # start one by hand (copies README.md, adds ko to langs)
 ./tut translation mark <id> ko # after translating: matches the current README.md
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
@@ -72,6 +73,13 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
     `owners` fields by `./tut sync`: never edit it by hand.
 12. **Never push to `stable`.** Only the release workflow moves it, and only
     forward to a fully verified commit of `main` (docs/release.md).
+
+## Translations
+
+When you change a tutorial's README.md, bring its translations along in the same
+PR: translate the changed parts yourself or run `./tut translation draft`, review
+the result, and only then `./tut translation mark`. Never mark a translation you
+did not check against the English text.
 
 ## Leave the repository smarter than you found it
 

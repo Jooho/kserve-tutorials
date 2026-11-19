@@ -16,7 +16,7 @@ def test_every_subcommand_is_offered_and_hidden_ones_are_not():
 def test_values_and_options():
     assert "llmisvc-anatomy" in cli.complete(["run"])
     assert "--twice" in cli.complete(["run", "llmisvc-anatomy"])
-    assert cli.complete(["translation"]) == ["init", "mark", "status"]
+    assert cli.complete(["translation"]) == ["draft", "init", "mark", "status"]
     assert "ko" in cli.complete(["translation", "init", "llmisvc-anatomy"])
     assert "llmisvc" in cli.complete(["list", "--tag"])
     assert cli.complete(["list", "--status"]) == ["draft", "stable", "deprecated", "archived"]

@@ -4,6 +4,8 @@
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
 > **Status:** 🚧 draft · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-llmisvc/v1`](../../envs/kind-llmisvc/v1/) · **GPU:** not required
+>
+> 🌐 [한국어](README.ko.md)
 
 <!-- /tut -->
 
