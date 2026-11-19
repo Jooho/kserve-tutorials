@@ -82,10 +82,20 @@ body.term-right .splitter { cursor: col-resize; }
 .splitter:hover { background: var(--accent); }
 
 /* toolbar */
-.toolbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 16px; align-items: flex-start; justify-content: space-between;
-  flex-wrap: wrap; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--border); }
+/* Title and chips on top, the step buttons always on their own row below, so
+   they stay in the same place however many chips / path bar there are. */
+.toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 24px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .toolbar h1 { font-size: 17px; margin: 0 0 4px; }
-.tb-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tb-title { min-width: 0; }
+.toolbar { container: tb / inline-size; }
+.tb-title .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tb-actions { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow-x: auto;
+  scrollbar-width: thin; }
+.tb-actions > * { flex: none; }
+.tb-actions #edit { margin-left: auto; }
+/* narrow panes: icons only, the full label stays in the tooltip */
+@container tb (max-width: 760px) { .tb-actions .btn .lbl { display: none; } }
 .btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 6px; padding: 5px 10px; }
 .btn:hover { border-color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
@@ -194,3 +204,5 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
   border: 1px solid var(--border); background: var(--code-bg); color: var(--text); tab-size: 2;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: calc(var(--fs) - 1.5px); line-height: 1.5; }
 #edit.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+[hidden] { display: none !important; }   /* `hidden` always wins over display: flex/grid */
