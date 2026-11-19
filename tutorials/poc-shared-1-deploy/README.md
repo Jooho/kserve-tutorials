@@ -51,5 +51,7 @@ echo "model ready in $NS: $(cat "$POC_HOME/$NS/model")"
 ## Cleanup
 
 ```bash cleanup
-rm -rf "${TMPDIR:-/tmp}/tut-poc/${NS:?}"
+POC_HOME="${POC_HOME:-${TMPDIR:-/tmp}/tut-poc}"
+rm -f "$POC_HOME/$NS/model"
+rmdir "$POC_HOME/$NS" 2>/dev/null || true   # only if nothing else is left
 ```

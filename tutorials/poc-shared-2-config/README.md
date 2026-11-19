@@ -68,5 +68,7 @@ echo "config ready in $NS"
 ## Cleanup
 
 ```bash cleanup
-rm -rf "${TMPDIR:-/tmp}/tut-poc/${NS:?}"
+POC_HOME="${POC_HOME:-${TMPDIR:-/tmp}/tut-poc}"
+rm -f "$POC_HOME/$NS/model" "$POC_HOME/$NS/config"
+rmdir "$POC_HOME/$NS" 2>/dev/null || true   # only if nothing else is left
 ```
