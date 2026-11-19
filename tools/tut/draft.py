@@ -99,6 +99,49 @@ def copy_input(src: Path, dst: Path) -> tuple[list[str], list[str]]:
     return copied, skipped
 
 
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
+
+def is_asset(p: Path) -> bool:
+    """Files the AI cannot write itself (it only writes text): images and binaries."""
+    if p.suffix.lower() in IMAGE_EXT:
+        return True
+    try:
+        return b"\0" in p.read_bytes()[:8192]
+    except OSError:
+        return False
+
+
+def copy_assets(inp: Path, tdir: Path) -> list[str]:
+    """Copy images and binary files into the tutorial at the same relative path
+    (images/x.svg -> tutorials/<id>/images/x.svg), so existing links keep working
+    and the UI, the site and GitHub show them."""
+    out = []
+    for p in sorted(inp.rglob("*")):
+        if p.is_file() and is_asset(p):
+            rel = p.relative_to(inp)
+            (tdir / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, tdir / rel)
+            out.append(str(rel))
+    return out
+
+
+def prune_assets(tdir: Path, assets: list[str]) -> list[str]:
+    """Remove copied assets nothing in the tutorial refers to; return them."""
+    texts = "\n".join(p.read_text(errors="replace") for p in tdir.rglob("*")
+                      if p.is_file() and not is_asset(p))
+    removed = []
+    for rel in assets:
+        p = tdir / rel
+        if p.exists() and rel not in texts and Path(rel).name not in texts:
+            p.unlink()
+            removed.append(rel)
+    for d in sorted({(tdir / r).parent for r in removed}, key=lambda d: -len(d.parts)):
+        while d != tdir and d.is_dir() and not any(d.iterdir()):
+            d.rmdir(); d = d.parent
+    return removed
+
+
 def parts_catalog(root: Path = REPO_ROOT) -> str:
     """Everything a new tutorial can reuse, and who already uses it."""
     tutorials = [t for t in load_tutorials(root) if not t.errors]
@@ -138,9 +181,14 @@ def parts_catalog(root: Path = REPO_ROOT) -> str:
 
 
 def build_prompt(tid: str, inp: Path, work: Path, files: list[str], skipped: list[str],
-                 root: Path = REPO_ROOT) -> str:
+                 root: Path = REPO_ROOT, assets: list[str] | None = None) -> str:
     rel = lambda p: p.relative_to(root)
     big = f"\nToo big to copy (mention them if they matter): {', '.join(skipped)}" if skipped else ""
+    if assets:
+        big += ("\nImages and binary files are ALREADY copied into tutorials/" + tid + "/ at the same "
+                "relative path (you cannot write binary files): " + ", ".join(assets) +
+                ". Link images with relative paths, e.g. ![Architecture](images/architecture.svg); "
+                "refer to the other files by those paths. Copies nothing refers to are removed afterwards.")
     return f"""You turn a folder of TESTED work into a KServe tutorial in this repository's format.
 Work in the repository at {root}.
 
@@ -252,6 +300,8 @@ class Result:
     found: list = field(default_factory=list)
     missing: list = field(default_factory=list)
     agent_rc: int = 0
+    assets_kept: list = field(default_factory=list)
+    assets_removed: list = field(default_factory=list)
 
 
 def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
@@ -268,8 +318,9 @@ def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
     inp = work / "input"
     inp.mkdir(parents=True)
     files, skipped = copy_input(src, inp)
+    assets = copy_assets(inp, tdir)
     (work / "parts.md").write_text(parts_catalog(root))
-    prompt = build_prompt(tid, inp, work, files, skipped, root)
+    prompt = build_prompt(tid, inp, work, files, skipped, root, assets)
     (work / "prompt.md").write_text(prompt)
     log(f"→ {tid}: {len(files)} input file(s) copied to {inp.relative_to(root)}; "
         f"running {agent.name} (this can take several minutes) …")
@@ -282,6 +333,8 @@ def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
             p = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, text=True,
                                stdout=logf, stderr=subprocess.STDOUT, timeout=timeout)
     res = Result(tid, work, agent_rc=p.returncode)
+    res.assets_removed = prune_assets(tdir, assets)
+    res.assets_kept = [a for a in assets if a not in res.assets_removed]
     generate.sync(root)
     res.outside = changed_outside(before, tid, root)
     res.problems = [f for f in lint.Linter(root).run() if f.path.resolve().is_relative_to(tdir.resolve())]
@@ -300,6 +353,8 @@ def render_report(r: Result, src: Path, root: Path = REPO_ROOT) -> str:
            + ("" if (r.work / "notes.md").exists() else " — **missing**"),
            f"- lint: {len(errs)} error(s), {len(r.problems) - len(errs)} warning(s)",
            f"- input script commands found in the tutorial as-is: {len(r.found)}/{total}",
+           f"- images / binary files copied in: {len(r.assets_kept)} used"
+           + (f", {len(r.assets_removed)} unused removed ({', '.join(r.assets_removed)})" if r.assets_removed else ""),
            f"- files changed outside tutorials/{r.tid}/ and build/: {len(r.outside)}", ""]
     if r.outside:
         out += ["## ✗ Changed outside the allowed folders (review, then restore with git)", ""]

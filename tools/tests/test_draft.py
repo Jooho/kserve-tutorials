@@ -18,7 +18,7 @@ FAKE_AI = textwrap.dedent('''
     work = re.search(r"write (build/draft/[a-z0-9-]+)/notes.md", prompt).group(1)
     t = pathlib.Path("tutorials") / tid
     readme = (t / "README.md").read_text()
-    step = ("## Deploy\\n\\n```bash run\\nkubectl apply -f manifests/model.yaml -n \\"$NS\\"\\n```\\n\\n"
+    step = ("## Deploy\\n\\n![Architecture](images/arch.svg)\\n\\n```bash run\\nkubectl apply -f manifests/model.yaml -n \\"$NS\\"\\n```\\n\\n"
             "```bash verify retry=30 delay=10\\nkubectl wait -n \\"$NS\\" isvc/m --for=condition=Ready --timeout=10s\\n```\\n\\n")
     readme = re.sub(r"## Step 1:.*?(?=## |\\Z)", step, readme, count=1, flags=re.S)
     (t / "README.md").write_text(readme)
@@ -66,6 +66,11 @@ def work(tmp_path_factory):
         echo done
         '''))
     (src / "notes.txt").write_text("tested on kind")
+    (src / "images").mkdir()
+    (src / "images" / "arch.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>")
+    (src / "images" / "old.png").write_bytes(b"\x89PNG\r\n\x1a\n\0\0")
+    (src / "models").mkdir()
+    (src / "models" / "model.bst").write_bytes(b"\0\1binary")
     return src
 
 
@@ -117,3 +122,15 @@ def test_agent_from_env(monkeypatch):
     monkeypatch.setenv("TUT_AI", "nope")
     with pytest.raises(draft.DraftError):
         draft.agent_from_env()
+
+
+def test_images_and_binaries_are_copied_in_and_unused_ones_removed(repo, work):
+    r = draft.draft(work, "with-images", None, agent(), root=repo, log=lambda *_: None)
+    t = repo / "tutorials" / "with-images"
+    assert (t / "images" / "arch.svg").exists()                 # linked from README: kept
+    assert not (t / "images" / "old.png").exists()              # nothing refers to it: removed
+    assert not (t / "models").exists()                          # unused binary: removed, empty dir too
+    assert r.assets_kept == ["images/arch.svg"]
+    assert sorted(r.assets_removed) == ["images/old.png", "models/model.bst"]
+    assert "images/arch.svg" in (r.work / "prompt.md").read_text()
+    assert not [f for f in r.problems if f.code == "D004"]       # no broken image link
