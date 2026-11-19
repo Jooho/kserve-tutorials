@@ -208,3 +208,17 @@ can be checked mechanically.
   first Tab). Tests that wait on a shell print its output when they time out,
   so a CI-only failure can be diagnosed from the log.
 - **Evidence:** [PR #7 check](https://github.com/Jooho/kserve-tutorials/actions/runs/44447042731).
+
+### CI-006 Tests must not depend on the contributor's machine
+- **What happened:** `make precommit` failed on a maintainer's laptop and
+  passed in CI: (1) four tests that create throwaway git repositories failed
+  with `git commit` exit 128, because the personal git config signs commits;
+  (2) a UI test failed with `No module named 'pyte'`, because the `.venv` was
+  made before `pyte` was added to `tools/requirements.txt`, and `make doctor`
+  only checked a hard-coded list of modules.
+- **Rule:** tests run with an isolated git config (`tools/tests/conftest.py`:
+  no signing, no hooks, no system config). `make doctor` checks every pin in
+  `tools/requirements.txt` (missing = problem, other version = warning) and
+  `make test` stops with "make setup" before running when a package is missing.
+- **Evidence:** reproduced with `GIT_CONFIG_GLOBAL` set to a config with
+  `commit.gpgsign = true` (4 failed before the fix, 71 passed after).

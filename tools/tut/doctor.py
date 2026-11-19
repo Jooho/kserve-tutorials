@@ -43,7 +43,24 @@ def cluster_name() -> tuple[str, str]:
 
 TOOL_KEYS = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
              "CLOUD_PROVIDER_KIND": "cloud-provider-kind"}
-PY_MODULES = ("yaml", "jsonschema", "aiohttp", "markdown", "mkdocs", "pytest")
+def python_packages(req: Path = REPO_ROOT / "tools" / "requirements.txt") -> tuple[list[str], list[str]]:
+    """(missing, other version) for the pins in tools/requirements.txt, so a
+    .venv made before a package was added or bumped is noticed."""
+    from importlib import metadata
+    missing, other = [], []
+    for line in req.read_text().splitlines():
+        m = re.match(r"^\s*([A-Za-z0-9_.-]+)\s*==\s*(\S+)", line)
+        if not m:
+            continue
+        name, want = m.groups()
+        try:
+            have = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            missing.append(name)
+            continue
+        if have != want:
+            other.append(f"{name} {have} (pinned {want})")
+    return missing, other
 
 
 def _run(cmd: list[str], timeout: float = 15) -> tuple[int, str]:
@@ -83,7 +100,6 @@ def requirements(root: Path, tutorial: str | None) -> tuple[int, float, str]:
 
 def toolkit_checks() -> list[Check]:
     """What ./tut itself needs (make setup)."""
-    import importlib.util
     v = sys.version_info
     checks = [Check("python", OK if v >= (3, 11) else FAIL, platform.python_version(),
                     "" if v >= (3, 11) else "install Python 3.11+")]
@@ -97,12 +113,14 @@ def toolkit_checks() -> list[Check]:
                            "" if tr.available else f"install or log in to the {tr.name} CLI"))
     except translate.TranslationError as e:
         checks_tr = Check("translator", WARN, str(e))
-    missing = [m for m in PY_MODULES if importlib.util.find_spec(m) is None]
+    missing, other = python_packages()
     venv = sys.prefix != sys.base_prefix
-    checks.append(Check("python packages", FAIL if missing else OK,
-                        f"missing: {', '.join(missing)}" if missing else
-                        ("installed in .venv" if venv else "installed (no venv)"),
-                        "make setup" if missing else ""))
+    detail = "; ".join(x for x in (f"missing: {', '.join(missing)}" if missing else "",
+                                   f"other version: {', '.join(other)}" if other else "") if x)
+    checks.append(Check("python packages", FAIL if missing else WARN if other else OK,
+                        detail or ("as pinned, in .venv" if venv else "as pinned (no venv)"),
+                        "make setup   (installs the versions pinned in tools/requirements.txt)"
+                        if missing or other else ""))
     checks.append(checks_tr)
     return checks
 
