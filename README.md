@@ -13,15 +13,23 @@ CI recently checked that it does.
 | Tutorial | Status | Tested KServe | Tags | Environment | GPU |
 |---|---|---|---|---|---|
 | [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-llmisvc/v1` | no |
+| [PoC 1 — Deploy a (fake) model](tutorials/poc-shared-1-deploy/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
+| [PoC 2 — Configure the model](tutorials/poc-shared-2-config/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
+| [PoC 3 — Scale the model](tutorials/poc-shared-3-scale/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
 
 **Collections** (reading paths)
 
 - **LLMInferenceService deep dive** — From one YAML to the resources it creates, how a request is routed, how to observe it and how it scales.
   1. [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/)
 
+- **PoC: shared steps** — Three tiny tutorials (no cluster) that reuse each other's steps with tut:define / tut:use.
+  1. [PoC 1 — Deploy a (fake) model](tutorials/poc-shared-1-deploy/)
+  2. [PoC 2 — Configure the model](tutorials/poc-shared-2-config/)
+  3. [PoC 3 — Scale the model](tutorials/poc-shared-3-scale/)
+
 **By KServe version**
 
-- **v0.18.0**: [llmisvc-anatomy](tutorials/llmisvc-anatomy/)
+- **v0.18.0**: [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [poc-shared-1-deploy](tutorials/poc-shared-1-deploy/), [poc-shared-2-config](tutorials/poc-shared-2-config/), [poc-shared-3-scale](tutorials/poc-shared-3-scale/)
 
 <!-- /tut -->
 

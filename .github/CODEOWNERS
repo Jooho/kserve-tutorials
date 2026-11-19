@@ -4,4 +4,8 @@
 *  @Jooho
 
 /catalog/collections/llmisvc-deep-dive.yaml  @Jooho
+/catalog/collections/poc-shared-steps.yaml  @Jooho
 /tutorials/llmisvc-anatomy/  @Jooho
+/tutorials/poc-shared-1-deploy/  @Jooho
+/tutorials/poc-shared-2-config/  @Jooho
+/tutorials/poc-shared-3-scale/  @Jooho

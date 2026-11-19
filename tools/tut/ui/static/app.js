@@ -44,8 +44,10 @@ async function loadList() {
   sel.value = S.versions.includes(S.version) ? S.version : "";
   if (!S.versions.includes(S.version)) S.version = "";
   await loadCatalog();
-  const want = location.hash.slice(1) || store.get("tut.current", "");
-  if (S.tutorials.some((t) => t.id === want)) openTutorial(want);
+  // #<id> = standalone, #<collection>/<id> = in a learning path
+  const [a, b] = (location.hash.slice(1) || store.get("tut.current", "")).split("/");
+  const want = b || a, group = b ? a : null;
+  if (S.tutorials.some((t) => t.id === want)) openTutorial(want, group);
 }
 
 // ------------------------------------------------------------- catalog views
@@ -77,11 +79,12 @@ function matches(t) {
   return true;
 }
 
-function item(t, { n = null, note = "", dim = false, extra = "" } = {}) {
+function item(t, { n = null, note = "", dim = false, extra = "", col = "" } = {}) {
   const title = esc(t.title[S.lang] || t.title.en);
   const tags = t.tags.map((x) => `<span class="tag ${S.tagFilter.has(x) ? "on" : ""}" data-tag="${x}"
     title="${esc(S.catalog?.tags[x]?.description || "")}">#${x}</span>`).join("");
-  return `<li data-id="${t.id}" class="${t.id === S.current ? "on" : ""} ${dim ? "untested" : ""} ${extra}">
+  const on = t.id === S.current && (col || null) === (S.group || null);
+  return `<li data-id="${t.id}" ${col ? `data-col="${col}"` : ""} class="${on ? "on" : ""} ${dim ? "untested" : ""} ${extra}">
     <div class="t">${n ? `<span class="num">${n}</span>` : ""}${title}</div>
     <div class="meta"><span>${statusLabel(t.status)}</span><span>${t.kserve.tested.join(", ")}</span>
       ${t.gpu ? "<span>GPU</span>" : ""}${note ? `<span class="note">${note}</span>` : ""}</div>
@@ -110,7 +113,7 @@ function renderList() {
         c.items.filter((r) => r.state !== "missing").map((r) => {
           const t = byId(r.shown); if (!t || !matches(t)) return {};
           const note = { unavailable: `not on ${v}`, replaced: `replaces ${r.member}`, archived: "archived" }[r.state] || "";
-          return { html: item(t, { n: r.n, note, dim: r.state === "unavailable" || r.state === "archived" }) };
+          return { html: item(t, { n: r.n, note, col: c.id, dim: r.state === "unavailable" || r.state === "archived" }) };
         }));
     }
     group("_other", S.lang === "ko" ? "기타" : "Other tutorials", "Not in any collection",
@@ -163,7 +166,7 @@ $("#list").addEventListener("click", (e) => {
     store.set("tut.collapsed", JSON.stringify([...S.collapsed])); renderList(); return;
   }
   const li = e.target.closest("li[data-id]");
-  if (li) openTutorial(li.dataset.id);
+  if (li) openTutorial(li.dataset.id, li.dataset.col || null);   // from a collection = learning path
 });
 $("#tagchips").addEventListener("click", (e) => {
   const t = e.target.closest("[data-untag]"); if (t) { S.tagFilter.delete(t.dataset.untag); renderList(); }
@@ -202,8 +205,10 @@ function sessionVersionFor(t) {
 }
 
 // ------------------------------------------------------------- document
-async function openTutorial(id) {
-  S.current = id; store.set("tut.current", id); history.replaceState(null, "", "#" + id);
+async function openTutorial(id, group = null) {
+  S.current = id; S.group = group; S.showAll = false;
+  const key = (group ? group + "/" : "") + id;
+  store.set("tut.current", key); history.replaceState(null, "", "#" + key);
   renderList();
   $("#empty").hidden = true; $("#matrix").hidden = true; $("#doc-wrap").hidden = false;
   await loadDoc();
@@ -212,10 +217,15 @@ async function openTutorial(id) {
 }
 
 async function loadDoc() {
-  const d = await fetch(`/api/tutorials/${S.current}?lang=${S.lang}`).then((r) => r.json());
+  const col = S.group ? `&collection=${encodeURIComponent(S.group)}` : "";
+  const d = await fetch(`/api/tutorials/${S.current}?lang=${S.lang}${col}`).then((r) => r.json());
   S.doc = d; S.states = {}; S.times = {};
   for (const [k, v] of Object.entries(d.states || {})) { S.states[k] = v.state; S.times[k] = v.ts; }
-  const t = currentMeta();
+  renderDoc();
+}
+
+function renderDoc() {
+  const d = S.doc, t = currentMeta();
   $("#doc-title").textContent = t.title[S.lang] || t.title.en;
   renderChips();
   $("#doc").innerHTML = d.html;
@@ -226,6 +236,54 @@ async function loadDoc() {
   updateProgress();
   select(firstPending(), false);
 }
+
+// ------------------------------------------------------------- learning path (PoC)
+// Opened from a collection, a tutorial hides what earlier members already did:
+// the `run` blocks of shared steps they define or use (their `verify` blocks
+// still run, to check the state is there) and cleanup (once, at the end).
+const hidden = (b) => !S.showAll && ((b.covered_by && b.role === "run") || b.group_skip);
+const steps = () => S.doc.blocks.filter((b) => RUNNABLE.has(b.role) && !hidden(b));
+const titleOf = (id) => { const t = byId(id); return t ? (t.title[S.lang] || t.title.en) : id; };
+
+function renderHidden(b) {
+  const el = document.createElement("div");
+  el.className = "block hidden-step"; el.dataset.idx = b.idx;
+  el.innerHTML = b.group_skip
+    ? `🧹 <b>cleanup</b> is skipped in a learning path (the next tutorials need this state).
+       <button class="btn" data-act="show">show</button>`
+    : `✓ shared step <span class="mono">${esc(b.shared)}</span> (${b.role}) — done in
+       <a href="#" data-open="${b.covered_by}">${esc(titleOf(b.covered_by))}</a>
+       <button class="btn" data-act="show">show</button>`;
+  el.addEventListener("click", (e) => {
+    const open = e.target.closest("[data-open]");
+    if (open) { e.preventDefault(); openTutorial(open.dataset.open, S.group); }
+    if (e.target.closest('[data-act="show"]')) { S.showAll = true; renderDoc(); }
+  });
+  return el;
+}
+
+// A covered step's verify failed: the earlier tutorial was skipped or its state is gone.
+function coveredHint(b) {
+  const runs = S.doc.blocks.filter((x) => x.shared === b.shared && x.role === "run").map((x) => x.idx);
+  const el = document.createElement("div");
+  el.className = "hint";
+  el.innerHTML = `Not ready: <span class="mono">${esc(b.shared)}</span> is done in
+    <a href="#" data-open="${b.covered_by}">${esc(titleOf(b.covered_by))}</a>.
+    <button class="btn" data-act="fix">▶ Run its hidden steps here</button>`;
+  el.addEventListener("click", (e) => {
+    const open = e.target.closest("[data-open]");
+    if (open) { e.preventDefault(); openTutorial(open.dataset.open, S.group); }
+    if (e.target.closest('[data-act="fix"]')) { S.showAll = true; renderDoc(); run([...runs, b.idx]); }
+  });
+  return el;
+}
+
+$("#chips").addEventListener("click", (e) => {
+  const open = e.target.closest("[data-open]");
+  if (open) { e.preventDefault(); openTutorial(open.dataset.open, S.group); return; }
+  if (e.target.closest('[data-act="toggle-hidden"]')) { S.showAll = !S.showAll; renderDoc(); }
+  if (e.target.closest('[data-act="standalone"]')) openTutorial(S.current, null);
+});
 
 function renderChips() {
   const t = currentMeta(); if (!t) return;
@@ -240,12 +298,28 @@ function renderChips() {
     S.doc && S.doc.lang !== S.lang ? `<span class="chip warn">no ${S.lang.toUpperCase()} translation — showing English</span>` : "",
     S.doc && S.doc.translation === "behind" ? `<span class="chip warn" title="The English README changed after this translation was made">${S.lang.toUpperCase()} translation is behind the English version</span>` : "",
     S.doc && S.doc.translation === "unmarked" ? `<span class="chip warn">${S.lang.toUpperCase()} translation not reviewed yet</span>` : "",
-  ].join("");
+  ].join("") + groupBar();
+}
+
+function groupBar() {
+  const g = S.doc?.group;
+  if (!g) return "";
+  const n = S.doc.blocks.filter((b) => (b.covered_by && b.role === "run") || b.group_skip).length;
+  const vars = Object.entries(g.vars).map(([k, v]) => `${k}=${v}`).join(" ");
+  return `<div class="pathbar">
+    📚 <b>${esc(g.title[S.lang] || g.title.en)}</b> · step ${g.n}/${g.total}
+    ${g.prev ? `<a href="#" data-open="${g.prev}">← ${esc(titleOf(g.prev))}</a>` : ""}
+    ${g.next ? `<a href="#" data-open="${g.next}">${esc(titleOf(g.next))} →</a>` : ""}
+    ${vars ? `<span class="mono" title="exported in this shell">${esc(vars)}</span>` : ""}
+    ${n ? `<button class="btn" data-act="toggle-hidden">${S.showAll ? "hide" : "show"} ${n} skipped block(s)</button>` : ""}
+    <button class="btn" data-act="standalone" title="Open with every step, as CI runs it">open standalone</button>
+  </div>`;
 }
 
 const RUNNABLE = new Set(["run", "verify"]);
 
 function renderBlock(b) {
+  if (hidden(b)) return renderHidden(b);
   if (!b.role) {
     const pre = document.createElement("pre");
     pre.className = "static"; pre.innerHTML = `<code>${esc(b.code)}</code>`;
@@ -259,6 +333,7 @@ function renderBlock(b) {
   el.innerHTML = `
     <div class="block-head">
       <span class="badge">${label}</span>
+      ${b.shared ? `<span class="badge shared" title="shared step (tut:define / tut:use)">⇄ ${esc(b.shared)}</span>` : ""}
       <span class="loc mono">${esc(S.doc.file)}:${b.line}</span>
       ${attrs ? `<span class="attrs mono">${esc(attrs)}</span>` : ""}
       <span class="head-actions">
@@ -287,10 +362,10 @@ function renderBlock(b) {
 // Steps from the first one that has not passed in this shell, up to `last`
 // (a new shell starts with nothing passed, so this then means "from the top").
 function pendingSteps(last = Infinity) {
-  const steps = S.doc.blocks.filter((x) => RUNNABLE.has(x.role) && x.idx <= last);
-  const first = steps.findIndex((x) => S.states[x.idx] !== "passed");
+  const todo = steps().filter((x) => x.idx <= last);
+  const first = todo.findIndex((x) => S.states[x.idx] !== "passed");
   if (first === -1) return Number.isFinite(last) ? [last] : [];
-  return steps.slice(first).map((x) => x.idx);
+  return todo.slice(first).map((x) => x.idx);
 }
 
 function ago(ts) {
@@ -304,6 +379,10 @@ function paint(el, state) {
   el.classList.remove("st-running", "st-failed", "st-passed", "st-stopped");
   if (state) el.classList.add("st-" + state);
   const s = el.querySelector(".state");
+  if (!s) return;                       // a hidden learning-path step
+  const b = S.doc?.blocks[idx];
+  el.querySelector(".hint")?.remove();
+  if (state === "failed" && b?.covered_by && !S.showAll) el.append(coveredHint(b));
   s.className = "state " + (state || "");
   const when = ["passed", "failed", "stopped"].includes(state) && S.times?.[idx] ? ` · ${ago(S.times[idx])}` : "";
   s.innerHTML = ({ running: `<span class="spinner"></span> running`, queued: "queued", passed: "✓ passed",
@@ -333,7 +412,7 @@ function select(idx, scroll = true) {
   }
 }
 function nextAfter(idx) {
-  const n = S.doc.blocks.find((x) => RUNNABLE.has(x.role) && x.idx > idx);
+  const n = steps().find((x) => x.idx > idx);
   return n ? n.idx : null;
 }
 function runSelected() {
@@ -368,10 +447,10 @@ function setState(idx, state, ts) {
 
 function updateProgress() {
   if (!S.doc) return;
-  const steps = S.doc.blocks.filter((b) => RUNNABLE.has(b.role));
-  const ok = steps.filter((b) => S.states[b.idx] === "passed").length;
-  const bad = steps.filter((b) => S.states[b.idx] === "failed").length;
-  $("#progress").textContent = `${ok}/${steps.length} passed${bad ? ` · ${bad} failed` : ""}`;
+  const all = steps();
+  const ok = all.filter((b) => S.states[b.idx] === "passed").length;
+  const bad = all.filter((b) => S.states[b.idx] === "failed").length;
+  $("#progress").textContent = `${ok}/${all.length} passed${bad ? ` · ${bad} failed` : ""}`;
 }
 
 function run(idxs, stopOnFail = true, focusTerminal = true) {
@@ -386,7 +465,7 @@ $("#continue").onclick = () => {
   if (!todo.length) { alert("Every step has passed in this shell. Use ▶ Run all to start over."); return; }
   run(todo);
 };
-$("#run-all").onclick = () => run(S.doc.blocks.filter((b) => RUNNABLE.has(b.role)).map((b) => b.idx));
+$("#run-all").onclick = () => run(steps().map((b) => b.idx));
 $("#cleanup").onclick = () => run(S.doc.blocks.filter((b) => b.role === "cleanup").map((b) => b.idx), false);
 $("#stop").onclick = () => send({ type: "interrupt" });
 $("#restart").onclick = () => { if (confirm("Start a new shell? Variables in the current shell are lost.")) startShell(); };
@@ -419,6 +498,8 @@ function connect() {
     else if (m.type === "block") setState(m.idx, m.state === "idle" ? null : m.state, m.ts);
     else if (m.type === "session") {
       if (m.state === "started") {
+        // A shell opened in the other mode has the wrong vars (e.g. NS): start a new one.
+        if ((m.collection || null) !== (S.group || null)) { started = true; startShell(); return; }
         started = true; S.sessionVersion = m.kserve_version;
         $("#term-title").textContent = `Terminal — ${S.current} · KServe ${m.kserve_version || "default"}`;
         refit();
@@ -439,7 +520,8 @@ function startShell() {
   updateProgress();
   select(firstPending(), false);
   term.reset();
-  send({ type: "start", kserve_version: sessionVersionFor(t), cols: term.cols, rows: term.rows });
+  send({ type: "start", kserve_version: sessionVersionFor(t), cols: term.cols, rows: term.rows,
+         collection: S.group || null });
   loadEnv();
 }
 

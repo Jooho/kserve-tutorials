@@ -21,6 +21,7 @@ from aiohttp import WSMsgType, web
 
 from .. import lint as tlint
 from .. import markdown as tmd
+from .. import shared
 from ..model import REPO_ROOT, load_tutorials, version_key
 from .session import ShellSession
 
@@ -55,6 +56,16 @@ class UI:
         for ws in list(self.clients.get(tid, ())):
             if not ws.closed:
                 asyncio.ensure_future(ws.send_str(data))
+
+    def learning_path(self, tid: str, col_id: str | None):
+        """(collection, position) when `tid` is opened from collection `col_id`."""
+        if not col_id:
+            return None, None
+        from .. import catalog
+        col = next((c for c in catalog.load_collections(self.root) if c.id == col_id), None)
+        if not col or tid not in col.members:
+            return None, None
+        return col, col.members.index(tid)
 
     def doc_blocks(self, tid: str, lang: str):
         t = self.tutorial_or_404(tid)
@@ -117,6 +128,9 @@ class UI:
         tid = request.match_info["tid"]
         lang = request.query.get("lang", "en")
         t, path, text, doc = self.doc_blocks(tid, lang)
+        col, pos = self.learning_path(tid, request.query.get("collection"))
+        names = shared.block_names(doc)
+        covered = shared.covered(col.members, tid, self.tutorials()) if col else {}
         lines = text.split("\n")
         blocks = []
         # Replace each fenced block with a placeholder the front end hydrates.
@@ -129,9 +143,14 @@ class UI:
                     p = self.root / "lib" / ref / name
                     scripts.append({"path": f"lib/{ref}/{name}",
                                     "content": p.read_text() if p.is_file() else None})
+            name = names.get(i)
             blocks.append({"idx": i, "lang": b.lang, "role": b.role, "attrs": b.attrs,
                            "code": b.code, "line": b.line, "region": b.in_region,
-                           "scripts": scripts})
+                           "scripts": scripts,
+                           # learning path: a shared step an earlier member already has,
+                           # and cleanup (done once, at the end of the path)
+                           "shared": name, "covered_by": covered.get(name) if name else None,
+                           "group_skip": bool(col) and b.role == "cleanup"})
         body = "\n".join(lines)
         body = re.sub(r"<details>", '<details markdown="1">', body)
         html = md.markdown(body, extensions=["tables", "md_in_html", "sane_lists"])
@@ -143,6 +162,11 @@ class UI:
             "translation": None if lang == "en" else tlint.translation_state(t, lang),
             "file": str(path.relative_to(self.root)), "html": html, "blocks": blocks,
             "states": self.block_states.get(tid, {}),
+            "group": None if not col else {
+                "id": col.id, "title": {l: col.text("title", l) for l in ("en", "ko")},
+                "n": pos + 1, "total": len(col.members), "vars": col.vars,
+                "prev": col.members[pos - 1] if pos > 0 else None,
+                "next": col.members[pos + 1] if pos + 1 < len(col.members) else None},
             "session": {"alive": tid in self.sessions and self.sessions[tid].alive,
                         "kserve_version": self.sessions[tid].kserve_version
                         if tid in self.sessions else None},
@@ -183,7 +207,8 @@ class UI:
         if sess and sess.alive:
             await ws.send_str(json.dumps({"type": "output", "data": "".join(sess.scrollback)}))
             await ws.send_str(json.dumps({"type": "session", "state": "started",
-                                          "kserve_version": sess.kserve_version}))
+                                          "kserve_version": sess.kserve_version,
+                                          "collection": sess.collection, "vars": sess.extra_env}))
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -196,7 +221,8 @@ class UI:
                     if sess:
                         sess.stop()
                     self.block_states[tid] = {}
-                    sess = self.start_session(tid, version)
+                    col, _ = self.learning_path(tid, m.get("collection"))
+                    sess = self.start_session(tid, version, col)
                     if m.get("cols"):
                         sess.resize(m["cols"], m["rows"])
                     continue
@@ -222,11 +248,12 @@ class UI:
             self.clients.get(tid, set()).discard(ws)
         return ws
 
-    def start_session(self, tid: str, version: str | None) -> ShellSession:
+    def start_session(self, tid: str, version: str | None, col=None) -> ShellSession:
         sess = ShellSession(
             tid, self.root, version,
             on_output=lambda data: self.broadcast(tid, {"type": "output", "data": data}),
-            on_event=lambda ev: self.broadcast(tid, ev))
+            on_event=lambda ev: self.broadcast(tid, ev),
+            collection=col.id if col else None, extra_env=col.vars if col else None)
         self.sessions[tid] = sess
         sess.start()
         return sess

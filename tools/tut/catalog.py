@@ -33,6 +33,11 @@ class Collection:
         return list(self.meta.get("members") or [])
 
     @property
+    def vars(self) -> dict[str, str]:
+        """Shared shell variables for the learning path (UI only)."""
+        return {str(k): str(v) for k, v in (self.meta.get("vars") or {}).items()}
+
+    @property
     def owners(self) -> list[str]:
         return list(self.meta.get("owners") or [])
 

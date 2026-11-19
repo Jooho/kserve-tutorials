@@ -26,6 +26,8 @@ Documents (README.md and translations)
        `helm install`, `>>`, `kubectl delete` without --ignore-not-found) unless
        the block is marked `once`; warning for drafts
   D013 the UI terminal's aliases (k, kc) must not appear in README blocks
+  D014 shared steps (tut:define / tut:use, PoC): one definition per name, `use`
+       an existing name, no markers inside a definition, do not use your own
 
 Catalog (catalog/)
   G001 every tag must be listed in catalog/tags.yaml (suggests the closest one)
@@ -63,7 +65,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from . import catalog, generate, markdown
+from . import catalog, generate, markdown, shared
 from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
                     load_modules, load_schema, load_tutorials)
 
@@ -167,6 +169,7 @@ class Linter:
     # ------------------------------------------------------------------ run
     def run(self) -> list[Finding]:
         schema = load_schema("tutorial.schema.json")
+        self.shared_defs = shared.definitions(self.tutorials)
         for t in self.tutorials:
             self.lint_meta(t, schema)
             self.lint_docs(t)
@@ -266,6 +269,30 @@ class Linter:
                         (self.warn if t.status == "draft" else self.err)(
                             "D012", path, f"not safe to run twice: {why} (or mark the block `once`)",
                             b.line + off)
+        # D014 shared steps
+        defs = getattr(self, "shared_defs", {})
+        mine = shared.regions(doc)
+        defined_here = {x.name for x in mine if x.kind == "define"}
+        for x in mine:
+            at = x.region.start + 1
+            if not shared.NAME_RE.match(x.name) or len(x.region.args) != 1:
+                self.err("D014", path, f"tut:{x.kind} needs exactly one name (a-z, 0-9, -)", at)
+                continue
+            if x.kind == "define":
+                if "<!-- tut:" in x.region.body:
+                    self.err("D014", path, f"tut:define {x.name}: no tut: markers inside a "
+                             "definition (shared steps do not nest)", at)
+                owners = [tid for tid, _ in defs.get(x.name, [])]
+                if len(owners) > 1:
+                    self.err("D014", path, f"tut:define {x.name} is defined more than once: "
+                             f"{', '.join(owners)}", at)
+            else:
+                if x.name in defined_here:
+                    self.err("D014", path, f"tut:use {x.name}: this tutorial defines it itself", at)
+                elif x.name not in defs:
+                    known = ", ".join(sorted(defs)) or "none yet"
+                    self.err("D014", path, f"tut:use {x.name}: no tutorial defines it "
+                             f"(defined: {known})", at)
         # D003 hard-coded versions
         region_lines = _region_lines(doc)
         for n, line in enumerate(text.split("\n"), 1):
