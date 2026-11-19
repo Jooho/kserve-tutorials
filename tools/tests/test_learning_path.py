@@ -42,7 +42,10 @@ def root(tmp_path_factory) -> Path:
     groups = r / "catalog" / "groups.yaml"
     groups.write_text(groups.read_text().rstrip() + "\n  poc:\n    title: {en: PoC}\n")
     (r / ".github").mkdir()
-    git = lambda *a: subprocess.run(["git", *a], cwd=r, check=True, capture_output=True)
+    # Module-scoped, so conftest's per-test isolated git config is not active yet:
+    # give git an identity explicitly (CI runners have none).
+    git = lambda *a: subprocess.run(["git", "-c", "user.name=tut-tests", "-c", "user.email=tut-tests@example.invalid",
+                                     "-c", "commit.gpgsign=false", *a], cwd=r, check=True, capture_output=True)
     git("init", "-q", "-b", "main"); git("add", "."); git("commit", "-qm", "fixture")
     from tut import generate
     generate.sync(r)
