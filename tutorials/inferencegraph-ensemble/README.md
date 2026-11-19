@@ -443,7 +443,8 @@ kind load docker-image ${MLSERVER_IMAGE} --name ${CLUSTER_NAME}
 
 ```bash verify
 CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"   # the environment's cluster
-docker exec "${CLUSTER_NAME}-control-plane" crictl images | grep -q 'ensemble-combiner'
+# grep without -q: with pipefail, -q stops reading early and crictl dies of SIGPIPE (exit 141)
+docker exec "${CLUSTER_NAME}-control-plane" crictl images | grep 'ensemble-combiner' >/dev/null
 ```
 
 ## Step 5: Put the models on a PVC

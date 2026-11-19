@@ -159,7 +159,7 @@ export PATH="$REPO/.tools/kind/$KIND:$REPO/.tools/kubectl/$KUBECTL:$REPO/.tools/
 
 # 1. An existing cluster: reuse it, add what is missing, or stop.
 HAVE="" HAVE_MODE="" HAVE_KEDA="false" ADD="$WANT" CREATE=1
-if kind get clusters 2>/dev/null | grep -qx "$KIND_CLUSTER_NAME"; then
+if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
   # `|| true`: jsonpath prints no trailing newline, so read returns 1 at EOF (set -e).
   IFS='|' read -r m_profile m_version m_types m_mode m_keda < <(
     kubectl --context "kind-$KIND_CLUSTER_NAME" -n kube-system get configmap tut-env -o \
@@ -254,7 +254,7 @@ ALL="$(printf '%s,%s' "$HAVE" "$ADD" | norm)"
 # Point the config at the renamed image so LLMInferenceServices can start.
 SCHEDULER_IMAGE="${TUT_SCHEDULER_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0}"
 if has "$ALL" llmisvc && kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler -o yaml 2>/dev/null \
-    | grep -q "llm-d-inference-scheduler:v0.7.1"; then
+    | grep "llm-d-inference-scheduler:v0.7.1" >/dev/null; then   # not -q: SIGPIPE under pipefail (CI-007)
   log "patching kserve-config-llm-scheduler: llm-d-inference-scheduler:v0.7.1 -> $SCHEDULER_IMAGE"
   kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler -o json \
     | sed "s#ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1#${SCHEDULER_IMAGE}#g" \

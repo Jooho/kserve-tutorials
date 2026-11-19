@@ -230,3 +230,19 @@ can be checked mechanically.
   `make test` stops with "make setup" before running when a package is missing.
 - **Evidence:** reproduced with `GIT_CONFIG_GLOBAL` set to a config with
   `commit.gpgsign = true` (4 failed before the fix, 71 passed after).
+
+### CI-007 `| grep -q` fails a check that is true
+- **What happened:** the first real run of the AI-drafted
+  `inferencegraph-ensemble` failed a verify block with exit 141 although the
+  image was there: `crictl images | grep -q ensemble-combiner`. The runner uses
+  `set -o pipefail`; `grep -q` exits at the first match, the writer gets
+  SIGPIPE (141), and the pipeline fails. It depends on output size and timing,
+  so it passes by hand and fails in CI. The same pattern in the env's
+  `setup.sh` (`kubectl get ... -o yaml | grep -q`) could silently skip the
+  scheduler-image workaround.
+- **Rule:** after a command that can print more than a few lines, write
+  `| grep PATTERN >/dev/null`, not `| grep -q PATTERN`. Proposed lint rule
+  (needs approval): warn on `| grep -q` in run/verify blocks and env scripts.
+- **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18),
+  `README.md:444 (step 11/25 · verify) (exit 141)`; reproduced:
+  `set -o pipefail; seq 1 200000 | grep -q 1` → 141.
