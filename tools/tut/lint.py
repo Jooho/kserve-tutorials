@@ -512,18 +512,6 @@ def translation_state(t: Tutorial, lang: str) -> str:
     return "draft" if "reviewed=no" in (m.group(3) or "") else "current"
 
 
-def init_translation(t: Tutorial, lang: str) -> Path:
-    """Start a translation: copy README.md (same blocks, so D011 holds) and add
-    the language to `langs` in tutorial.yaml. Not marked: that happens after
-    the text is actually translated."""
-    target = t.readme(lang)
-    if target.exists():
-        raise FileExistsError(f"tutorials/{t.id}/{target.name} already exists")
-    add_lang(t, lang)
-    target.write_text(t.readme("en").read_text())
-    return target
-
-
 def add_lang(t: Tutorial, lang: str) -> None:
     """Add `lang` to `langs` in tutorial.yaml, editing text so comments survive."""
     meta_file = t.path / "tutorial.yaml"
@@ -555,6 +543,9 @@ def write_draft(t: Tutorial, lang: str, text: str, by: str) -> Path:
 
 
 def mark_translation(t: Tutorial, lang: str) -> Path:
+    """Record that README.<lang>.md matches the current README.md (and make sure
+    the language is in `langs`, so a translation made by hand needs nothing else)."""
+    add_lang(t, lang)
     en = t.readme("en").read_text()
     tr_path = t.readme(lang)
     text = tr_path.read_text()
