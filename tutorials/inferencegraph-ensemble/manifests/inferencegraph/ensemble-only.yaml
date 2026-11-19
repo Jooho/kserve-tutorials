@@ -1,0 +1,12 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: InferenceGraph
+metadata:
+  name: housing-price-graph
+  namespace: kserve-graph-demo
+spec:
+  nodes:
+    root:
+      routerType: Ensemble
+      steps:
+        - serviceName: xgboost-predictor
+        - serviceName: lightgbm-predictor

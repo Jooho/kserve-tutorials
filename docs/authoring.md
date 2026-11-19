@@ -151,6 +151,27 @@ translation has the same shell blocks in the same order [D011]. When README.md
 changes later, lint warns that the translation is behind [D010] and the UI shows
 it to readers. Translation lag never blocks English changes or releases.
 
+## New tutorial from tested work: `./tut draft`
+
+Start from the scripts, manifests and notes you tested by hand:
+
+```bash skip
+export TUT_AI=claude          # or copilot, codex, cmd:<command>; or ./tut config TUT_AI=claude
+./tut draft ~/work/my-test --id my-test --owner <github-handle> [--collection <path>]
+```
+
+The folder is copied (the original is only read); images and binary files are
+copied into `tutorials/<id>/` at the same paths. Your AI CLI gets these rules,
+an example tutorial and the reusable parts (envs with their options, helper
+scripts, shared steps). It may write only `tutorials/<id>/` and
+`build/draft/<id>/` and run only `./tut _draftcheck <id>` (sync, lint, dry run;
+never a cluster). It lists every change to a tested command and the TODOs in
+`build/draft/<id>/notes.md`; the program checks the result and writes
+`build/draft/<id>/report.md` (lint, files changed elsewhere, input commands
+not in the tutorial). Finish in `./tut ui` (✎ Edit), then
+`./tut run <id> --twice`. Example of the material and the output:
+`docs/draft-example/`.
+
 ## Shared steps and learning paths
 
 - **Shared step:** wrap steps another tutorial may need in

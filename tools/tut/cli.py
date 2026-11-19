@@ -156,6 +156,35 @@ def cmd_show(a):
     _show(_tutorial(a.id), catalog.load_collections(REPO_ROOT))
 
 
+def cmd_draft(a):
+    from . import draft
+    from .scaffold import ScaffoldError
+    try:
+        agent = draft.agent_from_env()
+    except draft.DraftError as e:
+        sys.exit(str(e))
+    if agent is None:
+        sys.exit("No AI CLI configured. Pick the one you are logged in to, e.g.\n"
+                 "  export TUT_AI=claude          # or copilot, codex, cmd:<command>\n"
+                 "  ./tut config TUT_AI=claude    # to remember it in .tut.env")
+    if not agent.available:
+        sys.exit(f"TUT_AI={agent.name}, but `{agent.argv[0]}` is not on PATH")
+    try:
+        r = draft.draft(Path(a.folder), a.new_id, a.title, agent, owner=a.owner, collection=a.collection)
+    except (draft.DraftError, ScaffoldError) as e:
+        sys.exit(str(e))
+    errs = sum(f.severity == "error" for f in r.problems)
+    total = len(r.found) + len(r.missing)
+    print(f"\n{'✓' if not errs and not r.outside else '!'} tutorials/{r.tid}/ drafted by {agent.name}"
+          f" (exit {r.agent_rc})\n"
+          f"  lint: {errs} error(s) · input commands in the tutorial: {len(r.found)}/{total}"
+          f" · changed outside: {len(r.outside)}\n"
+          f"  report: {(r.work / 'report.md').relative_to(REPO_ROOT)}   AI notes: "
+          f"{(r.work / 'notes.md').relative_to(REPO_ROOT)}\n"
+          f"Next: ./tut ui → open {r.tid} → ✎ Edit, finish it; then ./tut run {r.tid} --twice")
+    return 0 if not r.outside else 1
+
+
 def cmd_new(a):
     from . import scaffold
     try:
@@ -392,6 +421,22 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--title", help='English title, e.g. "Autoscaling an LLMInferenceService"')
     s.add_argument("--owner", help="your GitHub handle (goes to owners and CODEOWNERS)")
     s.set_defaults(fn=cmd_new)
+
+    s = sub.add_parser("draft", help="AI: turn a folder of tested scripts/manifests/notes into a tutorial",
+                       description="Copy the folder (read only), then let your AI CLI (TUT_AI=claude|copilot|"
+                                   "codex|cmd:...) write tutorials/<id>/ in this repository's format, with the "
+                                   "rules, an example and the reusable parts. The result is checked (lint, "
+                                   "files outside, input commands missing) and reported in build/draft/<id>/.")
+    s.add_argument("folder", help="the folder with your tested work")
+    s.add_argument("--id", dest="new_id", help="tutorial id (default: from the folder name)")
+    s.add_argument("--title", help="English title (default: the AI writes one)")
+    s.add_argument("--owner", help="your GitHub handle (owners, CODEOWNERS)")
+    s.add_argument("--collection", help="add it to catalog/collections/<id>.yaml (created if missing)")
+    s.set_defaults(fn=cmd_draft)
+
+    s = sub.add_parser("_draftcheck", help=argparse.SUPPRESS)       # the one command the AI may run
+    s.add_argument("id")
+    s.set_defaults(fn=lambda a: sys.exit(__import__("tut.draft", fromlist=["x"]).draftcheck(a.id)))
 
     s = sub.add_parser("sync", help="regenerate <!-- tut:... --> regions")
     s.add_argument("--check", action="store_true", help="fail instead of writing")
