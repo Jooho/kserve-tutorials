@@ -105,11 +105,12 @@ On failure the runner prints the README line of the failing block.
 
 ## 7. Translation (if the old tutorial had one)
 
-1. `./tut translation init <id> ko` — creates `README.ko.md` from `README.md`
-   (same blocks and `tut:` regions) and adds `ko` to `langs`.
-2. Replace the prose with the old KO text (and translate code comments); keep
-   the shell blocks one to one with `README.md` (same order, roles, code).
-3. `./tut translation mark <id> ko`
+1. `./tut translation draft <id> ko` — an AI draft with the same blocks and
+   `tut:` regions as `README.md` (without an AI CLI: copy `README.md` to
+   `README.ko.md`).
+2. Bring in the old KO wording where it is better (and translate code comments);
+   keep the shell blocks one to one with `README.md` (same order, roles, code).
+3. `./tut translation mark <id> ko` (also adds `ko` to `langs`)
 4. `./tut lint` (D011 checks the structure).
 
 ## 8. Open the pull request

@@ -411,24 +411,20 @@ def test_runner_twice_catches_steps_that_break_on_repeat(tmp_path, monkeypatch):
     assert runner.run(ts["once"], twice=True) == 0                # once-blocks are not repeated
 
 
-def test_translation_flow_init_mark_behind(repo):
+def test_translation_by_hand_mark_behind(repo):
     d = make_tut(repo, "t")
     generate.sync(repo)
     t = next(x for x in load_tutorials(repo) if x.id == "t")
     assert lint.translation_state(t, "ko") == "missing"
-    lint.init_translation(t, "ko")                                   # copy + langs
+    (d / "README.ko.md").write_text((d / "README.md").read_text())   # translated by hand
+    assert lint.translation_state(t, "ko") == "unmarked"
+    lint.mark_translation(t, "ko")                                   # marks + adds ko to langs
     assert yaml.safe_load((d / "tutorial.yaml").read_text())["langs"] == ["en", "ko"]
     t = next(x for x in load_tutorials(repo) if x.id == "t")
-    assert lint.translation_state(t, "ko") == "unmarked"
-    assert "D010" in {f.code for f in lint.Linter(repo).run() if f.severity == "error"}
-    lint.mark_translation(t, "ko")
     assert lint.translation_state(t, "ko") == "current"
     assert codes(repo) == []
     (d / "README.md").write_text((d / "README.md").read_text() + "\nMore text.\n")
     assert lint.translation_state(t, "ko") == "behind"
-    import pytest
-    with pytest.raises(FileExistsError):
-        lint.init_translation(t, "ko")
 
 
 def test_list_is_one_line_per_tutorial_and_show_has_details(repo, monkeypatch, capsys):

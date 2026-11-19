@@ -16,8 +16,8 @@ def test_every_subcommand_is_offered_and_hidden_ones_are_not():
 def test_values_and_options():
     assert "llmisvc-anatomy" in cli.complete(["run"])
     assert "--twice" in cli.complete(["run", "llmisvc-anatomy"])
-    assert cli.complete(["translation"]) == ["draft", "init", "mark", "status"]
-    assert "ko" in cli.complete(["translation", "init", "llmisvc-anatomy"])
+    assert cli.complete(["translation"]) == ["draft", "mark", "status"]
+    assert "ko" in cli.complete(["translation", "mark", "llmisvc-anatomy"])
     assert "llmisvc" in cli.complete(["list", "--tag"])
     assert cli.complete(["list", "--status"]) == ["draft", "stable", "deprecated", "archived"]
     assert "v0.18.0" in cli.complete(["run", "llmisvc-anatomy", "--kserve-version"])
@@ -26,6 +26,6 @@ def test_values_and_options():
 
 def test_bash_function_completes_like_tab():
     script = (f'cd "{REPO_ROOT}"; source tools/tut-completion.bash; '
-              'COMP_WORDS=(./tut translation in); COMP_CWORD=2; _tut_complete; echo "${COMPREPLY[*]}"')
+              'COMP_WORDS=(./tut translation ma); COMP_CWORD=2; _tut_complete; echo "${COMPREPLY[*]}"')
     out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
-    assert out.strip() == "init"
+    assert out.strip() == "mark"

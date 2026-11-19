@@ -136,8 +136,9 @@ unchanged (comments inside code may be translated). A rejected draft is kept in
 marked `by=<tool> reviewed=no`: lint warns, the UI tells readers it is an AI
 translation, and `mark` turns it into a reviewed one.
 
-**By hand:** `./tut translation init <id> ko` copies README.md (same blocks and
-regions); translate prose and code comments, keep the code; then `mark`.
+**Rejected or no AI:** start from the rejected output in `build/translations/`,
+or copy `README.md` to `README.ko.md`; translate prose and code comments, keep
+the code and regions exactly; then `mark` (it also adds `ko` to `langs`).
 
 `./tut translation` shows every translation's state and the next step. A
 translation has the same shell blocks in the same order [D011]. When README.md
