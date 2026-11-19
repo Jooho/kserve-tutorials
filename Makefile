@@ -23,7 +23,7 @@ ifneq ($(CLUSTER),)
 export KIND_CLUSTER_NAME := $(CLUSTER)
 endif
 .DEFAULT_GOAL := help
-.PHONY: help setup config doctor tools sync lint test site check precommit ui list run run-keep matrix release-plan release
+.PHONY: help setup config doctor tools new sync lint test site check precommit ui list run run-keep matrix release-plan release
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -43,6 +43,10 @@ doctor: ## Check this machine: toolkit, Docker/host, environments (T=<id> for on
 
 tools: ## Download the CLI tools of an environment ahead of time (ENV=kind-llmisvc/v1; default all)
 	@for f in $(if $(ENV),envs/$(ENV)/tools.env,$(wildcard envs/*/*/tools.env)); do tools/install-tools.sh $$f; done
+
+new: ## Start a tutorial from the template: make new T=<id> [TITLE="..."] [OWNER=<github-handle>]
+	@test -n "$(T)" || { echo 'usage: make new T=<id> [TITLE="..."] [OWNER=<github-handle>]'; exit 2; }
+	./tut new $(T) $(if $(TITLE),--title "$(TITLE)") $(if $(OWNER),--owner $(OWNER))
 
 sync: ## Regenerate the <!-- tut:... --> regions
 	./tut sync

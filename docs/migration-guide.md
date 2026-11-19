@@ -43,11 +43,11 @@ Write down, before changing anything:
 ## 3. Create the directory
 
 ```bash skip
-cp -r tutorials/_template tutorials/<id>
+make new T=<id> TITLE="<English title>" OWNER=<github-handle>   # = ./tut new <id> ...
 rm tutorials/<id>/manifests/example.yaml
 ```
 
-Fill in `tutorial.yaml`. Start with `status: draft`. Pick `tags` from
+Fill in `tutorial.yaml` (it starts as `status: draft`, English only). Pick `tags` from
 `catalog/tags.yaml` (one `level` tag at least) and set `owners`. If the old
 tutorial was part of a series, add it to the matching
 `catalog/collections/<id>.yaml` in reading order (the planned members are

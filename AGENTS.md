@@ -30,6 +30,7 @@ make setup                  # .venv with the toolkit's Python packages (Python 3
 make doctor                 # Docker / host / environment check
 make config CLUSTER=<name>  # personal settings in .tut.env (shell > .tut.env > default)
 make tools ENV=<name>/vN    # download an environment's CLI tools ahead of time (optional)
+make new T=<id> [TITLE=".."] [OWNER=<handle>]   # new tutorial from tutorials/_template/ (= ./tut new)
 ./tut sync                  # regenerate <!-- tut:... --> regions — after every edit
 ./tut lint                  # all rules; must end with "0 error(s)"
 ./tut run <id> --dry-run    # the exact script CI will execute
