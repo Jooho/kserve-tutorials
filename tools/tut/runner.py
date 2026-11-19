@@ -55,7 +55,7 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
         for b in cleanups:
             out.append(f"  # --- {readme}:{b.line} (cleanup)")
             out.append("  (")
-            out.append(_indent(b.code, 4))
+            out.append(b.code)          # never indented: it would change heredocs and quoted text (CI-009)
             out.append("  )")
         out.append("  echo '::endgroup::'")
         out.append("}")
@@ -79,7 +79,7 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
                 "  set +e; trap - ERR",
                 "  (",
                 "    set -Eeuo pipefail; trap - ERR",
-                _indent(b.code, 4),
+                b.code,                 # byte for byte, see above
                 "  )",
                 "  __tut_rc=$?",
                 "  set -e; trap __tut_on_err ERR",
@@ -97,10 +97,6 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
     return "\n".join(out) + "\n", steps
 
 
-def _indent(code: str, n: int) -> str:
-    pad = " " * n
-    return "\n".join(pad + l if l.strip() else l for l in code.split("\n"))
-
 
 def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
         dry_run: bool = False, teardown_env: bool = False,
@@ -115,8 +111,14 @@ def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
     timeout = int(t.meta.get("timeout_minutes", 45)) * 60
     started = time.time()
     print(f"▶ {t.id} with KServe {version} ({len(steps)} steps, timeout {timeout // 60}m)", flush=True)
+    # Run the script from a file, not `bash -c <script>`: with -c the whole tutorial
+    # is in the shell's command line, so a step like `pkill -f "[p]ort-forward ..."`
+    # matched the runner itself and killed it (CI-008). A reader's terminal never
+    # has the script in its command line either.
+    script_file = state_file.with_suffix(".sh")
+    script_file.write_text(script)
     try:
-        rc = subprocess.run(["bash", "-c", script], env=env, timeout=timeout).returncode
+        rc = subprocess.run(["bash", str(script_file)], env=env, timeout=timeout).returncode
         failed_at = state_file.read_text().strip() if rc and state_file.exists() else None
     except subprocess.TimeoutExpired:
         rc, failed_at = 124, f"timeout after {timeout // 60} minutes"
@@ -124,6 +126,7 @@ def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
         if teardown_env and t.env_ref:
             subprocess.run([str(REPO_ROOT / "envs" / t.env_ref / "teardown.sh")])
         state_file.unlink(missing_ok=True)
+        script_file.unlink(missing_ok=True)
     result = {
         "tutorial": t.id,
         "kserve_version": version,

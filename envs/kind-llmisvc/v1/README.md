@@ -107,7 +107,7 @@ source "$HERE/tools.env"
 export PATH="$REPO/.tools/kind/$KIND:$REPO/.tools/kubectl/$KUBECTL:$REPO/.tools/helm/$HELM:$REPO/.tools/cloud-provider-kind/$CLOUD_PROVIDER_KIND:$PATH"
 
 # 1. Reuse the cluster when it was built by this profile with the same KServe version.
-if kind get clusters 2>/dev/null | grep -qx "$KIND_CLUSTER_NAME"; then
+if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
   marker=$(kubectl --context "kind-$KIND_CLUSTER_NAME" -n kube-system get configmap tut-env \
     -o jsonpath='{.data.profile}@{.data.kserve_version}' 2>/dev/null || true)
   if [[ "$marker" == "$PROFILE@$KSERVE_VERSION" ]]; then
@@ -172,7 +172,7 @@ done
 # Point the config at the renamed image so LLMInferenceServices can start.
 SCHEDULER_IMAGE="${TUT_SCHEDULER_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0}"
 if kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler -o yaml 2>/dev/null \
-    | grep -q "llm-d-inference-scheduler:v0.7.1"; then
+    | grep "llm-d-inference-scheduler:v0.7.1" >/dev/null; then   # not -q: SIGPIPE under pipefail (CI-007)
   log "patching kserve-config-llm-scheduler: llm-d-inference-scheduler:v0.7.1 -> $SCHEDULER_IMAGE"
   kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler -o json \
     | sed "s#ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1#${SCHEDULER_IMAGE}#g" \

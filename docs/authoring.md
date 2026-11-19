@@ -222,3 +222,47 @@ can be checked mechanically.
   `make test` stops with "make setup" before running when a package is missing.
 - **Evidence:** reproduced with `GIT_CONFIG_GLOBAL` set to a config with
   `commit.gpgsign = true` (4 failed before the fix, 71 passed after).
+
+### CI-007 `| grep -q` fails a check that is true
+- **What happened:** the first real run of the AI-drafted
+  `inferencegraph-ensemble` failed a verify block with exit 141 although the
+  image was there: `crictl images | grep -q ensemble-combiner`. The runner uses
+  `set -o pipefail`; `grep -q` exits at the first match, the writer gets
+  SIGPIPE (141), and the pipeline fails. It depends on output size and timing,
+  so it passes by hand and fails in CI. The same pattern in the env's
+  `setup.sh` (`kubectl get ... -o yaml | grep -q`, envs/kind-llmisvc/v1) could silently skip the
+  scheduler-image workaround.
+- **Rule:** after a command that can print more than a few lines, write
+  `| grep PATTERN >/dev/null`, not `| grep -q PATTERN`. Proposed lint rule
+  (needs approval): warn on `| grep -q` in run/verify blocks and env scripts.
+- **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18),
+  `README.md:444 (step 11/25 · verify) (exit 141)`; reproduced:
+  `set -o pipefail; seq 1 200000 | grep -q 1` → 141.
+
+### CI-008 The runner killed itself with a tutorial's `pkill -f`
+- **What happened:** the second run of `inferencegraph-ensemble` passed steps
+  1–20, then died with exit -15 (SIGTERM) and no failing step. Step 21 ran
+  `pkill -f "[p]ort-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80"`.
+  The runner passed the whole tutorial as `bash -c <script>`, so the runner's
+  own command line contained the port-forward command of the same step, and
+  pkill matched it. (The `[p]` trick only keeps pkill from matching itself.)
+  In a reader's terminal this cannot happen, so it was a CI-only failure.
+- **Rule:** the runner executes the script from a file (`bash <file>`), so no
+  step can match the runner by its command line. Tutorials may still prefer
+  stopping background processes by PID.
+- **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
+  (`exit_code: -15`, `failed_at: null`, during README.md:712); reproduced and
+  guarded by `test_runner_survives_pkill_f_of_a_command_in_the_same_tutorial`.
+
+### CI-009 The runner changed a block's code by indenting it
+- **What happened:** the third run of `inferencegraph-ensemble` reached step 22
+  (the first InferenceGraph request) and failed all 12 retries with
+  `IndentationError: unexpected indent`. The runner wrapped `retry=` verify
+  blocks (and cleanup blocks) in a loop and indented their code for
+  readability; that also indented the lines inside the `python3 -c '...'`
+  string. Heredocs would break the same way. The UI and a reader's terminal
+  run the code unchanged, so it only failed in CI.
+- **Rule:** the runner pastes block code byte for byte, never re-indented.
+- **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
+  (README.md:722, step 22/25); reproduced and guarded by
+  `test_runner_keeps_block_code_byte_for_byte`.
