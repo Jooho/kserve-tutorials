@@ -3,7 +3,7 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** 🚧 draft · **Tested with KServe:** v0.18.0 · **Environment:** — · **GPU:** not required
+> **Status:** 🚧 draft · **Tested with KServe:** v0.18.0, v0.17.0 · **Environment:** — · **GPU:** not required
 
 <!-- /tut -->
 

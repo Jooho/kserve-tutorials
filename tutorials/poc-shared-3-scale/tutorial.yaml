@@ -9,7 +9,7 @@ status: draft
 namespace: poc-shared-3-scale
 kserve:
   default: v0.18.0
-  tested: [v0.18.0]
+  tested: [v0.18.0, v0.17.0]   # PoC: two versions, to show the version picker
 tags: [beginner]
 requires: {gpu: false, cpu: 1, memory: 1Gi}
 langs: [en]

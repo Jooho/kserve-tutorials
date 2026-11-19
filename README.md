@@ -15,7 +15,7 @@ CI recently checked that it does.
 | [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-llmisvc/v1` | no |
 | [PoC 1 — Deploy a (fake) model](tutorials/poc-shared-1-deploy/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
 | [PoC 2 — Configure the model](tutorials/poc-shared-2-config/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
-| [PoC 3 — Scale the model](tutorials/poc-shared-3-scale/) | 🚧 draft | v0.18.0 | `beginner` | `—` | no |
+| [PoC 3 — Scale the model](tutorials/poc-shared-3-scale/) | 🚧 draft | v0.18.0, v0.17.0 | `beginner` | `—` | no |
 
 **Collections** (reading paths)
 
@@ -30,6 +30,7 @@ CI recently checked that it does.
 **By KServe version**
 
 - **v0.18.0**: [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [poc-shared-1-deploy](tutorials/poc-shared-1-deploy/), [poc-shared-2-config](tutorials/poc-shared-2-config/), [poc-shared-3-scale](tutorials/poc-shared-3-scale/)
+- **v0.17.0**: [poc-shared-3-scale](tutorials/poc-shared-3-scale/)
 
 <!-- /tut -->
 

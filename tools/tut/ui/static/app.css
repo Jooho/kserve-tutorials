@@ -206,3 +206,8 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 #edit.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
 [hidden] { display: none !important; }   /* `hidden` always wins over display: flex/grid */
+/* run version picker on a tutorial (only its tested versions) */
+select.chip.verchip { background: var(--panel); color: var(--text); cursor: pointer; padding: 1px 6px; }
+/* Versions view: the version filter gets its own full row above the tag filter */
+.filters { flex-wrap: wrap; }
+#verfilter { order: -1; flex: 1 1 100%; width: 100%; }

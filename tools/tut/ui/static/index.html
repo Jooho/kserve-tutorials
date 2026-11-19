@@ -17,9 +17,6 @@
     <div class="seg" id="termpos" title="Terminal position">
       <button data-pos="bottom" aria-label="Terminal at the bottom">⬓ Bottom</button><button data-pos="right" aria-label="Terminal on the right">◨ Right</button>
     </div>
-    <label class="field">KServe
-      <select id="version"></select>
-    </label>
     <div class="seg" id="lang">
       <button data-lang="en" class="on">EN</button><button data-lang="ko">KO</button>
     </div>
@@ -34,6 +31,7 @@
       <div class="filters">
         <select id="addtag" aria-label="Filter by tag"><option value="">＋ tag</option></select>
         <button id="showtags" class="icon-btn" aria-pressed="false" title="Show the tags of each tutorial">#&nbsp;tags</button>
+        <select id="verfilter" aria-label="KServe version" title="Show the tutorials tested on this KServe version" hidden></select>
         <select id="sort" aria-label="Sort"><option value="title">Sort: title</option><option value="status">Sort: status</option><option value="kserve">Sort: newest KServe</option></select>
       </div>
       <div id="tagchips"></div>
