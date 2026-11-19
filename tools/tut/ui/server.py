@@ -22,7 +22,7 @@ from aiohttp import WSMsgType, web
 from .. import lint as tlint
 from .. import markdown as tmd
 from .. import shared
-from ..model import REPO_ROOT, load_tutorials, version_key
+from ..model import LANGS, REPO_ROOT, load_tutorials, version_key
 from .session import ShellSession
 
 STATIC = Path(__file__).parent / "static"
@@ -187,6 +187,40 @@ class UI:
                         if tid in self.sessions else None},
         })
 
+    def source_path(self, tid: str, lang: str) -> Path:
+        """The README the editor may read and write: README.md or README.<lang>.md
+        of this tutorial, nothing else."""
+        t = self.tutorial_or_404(tid)
+        if lang not in LANGS:
+            raise web.HTTPBadRequest(text=f"unknown language {lang!r}")
+        p = t.readme(lang)
+        return p if p.exists() else t.readme("en")
+
+    async def api_source(self, request):
+        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"))
+        return web.json_response({"file": str(p.relative_to(self.root)), "text": p.read_text(),
+                                  "mtime": str(p.stat().st_mtime_ns)})
+
+    async def api_source_save(self, request):
+        """Save from the editor. `mtime` must match the file on disk, so a change
+        made in another editor meanwhile is never overwritten silently (409)."""
+        p = self.source_path(request.match_info["tid"], request.query.get("lang", "en"))
+        data = await request.json()
+        if str(data.get("mtime")) != str(p.stat().st_mtime_ns):
+            return web.json_response({"error": "changed on disk", "text": p.read_text(),
+                                      "mtime": str(p.stat().st_mtime_ns)}, status=409)
+        text = str(data.get("text", ""))
+        p.write_text(text if text.endswith("\n") else text + "\n")
+        return web.json_response({"mtime": str(p.stat().st_mtime_ns)})
+
+    async def api_sync(self, request):
+        """`./tut sync` from the editor: fills tut:use / header / setup in the files."""
+        from .. import generate
+        changed, errors = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: generate.sync(self.root))
+        return web.json_response({"changed": [str(p.relative_to(self.root)) for p in changed],
+                                  "errors": errors})
+
     async def api_stamp(self, request):
         """Changes whenever a file that shapes a tutorial page changes (live preview)."""
         latest = 0
@@ -314,6 +348,9 @@ class UI:
             web.get("/api/tutorials/{tid}/env", self.api_env),
             web.get("/api/tutorials/{tid}/problems", self.api_problems),
             web.get("/api/stamp", self.api_stamp),
+            web.get("/api/tutorials/{tid}/source", self.api_source),
+            web.put("/api/tutorials/{tid}/source", self.api_source_save),
+            web.post("/api/sync", self.api_sync),
             web.get("/ws/{tid}", self.ws),
             web.get("/files/{path:.+}", self.files),
             web.static("/static", STATIC),

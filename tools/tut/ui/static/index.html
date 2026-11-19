@@ -58,11 +58,24 @@
               <button class="btn" id="stop" title="Ctrl-C">■ Stop</button>
               <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹 Cleanup</button>
               <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻ New shell</button>
+              <button class="btn" id="edit" title="Edit this README next to its preview (Ctrl+S saves)">✎ Edit</button>
             </div>
           </div>
           <div class="problems" id="problems" hidden></div>
           <div class="envbar" id="envbar"></div>
-          <article class="doc" id="doc"></article>
+          <div class="docbody" id="docbody">
+            <aside class="editor" id="editor" hidden>
+              <div class="editor-head">
+                <span class="mono" id="editor-file"></span>
+                <span class="editor-state" id="editor-state"></span>
+                <button class="btn primary" id="editor-save" title="Ctrl+S">Save</button>
+                <button class="btn" id="editor-sync" title="Save, then ./tut sync: fills tut:use, header and setup in the files">Save &amp; sync</button>
+                <button class="btn" id="editor-close">Close</button>
+              </div>
+              <textarea id="editor-text" spellcheck="false" aria-label="README source"></textarea>
+            </aside>
+            <article class="doc" id="doc"></article>
+          </div>
         </div>
       </section>
 

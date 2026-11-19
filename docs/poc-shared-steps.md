@@ -56,8 +56,9 @@ The three PoC tutorials need no cluster: each step writes files under
 
 ## Writing a tutorial with live preview
 
-Keep `./tut ui` open on your tutorial and edit README.md in your editor. On
-save the page redraws within a second:
+Keep `./tut ui` open on your tutorial and either press **✎ Edit** (the README
+opens next to its preview; Ctrl+S saves, **Save & sync** also runs `./tut sync`)
+or edit README.md in your own editor. On save the page redraws within a second:
 
 - It shows the README **as it will be after `./tut sync`**: a new
   `<!-- tut:use name -->` line already shows the copied steps. A chip says
@@ -66,6 +67,10 @@ save the page redraws within a second:
   `tut:use modle: no tutorial defines it (defined: poc-config, poc-model)`).
 - Switch modes with "📚 open in path: …" (standalone → path) and "open
   standalone" (path → standalone).
+
+The editor never overwrites a newer file: if README.md changed elsewhere since
+it was opened, Save keeps your text and asks you to save again to overwrite it.
+It can only read and write this tutorial's README.md / README.<lang>.md.
 
 Note: while the file is not synced, the line numbers on blocks are those of the
 preview, not the file.
@@ -79,8 +84,8 @@ preview, not the file.
 | `tools/tut/lint.py` | D014: one definition per name, `use` an existing name, no markers inside a definition, do not use your own |
 | `schema/collection.schema.json`, `catalog.py` | collection `vars` |
 | `tools/tut/ui/*` | `?collection=` on a tutorial: hidden blocks, path bar (step n/m, prev/next, vars, show all, open standalone), hint on a failed covered verify; the shell gets the path's vars and restarts when the mode changes |
-| `tools/tut/ui/*` (preview) | the page and the run messages use the in-memory synced text; `/api/stamp` (reload on save), `/api/tutorials/<id>/problems` (lint for one tutorial); sidebar `# tags` toggle; learning paths in purple |
-| `tools/tests/test_shared.py` | sync, lint, coverage order, live preview, Problems |
+| `tools/tut/ui/*` (preview) | the page and the run messages use the in-memory synced text; `/api/stamp` (reload on save), `/api/tutorials/<id>/problems` (lint for one tutorial); ✎ Edit split view (`GET/PUT /api/tutorials/<id>/source`, `POST /api/sync`); sidebar `# tags` toggle; learning paths in purple |
+| `tools/tests/test_shared.py` | sync, lint, coverage order, live preview, Problems, editor read/save/conflict, sync |
 | `tools/tests/test_learning_path.py` | server API + real shell: standalone 7/7, path in order in the shared NS, path out of order fails at the covered check |
 | `tutorials/poc-shared-*`, `catalog/collections/poc-shared-steps.yaml` | the PoC itself |
 

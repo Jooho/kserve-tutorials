@@ -202,10 +202,12 @@ $("#version").addEventListener("change", (e) => {
 });
 $("#lang").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
+  const reopen = ED.open;
+  if (reopen && !closeEditor()) return;
   S.lang = b.dataset.lang; store.set("tut.lang", S.lang);
   document.querySelectorAll("#lang button").forEach((x) => x.classList.toggle("on", x === b));
   renderList();
-  if (S.current) loadDoc();
+  if (S.current) loadDoc().then(() => { if (reopen) openEditor(); });   // edit README.<lang>.md
 });
 document.querySelectorAll("#lang button").forEach((x) => x.classList.toggle("on", x.dataset.lang === S.lang));
 
@@ -216,6 +218,8 @@ function sessionVersionFor(t) {
 
 // ------------------------------------------------------------- document
 async function openTutorial(id, group = null) {
+  const reopen = ED.open;
+  if (reopen && id !== ED.tid && !closeEditor()) return;   // unsaved text: the user chose to stay
   S.current = id; S.group = group; S.showAll = false;
   const key = (group ? group + "/" : "") + id;
   store.set("tut.current", key); history.replaceState(null, "", "#" + key);
@@ -224,6 +228,7 @@ async function openTutorial(id, group = null) {
   await loadDoc();
   connect();
   loadEnv();
+  if (reopen && !ED.open) openEditor();              // keep editing, now this tutorial
 }
 
 async function loadDoc() {
@@ -253,19 +258,109 @@ async function loadProblems() {
        ${esc(p.message)}</li>`).join("")}</ul></details>`;
 }
 
+async function refreshPreview() {
+  const pane = $("#docpane"), top = pane.scrollTop, sel = S.selected;
+  await loadDoc();
+  pane.scrollTop = top;
+  if (sel != null && S.doc.blocks[sel]) select(sel, false);
+}
+
 async function pollChanges() {
   try {
     const { stamp } = await fetch("/api/stamp").then((r) => r.json());
     if (S.stamp && stamp !== S.stamp && S.current && !$("#doc-wrap").hidden) {
-      const pane = $("#docpane"), top = pane.scrollTop, sel = S.selected;
-      await loadDoc();
-      pane.scrollTop = top;
-      if (sel != null && S.doc.blocks[sel]) select(sel, false);
+      S.stamp = stamp;
+      await refreshPreview();
+      await editorSyncFromDisk();
     }
     S.stamp = stamp;
   } catch {}
 }
 setInterval(pollChanges, 1000);
+
+// ------------------------------------------------------------- editor (split view)
+// ✎ Edit opens the README next to its preview. Save (Ctrl+S) writes the file and
+// redraws the preview; editing the file elsewhere still works the same way.
+const ED = { open: false, tid: null, lang: null, mtime: null, saved: "" };
+const edText = $("#editor-text");
+const dirty = () => ED.open && edText.value !== ED.saved;
+const edState = (msg, cls = "") => { $("#editor-state").className = "editor-state " + cls; $("#editor-state").textContent = msg; };
+
+async function openEditor() {
+  if (!S.current) return;
+  const r = await fetch(`/api/tutorials/${S.current}/source?lang=${S.lang}`).then((r) => r.json());
+  Object.assign(ED, { open: true, tid: S.current, lang: S.lang, mtime: r.mtime, saved: r.text });
+  edText.value = r.text;
+  $("#editor-file").textContent = r.file;
+  $("#editor").hidden = false; $("#docbody").classList.add("editing"); $("#edit").classList.add("on");
+  edState("saved", "ok"); sizeEditor(); edText.focus();
+}
+
+function closeEditor() {
+  if (dirty() && !confirm("Discard the unsaved changes in the editor?")) return false;
+  ED.open = false;
+  $("#editor").hidden = true; $("#docbody").classList.remove("editing"); $("#edit").classList.remove("on");
+  return true;
+}
+
+async function saveEditor() {
+  if (!ED.open) return;
+  const text = edText.value;
+  const r = await fetch(`/api/tutorials/${ED.tid}/source?lang=${ED.lang}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, mtime: ED.mtime }) });
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 409) {           // someone saved the file elsewhere: keep our text, ask to save again
+    ED.mtime = d.mtime;
+    edState("the file changed on disk — your text is kept; Save again to overwrite it", "bad");
+    return;
+  }
+  if (!r.ok) { edState("save failed", "bad"); return; }
+  ED.mtime = d.mtime; ED.saved = text.endsWith("\n") ? text : text + "\n";
+  if (edText.value === text) edText.value = ED.saved;
+  edState("saved", "ok");
+  await refreshPreview();
+}
+
+// The file changed outside (another editor, git checkout): follow it unless we have unsaved text.
+async function editorSyncFromDisk() {
+  if (!ED.open) return;
+  const r = await fetch(`/api/tutorials/${ED.tid}/source?lang=${ED.lang}`).then((r) => r.json());
+  if (r.mtime === ED.mtime) return;
+  if (!dirty()) { ED.mtime = r.mtime; ED.saved = r.text; edText.value = r.text; edState("reloaded from disk", "ok"); }
+  else edState("the file changed on disk too — Save will ask before overwriting", "bad");
+}
+
+function sizeEditor() {
+  if (!ED.open) return;
+  const pane = $("#docpane"), tb = $(".toolbar");
+  const top = tb ? tb.offsetHeight : 0;
+  $("#editor").style.top = top + "px";
+  $("#editor").style.height = Math.max(240, pane.clientHeight - top - 8) + "px";
+}
+new ResizeObserver(sizeEditor).observe($("#docpane"));
+
+$("#edit").onclick = () => (ED.open ? closeEditor() : openEditor());
+$("#editor-close").onclick = () => closeEditor();
+$("#editor-save").onclick = () => saveEditor();
+$("#editor-sync").onclick = async () => {
+  if (dirty()) await saveEditor();
+  if (dirty()) return;                                  // save did not go through
+  const r = await fetch("/api/sync", { method: "POST" }).then((r) => r.json());
+  await editorSyncFromDisk();                           // sync rewrote the file: show it
+  await refreshPreview();
+  edState(r.errors.length ? "sync: " + r.errors.join("; ") : `synced (${r.changed.length} file(s) updated)`,
+          r.errors.length ? "bad" : "ok");
+};
+edText.addEventListener("input", () => edState(dirty() ? "● unsaved" : "saved", dirty() ? "dirty" : "ok"));
+edText.addEventListener("keydown", (e) => {
+  if (e.key === "Tab" && !e.shiftKey) {             // indent instead of leaving the editor
+    e.preventDefault(); document.execCommand("insertText", false, "  ");
+  }
+});
+addEventListener("keydown", (e) => {
+  if (ED.open && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveEditor(); }
+});
+addEventListener("beforeunload", (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
 
 function renderDoc() {
   const d = S.doc, t = currentMeta();

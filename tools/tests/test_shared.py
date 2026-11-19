@@ -95,3 +95,36 @@ def test_problems_panel_lists_this_tutorials_findings(repo):
     probs = ui_get(repo, "/api/tutorials/b/problems")["problems"]
     assert any(x["code"] == "D014" and "modle" in x["message"] for x in probs)
     assert all(x["file"].startswith("tutorials/b/") for x in probs)      # only this tutorial
+
+
+def ui_call(root, method, url, json=None):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    from tut.ui.server import UI
+
+    async def main():
+        ui = UI(root)
+        async with TestClient(TestServer(ui.app())) as c:
+            r = await c.request(method, url, json=json, headers={"X-Tut-Token": ui.token})
+            return r.status, await r.json() if r.content_type == "application/json" else await r.text()
+    return asyncio.run(main())
+
+
+def test_editor_reads_saves_and_never_overwrites_a_newer_file(repo):
+    readme = repo / "tutorials" / "b" / "README.md"
+    st, src = ui_call(repo, "GET", "/api/tutorials/b/source")
+    assert st == 200 and src["file"] == "tutorials/b/README.md" and src["text"] == readme.read_text()
+    st, r = ui_call(repo, "PUT", "/api/tutorials/b/source", {"text": src["text"] + "edited", "mtime": src["mtime"]})
+    assert st == 200 and readme.read_text().endswith("edited\n")
+    # saving with the old mtime (someone changed the file meanwhile) is refused, file untouched
+    st, r = ui_call(repo, "PUT", "/api/tutorials/b/source", {"text": "mine", "mtime": src["mtime"]})
+    assert st == 409 and r["text"].endswith("edited\n") and readme.read_text().endswith("edited\n")
+    # only this tutorial's README files
+    assert ui_call(repo, "GET", "/api/tutorials/b/source?lang=../../x")[0] == 400
+    assert ui_call(repo, "GET", "/api/tutorials/nope/source")[0] == 404
+
+
+def test_save_and_sync_fills_the_use_region(repo):
+    st, r = ui_call(repo, "POST", "/api/sync")
+    assert st == 200 and r["errors"] == [] and "tutorials/b/README.md" in r["changed"]
+    assert "Copied from a (tut:define model)" in (repo / "tutorials" / "b" / "README.md").read_text()
