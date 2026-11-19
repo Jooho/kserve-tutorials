@@ -1,0 +1,195 @@
+"""`./tut doctor`: is this machine ready to run the tutorials?
+
+Checks what most often makes "it works in CI" fail locally: Python, OS and
+architecture, Docker running and the CPU/memory it may use, the pinned tool
+versions (tools/versions.env), an existing kind cluster, free disk.
+Runs in `make setup`, in CI and before a tutorial, so it is tested all the time.
+"""
+from __future__ import annotations
+
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+from .model import REPO_ROOT, load_tutorials
+
+OK, WARN, FAIL = "ok", "warn", "fail"
+ICON = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
+GIB = 1024 ** 3
+
+
+@dataclass
+class Check:
+    name: str
+    status: str
+    detail: str
+    fix: str = ""
+
+
+TOOL_KEYS = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
+             "CLOUD_PROVIDER_KIND": "cloud-provider-kind"}
+PY_MODULES = ("yaml", "jsonschema", "aiohttp", "markdown", "mkdocs", "pytest")
+
+
+def _run(cmd: list[str], timeout: float = 15) -> tuple[int, str]:
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, (p.stdout + p.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 127, str(e)
+
+
+def env_tools(env_ref: str, root: Path = REPO_ROOT) -> dict[str, str]:
+    """{tool: version} from envs/<env>/tools.env."""
+    out = {}
+    f = root / "envs" / env_ref / "tools.env"
+    if f.exists():
+        for line in f.read_text().splitlines():
+            m = re.match(r"^\s*([A-Z_]+)\s*=\s*(\S+)", line)
+            if m and m.group(1) in TOOL_KEYS:
+                out[TOOL_KEYS[m.group(1)]] = m.group(2)
+    return out
+
+
+def requirements(root: Path, tutorial: str | None) -> tuple[int, float, str]:
+    """CPU and memory (GiB) the selected tutorial (or the most demanding one) needs."""
+    cpu, mem, who = 0, 0.0, ""
+    for t in load_tutorials(root):
+        if t.errors or (tutorial and t.id != tutorial):
+            continue
+        req = t.meta.get("requires") or {}
+        c = int(req.get("cpu", 0))
+        m = str(req.get("memory", "0Gi"))
+        g = float(m[:-2]) if m.endswith("Gi") else float(m[:-2]) / 1024
+        if (c, g) > (cpu, mem):
+            cpu, mem, who = c, g, t.id
+    return cpu, mem, who
+
+
+def toolkit_checks() -> list[Check]:
+    """What ./tut itself needs (make setup)."""
+    import importlib.util
+    v = sys.version_info
+    checks = [Check("python", OK if v >= (3, 11) else FAIL, platform.python_version(),
+                    "" if v >= (3, 11) else "install Python 3.11+")]
+    missing = [m for m in PY_MODULES if importlib.util.find_spec(m) is None]
+    venv = sys.prefix != sys.base_prefix
+    checks.append(Check("python packages", FAIL if missing else OK,
+                        f"missing: {', '.join(missing)}" if missing else
+                        ("installed in .venv" if venv else "installed (no venv)"),
+                        "make setup" if missing else ""))
+    return checks
+
+
+def host_checks(root: Path, tutorial: str | None) -> list[Check]:
+    """Can this machine run kind? We check, we do not install (Docker is yours)."""
+    checks: list[Check] = []
+    osname, arch = platform.system(), platform.machine().lower()
+    arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(arch, arch)
+    if osname == "Linux" and arch == "amd64":
+        checks.append(Check("platform", OK, f"linux/{arch} (same as CI)"))
+    elif osname in ("Linux", "Darwin") and arch in ("amd64", "arm64"):
+        extra = (" — cloud-provider-kind needs sudo; LoadBalancer IPs are reached via localhost"
+                 if osname == "Darwin" else "")
+        checks.append(Check("platform", WARN, f"{osname.lower()}/{arch}: not covered by CI{extra}",
+                            "report problems with the issue template (docs/backlog.md B3)"))
+    else:
+        checks.append(Check("platform", FAIL, f"{osname}/{arch}", "use Linux, macOS or WSL2"))
+
+    for tool in ("git", "curl"):
+        checks.append(Check(tool, OK if shutil.which(tool) else FAIL,
+                            "found" if shutil.which(tool) else "not found",
+                            "" if shutil.which(tool) else f"install {tool}"))
+
+    if not shutil.which("docker"):
+        checks.append(Check("docker", FAIL, "not installed",
+                            "install Docker (Docker Desktop, colima, Docker Engine); we do not install it"))
+    else:
+        rc, out = _run(["docker", "info", "--format", "{{json .}}"])
+        if rc != 0:
+            checks.append(Check("docker", FAIL, "installed but not running", "start Docker"))
+        else:
+            info = json.loads(out)
+            ncpu, memg = info.get("NCPU", 0), info.get("MemTotal", 0) / GIB
+            need_cpu, need_mem, who = requirements(root, tutorial)
+            low = ncpu < need_cpu or memg + 0.5 < need_mem
+            checks.append(Check(
+                "docker", WARN if low else OK,
+                f"{info.get('ServerVersion', '?')}, {ncpu} CPU, {memg:.1f} GiB"
+                + (f"; {who} asks for {need_cpu} CPU, {need_mem:g} GiB" if who else ""),
+                "give Docker more CPU / memory" if low else ""))
+
+    free = shutil.disk_usage(Path.home()).free / GIB
+    checks.append(Check("disk", OK if free >= 20 else WARN, f"{free:.0f} GiB free",
+                        "" if free >= 20 else "images and models need ~20 GiB"))
+    return checks
+
+
+def env_checks(root: Path, env_ref: str) -> list[Check]:
+    """The env's pinned CLI tools (installed by its setup step) and its cluster."""
+    checks: list[Check] = []
+    tools = env_tools(env_ref, root)
+    for name, version in tools.items():
+        path = root / ".tools" / name / version / name
+        checks.append(Check(f"{name} {version}", OK,
+                            "downloaded (.tools/)" if path.exists()
+                            else "not downloaded yet: the setup step installs it"))
+    kind = root / ".tools" / "kind" / tools.get("kind", "-") / "kind"
+    kind_cmd = str(kind) if kind.exists() else shutil.which("kind")
+    cluster = os.environ.get("KIND_CLUSTER_NAME", "kind")
+    if kind_cmd and shutil.which("docker"):
+        _, out = _run([kind_cmd, "get", "clusters"])
+        if cluster not in out.split():
+            checks.append(Check("kind cluster", OK, f"no '{cluster}' cluster yet (setup creates it)"))
+        else:
+            kubectl = root / ".tools" / "kubectl" / tools.get("kubectl", "-") / "kubectl"
+            kcmd = str(kubectl) if kubectl.exists() else (shutil.which("kubectl") or "kubectl")
+            rc, marker = _run([kcmd, "--context", f"kind-{cluster}", "-n", "kube-system", "get",
+                               "configmap", "tut-env", "-o",
+                               "jsonpath={.data.profile}@{.data.kserve_version}"])
+            if rc == 0 and marker:
+                checks.append(Check("kind cluster", OK, f"'{cluster}' exists, built as {marker}"))
+            else:
+                checks.append(Check("kind cluster", WARN,
+                                    f"'{cluster}' exists but was not built by a tutorial environment",
+                                    "setup stops instead of changing it: delete it, set "
+                                    "TUT_ENV_RECREATE=1, or use another KIND_CLUSTER_NAME"))
+    return checks
+
+
+def run_checks(root: Path = REPO_ROOT, tutorial: str | None = None,
+               toolkit_only: bool = False) -> list[tuple[str, list[Check]]]:
+    sections = [("toolkit (./tut, make setup)", toolkit_checks())]
+    if toolkit_only:
+        return sections
+    sections.append(("host: can it run kind? (you install Docker, git, curl)",
+                     host_checks(root, tutorial)))
+    envs = sorted({t.env_ref for t in load_tutorials(root)
+                   if t.env_ref and not t.errors and (not tutorial or t.id == tutorial)})
+    for e in envs:
+        sections.append((f"environment {e} (tools are installed by its setup step)",
+                         env_checks(root, e)))
+    return sections
+
+
+def report(sections: list[tuple[str, list[Check]]], as_json: bool = False) -> int:
+    checks = [c for _, cs in sections for c in cs]
+    if as_json:
+        print(json.dumps([{"section": n, **c.__dict__} for n, cs in sections for c in cs], indent=2))
+    else:
+        for name, cs in sections:
+            print(f"\n{name}")
+            for c in cs:
+                print(f"  {ICON[c.status]} {c.name:30} {c.detail}")
+                if c.fix and c.status != OK:
+                    print(f"     {'':24} → {c.fix}")
+        n_fail = sum(c.status == FAIL for c in checks)
+        n_warn = sum(c.status == WARN for c in checks)
+        print(f"\n{n_fail} problem(s), {n_warn} warning(s)")
+    return 1 if any(c.status == FAIL for c in checks) else 0

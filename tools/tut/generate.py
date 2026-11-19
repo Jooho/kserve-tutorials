@@ -54,6 +54,23 @@ def render_include(readme_dir: Path, args: list[str]) -> str:
     return f"{fence}{info}\n{body}\n{fence}"
 
 
+def env_tool_dirs(env_ref: str, root: Path = REPO_ROOT) -> list[str]:
+    """`$REPO_ROOT/.tools/<tool>/<version>` for every tool in envs/<env>/tools.env."""
+    f = root / "envs" / env_ref / "tools.env"
+    if not f.exists():
+        return []
+    names = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
+             "CLOUD_PROVIDER_KIND": "cloud-provider-kind"}
+    out = []
+    for line in f.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if "=" in line:
+            k, v = (x.strip() for x in line.split("=", 1))
+            if k in names and v:
+                out.append(f"$REPO_ROOT/.tools/{names[k]}/{v}")
+    return out
+
+
 def render_setup(t: Tutorial) -> str:
     env = t.env_ref
     lines = [
@@ -65,6 +82,10 @@ def render_setup(t: Tutorial) -> str:
         'export TUT_LIB="$REPO_ROOT/lib"',
     ]
     if env:
+        dirs = env_tool_dirs(env)
+        if dirs:
+            lines.append("# pinned CLI tools of the environment, for this shell only")
+            lines.append(f'export PATH="{":".join(dirs)}:$PATH"')
         lines.append(f'"$REPO_ROOT/envs/{env}/setup.sh"')
     lines += [
         'kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -',

@@ -6,7 +6,7 @@ description: >
 frozen: false          # -> true once a stable tutorial has passed on it
 kserve:
   min: v0.17.1          # first tag that ships hack/kserve-install.sh --type llmisvc
-requires: [docker, kubectl, git, go]
+requires: [docker, git, curl]   # host prerequisites the user installs; CLI tools come from tools.env
 inputs:
   KSERVE_VERSION: KServe tag to install (required, set by the tutorial's setup block)
   KIND_CLUSTER_NAME: "Kind cluster name (default: kind)"

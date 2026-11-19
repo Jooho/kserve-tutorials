@@ -62,6 +62,11 @@ generated `<!-- tut:setup -->` region [D006]. Files are shown with
 - `frozen: true` parts never change [E002, L003]. To change one, copy it to
   `vN+1`, change the copy, move tutorials over one PR at a time.
 - A stable tutorial may only use frozen parts [T007, L004].
+- **Tools belong to the environment.** An environment pins the CLI tools it
+  needs in `tools.env`; its `setup.sh` installs them into `.tools/` and the
+  generated setup block puts them on `PATH` for that shell only. Tutorials
+  never install tools or assume system ones. Docker is a user prerequisite,
+  checked by `./tut doctor`, never installed.
 - **Installation robustness belongs in the environment, not in tutorials.**
   If a tutorial needs a retry or a readiness wait because the platform was not
   really ready, fix the environment profile.
