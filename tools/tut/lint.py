@@ -486,6 +486,51 @@ def _images(node):
             yield from _images(x)
 
 
+TRANSLATION_STATES = {
+    "current": "up to date",
+    "behind": "behind README.md (the English source changed since)",
+    "unmarked": "file exists, never marked (run `translation mark` after translating)",
+    "missing": "not translated",
+}
+
+
+def translation_state(t: Tutorial, lang: str) -> str:
+    """current | behind | unmarked | missing (see TRANSLATION_STATES)."""
+    p = t.readme(lang)
+    if not p.exists():
+        return "missing"
+    m = TRANSLATION_RE.search(p.read_text())
+    if not m:
+        return "unmarked"
+    return "current" if m.group(2) == source_hash(t.readme("en").read_text()) else "behind"
+
+
+def init_translation(t: Tutorial, lang: str) -> Path:
+    """Start a translation: copy README.md (same blocks, so D011 holds) and add
+    the language to `langs` in tutorial.yaml. Not marked: that happens after
+    the text is actually translated."""
+    target = t.readme(lang)
+    if target.exists():
+        raise FileExistsError(f"tutorials/{t.id}/{target.name} already exists")
+    meta_file = t.path / "tutorial.yaml"
+    text = meta_file.read_text()
+    if lang not in t.langs:
+        # edit the text (not a YAML round-trip) so comments and layout survive
+        flow = re.search(r"^langs:[ \t]*\[([^\]]*)\]", text, re.M)
+        block = re.search(r"^langs:[ \t]*\n((?:[ \t]*-[ \t]*\S+[ \t]*\n)+)", text, re.M)
+        if flow:
+            langs = [x.strip() for x in flow.group(1).split(",") if x.strip()] + [lang]
+            text = text[:flow.start()] + f"langs: [{', '.join(langs)}]" + text[flow.end():]
+        elif block:
+            indent = re.match(r"[ \t]*", block.group(1)).group(0)
+            text = text[:block.end()] + f"{indent}- {lang}\n" + text[block.end():]
+        else:
+            raise ValueError("tutorial.yaml: cannot find `langs`; add it, e.g. `langs: [en]`")
+        meta_file.write_text(text)
+    target.write_text(t.readme("en").read_text())
+    return target
+
+
 def mark_translation(t: Tutorial, lang: str) -> Path:
     en = t.readme("en").read_text()
     tr_path = t.readme(lang)

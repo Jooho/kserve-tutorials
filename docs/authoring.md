@@ -113,8 +113,18 @@ being replaced) → `archived` (kept, not run). Deprecating or archiving needs a
 
 ## 7. Translations
 
-`README.md` is the source. A translation has the same shell blocks in the same
-order [D011]; after translating run `./tut translation mark <id> <lang>` [D010].
+`README.md` is the source. `<id>` is the tutorial's directory name.
+
+```bash skip
+./tut translation                     # every translation's state and the next step
+./tut translation init <id> ko        # copies README.md to README.ko.md, adds ko to langs
+#   translate prose and code comments; keep the code blocks themselves
+./tut translation mark <id> ko        # only after the text really matches README.md
+```
+
+A translation has the same shell blocks in the same order [D011]. When
+README.md changes later, lint warns that the translation is behind [D010] and
+the UI shows it to readers until someone updates it and marks it again.
 
 ## 8. Before you open a PR
 
