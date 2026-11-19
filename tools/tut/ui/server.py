@@ -67,10 +67,23 @@ class UI:
             return None, None
         return col, col.members.index(tid)
 
+    def preview(self, t, path: Path, lang: str) -> tuple[str, bool, str | None]:
+        """The README as it will be after `./tut sync` (tut:use filled in, header,
+        setup), computed in memory: what you see while writing is what runs.
+        Returns (text, the file still needs sync, sync error)."""
+        from .. import generate
+        raw = path.read_text()
+        try:
+            new = generate.sync_file(path, t, lang, list(self.tutorials().values()), self.root)
+        except generate.SyncError as e:
+            return raw, False, str(e)
+        return new, new != raw, None
+
     def doc_blocks(self, tid: str, lang: str):
+        # The page and the "run" messages use the same text, so block indexes match.
         t = self.tutorial_or_404(tid)
         path = t.readme(lang) if t.readme(lang).exists() else t.readme("en")
-        text = path.read_text()
+        text, _, _ = self.preview(t, path, lang)
         return t, path, text, tmd.parse(text)
 
     # ----------------------------------------------------------- middleware
@@ -128,6 +141,7 @@ class UI:
         tid = request.match_info["tid"]
         lang = request.query.get("lang", "en")
         t, path, text, doc = self.doc_blocks(tid, lang)
+        _, stale, sync_error = self.preview(t, path, lang)
         col, pos = self.learning_path(tid, request.query.get("collection"))
         names = shared.block_names(doc)
         covered = shared.covered(col.members, tid, self.tutorials()) if col else {}
@@ -162,6 +176,7 @@ class UI:
             "translation": None if lang == "en" else tlint.translation_state(t, lang),
             "file": str(path.relative_to(self.root)), "html": html, "blocks": blocks,
             "states": self.block_states.get(tid, {}),
+            "preview": {"stale": stale, "error": sync_error},
             "group": None if not col else {
                 "id": col.id, "title": {l: col.text("title", l) for l in ("en", "ko")},
                 "n": pos + 1, "total": len(col.members), "vars": col.vars,
@@ -171,6 +186,33 @@ class UI:
                         "kserve_version": self.sessions[tid].kserve_version
                         if tid in self.sessions else None},
         })
+
+    async def api_stamp(self, request):
+        """Changes whenever a file that shapes a tutorial page changes (live preview)."""
+        latest = 0
+        for pattern in ("tutorials/*/README*.md", "tutorials/*/tutorial.yaml",
+                        "tutorials/*/manifests/*", "catalog/*.yaml", "catalog/collections/*.yaml"):
+            for p in self.root.glob(pattern):
+                try:
+                    latest = max(latest, p.stat().st_mtime_ns)
+                except OSError:
+                    pass
+        return web.json_response({"stamp": str(latest)})
+
+    async def api_problems(self, request):
+        """Lint findings for one tutorial (its directory), for the Problems panel."""
+        t = self.tutorial_or_404(request.match_info["tid"])
+        findings = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: tlint.Linter(self.root).run())
+        base = t.path.resolve()
+        out = []
+        for f in findings:
+            p = f.path if f.path.is_absolute() else self.root / f.path
+            if p.resolve().is_relative_to(base):
+                out.append({"severity": f.severity, "code": f.code, "line": f.line,
+                            "file": str(p.resolve().relative_to(self.root.resolve())),
+                            "message": f.message})
+        return web.json_response({"problems": out})
 
     async def api_env(self, request):
         t = self.tutorial_or_404(request.match_info["tid"])
@@ -270,6 +312,8 @@ class UI:
             web.get("/api/catalog", self.api_catalog),
             web.get("/api/tutorials/{tid}", self.api_tutorial),
             web.get("/api/tutorials/{tid}/env", self.api_env),
+            web.get("/api/tutorials/{tid}/problems", self.api_problems),
+            web.get("/api/stamp", self.api_stamp),
             web.get("/ws/{tid}", self.ws),
             web.get("/files/{path:.+}", self.files),
             web.static("/static", STATIC),

@@ -54,6 +54,22 @@ The three PoC tutorials need no cluster: each step writes files under
    only runs the verifies and its own step, in `NS=poc-path` with
    `MODEL=path-model`.
 
+## Writing a tutorial with live preview
+
+Keep `./tut ui` open on your tutorial and edit README.md in your editor. On
+save the page redraws within a second:
+
+- It shows the README **as it will be after `./tut sync`**: a new
+  `<!-- tut:use name -->` line already shows the copied steps. A chip says
+  "preview · file not synced — run make precommit" until you sync.
+- A **Problems** panel lists this tutorial's lint findings (for example D014
+  `tut:use modle: no tutorial defines it (defined: poc-config, poc-model)`).
+- Switch modes with "📚 open in path: …" (standalone → path) and "open
+  standalone" (path → standalone).
+
+Note: while the file is not synced, the line numbers on blocks are those of the
+preview, not the file.
+
 ## What changed
 
 | Part | Change |
@@ -63,7 +79,9 @@ The three PoC tutorials need no cluster: each step writes files under
 | `tools/tut/lint.py` | D014: one definition per name, `use` an existing name, no markers inside a definition, do not use your own |
 | `schema/collection.schema.json`, `catalog.py` | collection `vars` |
 | `tools/tut/ui/*` | `?collection=` on a tutorial: hidden blocks, path bar (step n/m, prev/next, vars, show all, open standalone), hint on a failed covered verify; the shell gets the path's vars and restarts when the mode changes |
-| `tools/tests/test_shared.py` | sync, lint, coverage order |
+| `tools/tut/ui/*` (preview) | the page and the run messages use the in-memory synced text; `/api/stamp` (reload on save), `/api/tutorials/<id>/problems` (lint for one tutorial); sidebar `# tags` toggle; learning paths in purple |
+| `tools/tests/test_shared.py` | sync, lint, coverage order, live preview, Problems |
+| `tools/tests/test_learning_path.py` | server API + real shell: standalone 7/7, path in order in the shared NS, path out of order fails at the covered check |
 | `tutorials/poc-shared-*`, `catalog/collections/poc-shared-steps.yaml` | the PoC itself |
 
 Runner and CI are unchanged: they always run the whole README (standalone).

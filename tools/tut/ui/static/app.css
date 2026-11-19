@@ -174,3 +174,11 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 #list .tags { display: none; }
 #list.show-tags .tags { display: flex; }
 #showtags.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+/* live preview: Problems panel and chips */
+.problems { margin: 10px 0 0; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--warn); }
+.problems.bad { border-color: var(--bad); }
+.problems summary { cursor: pointer; font-weight: 600; }
+.problems ul { margin: 6px 0 2px; padding-left: 18px; }
+.problems li { margin: 2px 0; }
+.chip.bad { border-color: var(--bad); color: var(--bad); }
+.chip.pathchip { color: var(--path); border-color: var(--path); text-decoration: none; }

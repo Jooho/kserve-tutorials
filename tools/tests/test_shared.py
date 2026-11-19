@@ -61,3 +61,37 @@ def test_covered_only_counts_earlier_members(repo):
     assert shared.covered(["a", "b"], "b", ts) == {"model": "a"}
     assert shared.covered(["b", "a"], "b", ts) == {}          # b comes first: nothing covered
     assert shared.covered(["a", "b"], "a", ts) == {}
+
+
+def ui_get(root, url):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    from tut.ui.server import UI
+
+    async def main():
+        ui = UI(root)
+        async with TestClient(TestServer(ui.app())) as c:
+            r = await c.get(url, headers={"X-Tut-Token": ui.token})
+            assert r.status == 200
+            return await r.json()
+    return asyncio.run(main())
+
+
+def test_live_preview_shows_the_synced_text_before_sync(repo):
+    """While writing: the page shows what sync will produce, says the file is not
+    synced yet, and the run messages use the same block indexes."""
+    d = ui_get(repo, "/api/tutorials/b")                        # b has an empty tut:use, not synced
+    assert d["preview"] == {"stale": True, "error": None}
+    assert any(blk["shared"] == "model" and "echo deploy" in blk["code"] for blk in d["blocks"])
+    generate.sync(repo)
+    assert ui_get(repo, "/api/tutorials/b")["preview"] == {"stale": False, "error": None}
+
+
+def test_problems_panel_lists_this_tutorials_findings(repo):
+    p = repo / "tutorials" / "b" / "README.md"
+    p.write_text(p.read_text().replace("tut:use model", "tut:use modle"))
+    d = ui_get(repo, "/api/tutorials/b")
+    assert d["preview"]["error"].startswith("tut:use modle: no tutorial defines it")
+    probs = ui_get(repo, "/api/tutorials/b/problems")["problems"]
+    assert any(x["code"] == "D014" and "modle" in x["message"] for x in probs)
+    assert all(x["file"].startswith("tutorials/b/") for x in probs)      # only this tutorial

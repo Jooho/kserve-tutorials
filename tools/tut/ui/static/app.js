@@ -232,7 +232,40 @@ async function loadDoc() {
   S.doc = d; S.states = {}; S.times = {};
   for (const [k, v] of Object.entries(d.states || {})) { S.states[k] = v.state; S.times[k] = v.ts; }
   renderDoc();
+  loadProblems();
 }
+
+// ------------------------------------------------------------- live preview (authoring)
+// Save README.md in your editor: the page redraws within a second. The server
+// shows it as it will be after `./tut sync` (tut:use filled in), and the
+// Problems panel lists this tutorial's lint findings.
+async function loadProblems() {
+  const id = S.current;
+  const r = await fetch(`/api/tutorials/${id}/problems`).then((r) => r.json()).catch(() => null);
+  if (!r || id !== S.current) return;
+  const box = $("#problems");
+  const errs = r.problems.filter((p) => p.severity === "error").length;
+  box.hidden = !r.problems.length;
+  box.className = "problems " + (errs ? "bad" : "warn");
+  box.innerHTML = `<details ${errs ? "open" : ""}><summary>${errs ? "✗" : "⚠"} ${r.problems.length} problem(s) in this tutorial
+    <span class="muted">(./tut lint)</span></summary><ul>${r.problems.map((p) =>
+      `<li><span class="mono">${esc(p.code)}</span> <span class="mono muted">${esc(p.file)}${p.line ? ":" + p.line : ""}</span>
+       ${esc(p.message)}</li>`).join("")}</ul></details>`;
+}
+
+async function pollChanges() {
+  try {
+    const { stamp } = await fetch("/api/stamp").then((r) => r.json());
+    if (S.stamp && stamp !== S.stamp && S.current && !$("#doc-wrap").hidden) {
+      const pane = $("#docpane"), top = pane.scrollTop, sel = S.selected;
+      await loadDoc();
+      pane.scrollTop = top;
+      if (sel != null && S.doc.blocks[sel]) select(sel, false);
+    }
+    S.stamp = stamp;
+  } catch {}
+}
+setInterval(pollChanges, 1000);
 
 function renderDoc() {
   const d = S.doc, t = currentMeta();
@@ -293,6 +326,8 @@ $("#chips").addEventListener("click", (e) => {
   if (open) { e.preventDefault(); openTutorial(open.dataset.open, S.group); return; }
   if (e.target.closest('[data-act="toggle-hidden"]')) { S.showAll = !S.showAll; renderDoc(); }
   if (e.target.closest('[data-act="standalone"]')) openTutorial(S.current, null);
+  const p = e.target.closest("[data-path]");
+  if (p) { e.preventDefault(); openTutorial(S.current, p.dataset.path); }
 });
 
 function renderChips() {
@@ -308,8 +343,14 @@ function renderChips() {
     S.doc && S.doc.lang !== S.lang ? `<span class="chip warn">no ${S.lang.toUpperCase()} translation — showing English</span>` : "",
     S.doc && S.doc.translation === "behind" ? `<span class="chip warn" title="The English README changed after this translation was made">${S.lang.toUpperCase()} translation is behind the English version</span>` : "",
     S.doc && S.doc.translation === "unmarked" ? `<span class="chip warn">${S.lang.toUpperCase()} translation not reviewed yet</span>` : "",
+    S.doc?.preview?.error ? `<span class="chip bad" title="${esc(S.doc.preview.error)}">✗ sync: ${esc(S.doc.preview.error)}</span>` : "",
+    S.doc?.preview?.stale ? `<span class="chip warn" title="The page shows the README as it will be after ./tut sync; the file itself is not updated yet">preview · file not synced — run make precommit</span>` : "",
+    ...(S.group ? [] : pathsOf(S.current).map((c) =>
+      `<a href="#" class="chip pathchip" data-path="${c.id}" title="Open as a step of this learning path">📚 open in path: ${esc(c.title[S.lang] || c.title.en)}</a>`)),
   ].join("") + groupBar();
 }
+
+const pathsOf = (id) => (S.catalog?.collections || []).filter((c) => c.items.some((r) => r.shown === id || r.member === id));
 
 function groupBar() {
   const g = S.doc?.group;
