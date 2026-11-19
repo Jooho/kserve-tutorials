@@ -19,6 +19,7 @@ from pathlib import Path
 import markdown as md
 from aiohttp import WSMsgType, web
 
+from .. import lint as tlint
 from .. import markdown as tmd
 from ..model import REPO_ROOT, load_tutorials, version_key
 from .session import ShellSession
@@ -139,6 +140,7 @@ class UI:
                       lambda m: f'{m.group(1)}="{base}{m.group(2)}"', html)
         return web.json_response({
             "id": tid, "lang": lang if t.readme(lang).exists() else "en",
+            "translation": None if lang == "en" else tlint.translation_state(t, lang),
             "file": str(path.relative_to(self.root)), "html": html, "blocks": blocks,
             "states": self.block_states.get(tid, {}),
             "session": {"alive": tid in self.sessions and self.sessions[tid].alive,

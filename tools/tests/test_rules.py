@@ -409,3 +409,23 @@ def test_runner_twice_catches_steps_that_break_on_repeat(tmp_path, monkeypatch):
     assert "pass 2/2" in json.loads(report.read_text())["failed_at"]
     assert runner.run(ts["robust"], twice=True) == 0
     assert runner.run(ts["once"], twice=True) == 0                # once-blocks are not repeated
+
+
+def test_translation_flow_init_mark_behind(repo):
+    d = make_tut(repo, "t")
+    generate.sync(repo)
+    t = next(x for x in load_tutorials(repo) if x.id == "t")
+    assert lint.translation_state(t, "ko") == "missing"
+    lint.init_translation(t, "ko")                                   # copy + langs
+    assert yaml.safe_load((d / "tutorial.yaml").read_text())["langs"] == ["en", "ko"]
+    t = next(x for x in load_tutorials(repo) if x.id == "t")
+    assert lint.translation_state(t, "ko") == "unmarked"
+    assert "D010" in {f.code for f in lint.Linter(repo).run() if f.severity == "error"}
+    lint.mark_translation(t, "ko")
+    assert lint.translation_state(t, "ko") == "current"
+    assert codes(repo) == []
+    (d / "README.md").write_text((d / "README.md").read_text() + "\nMore text.\n")
+    assert lint.translation_state(t, "ko") == "behind"
+    import pytest
+    with pytest.raises(FileExistsError):
+        lint.init_translation(t, "ko")

@@ -237,7 +237,9 @@ function renderChips() {
     untested ? `<span class="chip warn">not tested on ${S.version} — using ${v}</span>` : "",
     t.env ? `<span class="chip">env ${t.env}</span>` : "",
     ...t.uses.map((u) => `<span class="chip">lib ${u}</span>`),
-    S.doc && S.doc.lang !== S.lang ? `<span class="chip warn">no ${S.lang.toUpperCase()} translation</span>` : "",
+    S.doc && S.doc.lang !== S.lang ? `<span class="chip warn">no ${S.lang.toUpperCase()} translation — showing English</span>` : "",
+    S.doc && S.doc.translation === "behind" ? `<span class="chip warn" title="The English README changed after this translation was made">${S.lang.toUpperCase()} translation is behind the English version</span>` : "",
+    S.doc && S.doc.translation === "unmarked" ? `<span class="chip warn">${S.lang.toUpperCase()} translation not reviewed yet</span>` : "",
   ].join("");
 }
 

@@ -34,8 +34,10 @@ make tools ENV=<name>/vN    # download an environment's CLI tools ahead of time 
 ./tut run <id> --dry-run    # the exact script CI will execute
 ./tut run <id>              # execute for real (Docker + kubectl + Kind)
 ./tut ui                    # local web UI: run a tutorial step by step
-./tut list
-./tut translation mark <id> ko
+./tut list [--tag T] [--status S]   # tutorials with versions, env, languages, collections, tags
+./tut translation              # state of every translation + next step
+./tut translation init <id> ko # start one (copies README.md, adds ko to langs)
+./tut translation mark <id> ko # after translating: matches the current README.md
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
 

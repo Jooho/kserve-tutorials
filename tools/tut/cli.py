@@ -10,15 +10,61 @@ from .model import REPO_ROOT, load_tutorials
 
 
 def _tutorial(tid: str):
-    for t in load_tutorials(REPO_ROOT, include_template=False):
+    import difflib
+    ts = load_tutorials(REPO_ROOT, include_template=False)
+    for t in ts:
         if t.id == tid:
             return t
-    sys.exit(f"unknown tutorial {tid!r} (see ./tut list)")
+    near = difflib.get_close_matches(tid, [t.id for t in ts], n=1)
+    hint = f"did you mean {near[0]!r}? " if near else ""
+    sys.exit(f"unknown tutorial {tid!r}: {hint}A tutorial id is its directory name under "
+             f"tutorials/; `./tut list` shows them.")
+
+
+STATUS_ICON = {"draft": "🚧", "stable": "✅", "deprecated": "⚠️ ", "archived": "🗄️ "}
+LANG_NAME = {"en": "English", "ko": "Korean"}
 
 
 def cmd_list(a):
-    for t in load_tutorials(REPO_ROOT):
-        print(f"{t.id:32} {t.status:11} kserve={','.join(t.kserve_tested):24} env={t.env_ref}")
+    from . import catalog
+    ts = [t for t in load_tutorials(REPO_ROOT) if not t.errors]
+    if a.status:
+        ts = [t for t in ts if t.status == a.status]
+    if a.tag:
+        ts = [t for t in ts if a.tag in (t.meta.get("tags") or [])]
+    cols = catalog.load_collections(REPO_ROOT)
+    if a.json:
+        print(json.dumps([{
+            "id": t.id, "title": t.title(), "status": t.status, "kserve": t.meta.get("kserve"),
+            "env": t.env_ref, "uses": t.uses, "tags": t.meta.get("tags", []),
+            "translations": {l: lint.translation_state(t, l) for l in LANG_NAME if l != "en"},
+            "collections": [c.id for c in cols if t.id in c.members],
+        } for t in ts], indent=2, ensure_ascii=False))
+        return
+    if not ts:
+        print("No tutorials match.")
+        return
+    for t in ts:
+        kv = ", ".join(f"{v} (default)" if v == t.kserve_default else v for v in t.kserve_tested)
+        parts = [f"env {t.env_ref}"] if t.env_ref else []
+        parts += [f"lib {u}" for u in t.uses]
+        langs = ["en (source)"] + [
+            f"{l} {lint.translation_state(t, l).replace('current', 'up to date').replace('missing', 'not translated')}"
+            for l in LANG_NAME if l != "en"]
+        inc = [f"{c.id} (#{c.members.index(t.id) + 1})" for c in cols if t.id in c.members]
+        print(f"{t.id}  {STATUS_ICON.get(t.status, '')} {t.status}")
+        print(f"  {t.title()}")
+        print(f"  KServe       {kv}")
+        if parts:
+            print(f"  uses         {'  ·  '.join(parts)}")
+        print(f"  languages    {'  ·  '.join(langs)}")
+        if inc:
+            print(f"  collections  {', '.join(inc)}")
+        if t.meta.get("tags"):
+            print(f"  tags         {' '.join('#' + x for x in t.meta['tags'])}")
+        print()
+    print(f"{len(ts)} tutorial(s).  Run one: ./tut run <id>   ·   step through it: ./tut ui   ·   "
+          "translations: ./tut translation")
 
 
 def cmd_sync(a):
@@ -58,11 +104,42 @@ def cmd_matrix(a):
 
 
 def cmd_translation(a):
+    langs = [l for l in LANG_NAME if l != "en"]
+    if a.tcmd in (None, "status"):
+        print("Translations (English README.md is the source)\n")
+        todo = []
+        for t in load_tutorials(REPO_ROOT):
+            if t.errors:
+                continue
+            for l in langs:
+                st = lint.translation_state(t, l)
+                icon = {"current": "✅", "behind": "⚠️ ", "unmarked": "❌", "missing": "· "}[st]
+                print(f"  {icon} {t.id:32} {l}  {lint.TRANSLATION_STATES[st]}")
+                if st == "missing":
+                    todo.append(f"start:   ./tut translation init {t.id} {l}")
+                elif st in ("behind", "unmarked"):
+                    todo.append(f"update tutorials/{t.id}/README.{l}.md, then: "
+                                f"./tut translation mark {t.id} {l}")
+        if todo:
+            print("\nNext steps:\n  " + "\n  ".join(todo))
+        return
+    if a.lang not in langs:
+        sys.exit(f"unknown language {a.lang!r}; supported: {', '.join(langs)}")
     t = _tutorial(a.id)
+    if a.tcmd == "init":
+        try:
+            p = lint.init_translation(t, a.lang)
+        except (FileExistsError, ValueError) as e:
+            sys.exit(str(e))
+        print(f"created {p.relative_to(REPO_ROOT)} (a copy of README.md) and added {a.lang!r} to langs.\n"
+              f"Translate the prose and code comments; keep the code blocks as they are.\n"
+              f"Then: ./tut translation mark {t.id} {a.lang}")
+        return
     if not t.readme(a.lang).exists():
-        sys.exit(f"{t.readme(a.lang)} does not exist")
+        sys.exit(f"tutorials/{t.id}/README.{a.lang}.md does not exist yet. Start it with:\n"
+                 f"  ./tut translation init {t.id} {a.lang}")
     p = lint.mark_translation(t, a.lang)
-    print(f"marked {p.relative_to(REPO_ROOT)} as translated from the current README.md")
+    print(f"marked {p.relative_to(REPO_ROOT)} as a translation of the current README.md")
 
 
 def cmd_site(a):
@@ -140,7 +217,11 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="tut", description="KServe tutorials toolkit")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("list", help="list tutorials").set_defaults(fn=cmd_list)
+    s = sub.add_parser("list", help="list tutorials: versions, env, languages, collections, tags")
+    s.add_argument("--status", choices=["draft", "stable", "deprecated", "archived"])
+    s.add_argument("--tag", help="only tutorials with this tag (see catalog/tags.yaml)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_list)
 
     s = sub.add_parser("sync", help="regenerate <!-- tut:... --> regions")
     s.add_argument("--check", action="store_true", help="fail instead of writing")
@@ -175,12 +256,18 @@ def main(argv=None):
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_matrix)
 
-    s = sub.add_parser("translation", help="translation helpers")
-    tsub = s.add_subparsers(dest="tcmd", required=True)
-    m = tsub.add_parser("mark", help="record that a translation matches the current README.md")
-    m.add_argument("id")
-    m.add_argument("lang")
-    m.set_defaults(fn=cmd_translation)
+    s = sub.add_parser("translation", help="translation status (no arguments), init, mark",
+                       description="Without a subcommand: show every translation's state and the next "
+                                   "step. <id> is a tutorial id (directory under tutorials/, see ./tut "
+                                   "list); <lang> is a language code such as ko.")
+    tsub = s.add_subparsers(dest="tcmd")
+    tsub.add_parser("status", help="state of every translation (default)")
+    for name, help_ in (("init", "start a translation: copy README.md and add the language to langs"),
+                        ("mark", "after translating: record that it matches the current README.md")):
+        m = tsub.add_parser(name, help=help_)
+        m.add_argument("id", help="tutorial id, e.g. llmisvc-anatomy")
+        m.add_argument("lang", help="language code, e.g. ko")
+    s.set_defaults(fn=cmd_translation)
 
     s = sub.add_parser("site", help="assemble the MkDocs source tree")
     s.add_argument("--out", default=str(REPO_ROOT / "build" / "site-src"))
