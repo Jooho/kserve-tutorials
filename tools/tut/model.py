@@ -30,7 +30,7 @@ def version_key(v: str) -> tuple[int, ...]:
 
 @dataclass
 class EnvProfile:
-    ref: str            # "<name>/<version>", e.g. "kind-llmisvc/v1"
+    ref: str            # "<name>/<version>", e.g. "kind-kserve/v1"
     path: Path
     meta: dict
 
@@ -80,6 +80,10 @@ class Tutorial:
     @property
     def env_ref(self) -> str | None:
         return self.meta.get("env")
+
+    @property
+    def env_options(self) -> dict:
+        return dict(self.meta.get("env_options") or {})
 
     @property
     def uses(self) -> list[str]:
@@ -174,4 +178,20 @@ def load_modules(root: Path = REPO_ROOT) -> dict[str, Module]:
         except yaml.YAMLError:
             meta = {"_invalid": True}
         out[ref] = Module(ref=ref, path=m.parent, meta=meta)
+    return out
+
+
+def env_settings(t: "Tutorial", env: "EnvProfile | None") -> list[tuple[str, str]]:
+    """[(TUT_ENV_<NAME>, value)] for the setup step: the tutorial's env_options
+    over the env's declared defaults, in the order the env declares them."""
+    if env is None:
+        return []
+    out = []
+    for name, spec in (env.meta.get("options") or {}).items():
+        v = t.env_options.get(name, spec.get("default"))
+        if isinstance(v, list):
+            v = ",".join(str(x) for x in v)
+        elif isinstance(v, bool):
+            v = "true" if v else "false"
+        out.append((f"TUT_ENV_{name.upper()}", str(v)))
     return out

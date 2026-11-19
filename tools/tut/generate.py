@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import markdown
-from .model import (LANGS, REPO_ROOT, Tutorial, load_envs, load_modules, load_tutorials,
+from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, load_envs, load_modules, load_tutorials,
                     readme_name, version_key)
 
 EXT_LANG = {".yaml": "yaml", ".yml": "yaml", ".json": "json", ".py": "python",
@@ -87,7 +87,11 @@ def render_setup(t: Tutorial) -> str:
         if dirs:
             lines.append("# pinned CLI tools of the environment, for this shell only")
             lines.append(f'export PATH="{":".join(dirs)}:$PATH"')
-        lines.append(f'"$REPO_ROOT/envs/{env}/setup.sh"')
+        settings = env_settings(t, load_envs(t.path.parent.parent).get(env))
+        prefix = " ".join(f"{k}={v}" for k, v in settings)
+        if settings:
+            lines.append("# what this tutorial needs from the environment (env_options in tutorial.yaml)")
+        lines.append(f'{prefix + " " if prefix else ""}"$REPO_ROOT/envs/{env}/setup.sh"')
     lines += [
         'kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -',
         f'cd "$REPO_ROOT/tutorials/{t.id}"',

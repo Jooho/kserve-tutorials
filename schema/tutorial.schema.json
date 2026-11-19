@@ -140,6 +140,27 @@
           "type": "string"
         }
       }
+    },
+    "env_options": {
+      "description": "Options for the env (see options in its profile.yaml), e.g. {types: [kserve], mode: standard}.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        ]
+      }
     }
   },
   "$defs": {
