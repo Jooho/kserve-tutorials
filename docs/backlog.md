@@ -33,6 +33,7 @@ Status: ☐ open · ◐ in progress · ☑ done
 | B5 | ☐ | **Lint: every `kubectl wait` has `--timeout`; no long `sleep`** | authoring.md § Writing good steps |
 | B6 | ☐ | **CI scenario: existing cluster** (provision first, then run the tutorial in bring-your-own mode) | Tests A2 |
 | B7 | ☐ | **CI scenario: run twice on the same cluster** (catches `AlreadyExists`, leftover state, partial re-runs from the UI) | Local runs are rarely on a clean cluster |
+| B9 | ☑ | **Personal settings without `export`**: `.tut.env` (`make config CLUSTER=tut`), loaded by `./tut`, the UI and every setup step; shell > file > default | A reader with an existing `kind` cluster had to remember `export KIND_CLUSTER_NAME=…` in every terminal |
 | B8 | ☐ | **UI "Report a problem"** button: opens an issue prefilled with doctor output, failing block and output tail | Local failures CI cannot see must come back to the repository |
 
 ## C. Content and KServe versions

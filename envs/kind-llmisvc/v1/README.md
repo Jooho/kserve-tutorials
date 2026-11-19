@@ -51,7 +51,9 @@ export KSERVE_VERSION=<a version listed by the tutorial>
 
 The script is idempotent. If a cluster built by this profile with the same KServe
 version exists, it is reused. If a cluster built by something else exists, the
-script stops instead of changing it; set `TUT_ENV_RECREATE=1` to replace it.
+script stops instead of changing it. Either give the tutorials their own
+cluster name (`make config CLUSTER=tut`, stored in `.tut.env`) or set
+`TUT_ENV_RECREATE=1` to replace it.
 
 ## Remove it
 

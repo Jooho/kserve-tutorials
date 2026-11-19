@@ -89,6 +89,40 @@ def cmd_release(a):
         sys.stdout.write(release.notes(a.version, a.sha, reports, repo=a.repo))
 
 
+CONFIG_FILE = REPO_ROOT / ".tut.env"
+CONFIG_KEYS = {"KIND_CLUSTER_NAME": "name of the kind cluster tutorials create/use (default: kind)",
+               "TUT_SKIP_TOOLS": "tools you provide yourself, e.g. \"helm\" (default: none)",
+               "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)"}
+
+
+def cmd_config(a):
+    import os
+    import re
+    lines = CONFIG_FILE.read_text().splitlines() if CONFIG_FILE.exists() else []
+    changes = []
+    for kv in a.set:
+        k, eq, v = kv.partition("=")
+        k, v = k.strip(), v.strip()
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", k) or not eq:
+            sys.exit(f"expected KEY=VALUE, got {kv!r}")
+        lines = [l for l in lines if l.split("=", 1)[0].strip() != k]
+        if v:
+            lines.append(f"{k}={v}")
+        changes.append(f"set {k}={v}" if v else f"removed {k}")
+    if a.set:   # save first, then report
+        body = [l for l in lines if not l.startswith("# personal")]
+        CONFIG_FILE.write_text("# personal settings, not in git; see `./tut config`\n"
+                               + "".join(l + "\n" for l in body))
+        for c in changes:
+            print(f"{c} in .tut.env")
+    print("\nsettings (shell > .tut.env > default):")
+    loaded = set((os.environ.get("TUT_CONFIG_LOADED") or "").split())
+    for k, help_ in CONFIG_KEYS.items():
+        val = os.environ.get(k)
+        src = ".tut.env" if k in loaded else ("shell" if val is not None else "default")
+        print(f"  {k:18} {val if val is not None else '-':10} ({src})  {help_}")
+
+
 def cmd_doctor(a):
     return doctor.report(doctor.run_checks(tutorial=a.tutorial, toolkit_only=a.toolkit),
                          as_json=a.json)
@@ -164,6 +198,10 @@ def main(argv=None):
     r.add_argument("--reports")
     r.add_argument("--repo", default="<owner>/<repo>")
     s.set_defaults(fn=cmd_release)
+
+    s = sub.add_parser("config", help="show or set personal settings in .tut.env")
+    s.add_argument("set", nargs="*", metavar="KEY=VALUE", help="KEY= removes a setting")
+    s.set_defaults(fn=cmd_config)
 
     s = sub.add_parser("doctor", help="is this machine ready to run the tutorials?")
     s.add_argument("--tutorial", help="check the resources this tutorial asks for")

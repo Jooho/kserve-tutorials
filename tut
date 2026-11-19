@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Entry point for the tutorial toolkit. See `./tut --help` and `make help`.
-# Uses the repository's .venv when it exists (make setup). The CLI tools a
-# tutorial needs (kind, kubectl, ...) are not handled here: each environment
-# installs its own into .tools/ (see envs/*/tools.env).
+# Uses the repository's .venv when it exists (make setup) and loads personal
+# settings from .tut.env (tools/local-config.sh). The CLI tools a tutorial
+# needs (kind, kubectl, ...) are not handled here: each environment installs
+# its own into .tools/ (see envs/*/tools.env).
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=tools/local-config.sh
+source "$ROOT/tools/local-config.sh"
 PY=python3
 [ -x "$ROOT/.venv/bin/python" ] && PY="$ROOT/.venv/bin/python"
 exec env PYTHONPATH="$ROOT/tools${PYTHONPATH:+:$PYTHONPATH}" "$PY" -m tut "$@"

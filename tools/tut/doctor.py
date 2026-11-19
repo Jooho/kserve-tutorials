@@ -29,7 +29,16 @@ class Check:
     name: str
     status: str
     detail: str
-    fix: str = ""
+    fix: str = ""          # may span several lines
+
+
+def cluster_name() -> tuple[str, str]:
+    """(name, where it came from) — shell > .tut.env > default."""
+    name = os.environ.get("KIND_CLUSTER_NAME")
+    if name is None:
+        return "kind", "default"
+    loaded = (os.environ.get("TUT_CONFIG_LOADED") or "").split()
+    return name, ".tut.env" if "KIND_CLUSTER_NAME" in loaded else "shell"
 
 
 TOOL_KEYS = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
@@ -142,7 +151,9 @@ def env_checks(root: Path, env_ref: str) -> list[Check]:
                             else "not downloaded yet: the setup step installs it"))
     kind = root / ".tools" / "kind" / tools.get("kind", "-") / "kind"
     kind_cmd = str(kind) if kind.exists() else shutil.which("kind")
-    cluster = os.environ.get("KIND_CLUSTER_NAME", "kind")
+    cluster, source = cluster_name()
+    checks.append(Check("cluster name", OK, f"'{cluster}' ({source}; change with "
+                        "`make config CLUSTER=<name>`)"))
     if kind_cmd and shutil.which("docker"):
         _, out = _run([kind_cmd, "get", "clusters"])
         if cluster not in out.split():
@@ -156,10 +167,15 @@ def env_checks(root: Path, env_ref: str) -> list[Check]:
             if rc == 0 and marker:
                 checks.append(Check("kind cluster", OK, f"'{cluster}' exists, built as {marker}"))
             else:
-                checks.append(Check("kind cluster", WARN,
-                                    f"'{cluster}' exists but was not built by a tutorial environment",
-                                    "setup stops instead of changing it: delete it, set "
-                                    "TUT_ENV_RECREATE=1, or use another KIND_CLUSTER_NAME"))
+                checks.append(Check(
+                    "kind cluster", WARN,
+                    f"a kind cluster named '{cluster}' already exists and was not created by "
+                    "these tutorials (it may hold your own work). The tutorial will not touch it "
+                    "and will stop at the setup step.",
+                    "keep it and let the tutorials use another cluster (remembered in .tut.env):\n"
+                    "    make config CLUSTER=tut\n"
+                    "or, if you no longer need it, delete it:\n"
+                    f"    kind delete cluster --name {cluster}"))
     return checks
 
 
@@ -188,7 +204,10 @@ def report(sections: list[tuple[str, list[Check]]], as_json: bool = False) -> in
             for c in cs:
                 print(f"  {ICON[c.status]} {c.name:30} {c.detail}")
                 if c.fix and c.status != OK:
-                    print(f"     {'':24} → {c.fix}")
+                    first, *rest = c.fix.splitlines()
+                    print(f"      → {first}")
+                    for line in rest:
+                        print(f"        {line}")
         n_fail = sum(c.status == FAIL for c in checks)
         n_warn = sum(c.status == WARN for c in checks)
         print(f"\n{n_fail} problem(s), {n_warn} warning(s)")

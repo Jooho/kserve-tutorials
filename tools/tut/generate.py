@@ -79,6 +79,7 @@ def render_setup(t: Tutorial) -> str:
         f'export KSERVE_VERSION="${{KSERVE_VERSION:-{t.kserve_default}}}"',
         f'export NS="${{NS:-{t.namespace}}}"',
         'export REPO_ROOT="$(git rev-parse --show-toplevel)"',
+        'source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any',
         'export TUT_LIB="$REPO_ROOT/lib"',
     ]
     if env:
