@@ -205,7 +205,7 @@ def cmd_translation(a):
                 icon = {"current": "✅", "draft": "🤖", "behind": "⚠️ ", "unmarked": "❌", "missing": "· "}[st]
                 print(f"  {icon} {t.id:32} {l}  {lint.TRANSLATION_STATES[st]}")
                 if st == "missing":
-                    todo.append(f"start:   ./tut translation draft {t.id} {l}   (AI)  or  init (by hand)")
+                    todo.append(f"start:   ./tut translation draft {t.id} {l}")
                 elif st == "draft":
                     todo.append(f"review tutorials/{t.id}/README.{l}.md, then: ./tut translation mark {t.id} {l}")
                 elif st in ("behind", "unmarked"):
@@ -219,18 +219,11 @@ def cmd_translation(a):
     if a.lang not in langs:
         sys.exit(f"unknown language {a.lang!r}; supported: {', '.join(langs)}")
     t = _tutorial(a.id)
-    if a.tcmd == "init":
-        try:
-            p = lint.init_translation(t, a.lang)
-        except (FileExistsError, ValueError) as e:
-            sys.exit(str(e))
-        print(f"created {p.relative_to(REPO_ROOT)} (a copy of README.md) and added {a.lang!r} to langs.\n"
-              f"Translate the prose and code comments; keep the code blocks as they are.\n"
-              f"Then: ./tut translation mark {t.id} {a.lang}")
-        return
     if not t.readme(a.lang).exists():
         sys.exit(f"tutorials/{t.id}/README.{a.lang}.md does not exist yet. Start it with:\n"
-                 f"  ./tut translation init {t.id} {a.lang}")
+                 f"  ./tut translation draft {t.id} {a.lang}          # AI draft\n"
+                 f"or by hand: copy README.md to README.{a.lang}.md, translate prose and code "
+                 f"comments (keep the code), then mark it")
     p = lint.mark_translation(t, a.lang)
     print(f"marked {p.relative_to(REPO_ROOT)} as a translation of the current README.md")
 
@@ -279,7 +272,8 @@ def _translation_draft(a, langs):
             rej.parent.mkdir(parents=True, exist_ok=True)
             rej.write_text(text)
             print("  ✗ rejected, nothing written: " + "; ".join(problems)
-                  + f"\n    (the AI output is in {rej.relative_to(REPO_ROOT)})")
+                  + f"\n    the AI output is in {rej.relative_to(REPO_ROOT)}: run draft again, or fix it,"
+                  f"\n    save it as tutorials/{t.id}/README.{lang}.md and run: ./tut translation mark {t.id} {lang}")
             failed += 1
             continue
         path = lint.write_draft(t, lang, text, tr.name)
@@ -416,7 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_matrix)
 
-    s = sub.add_parser("translation", help="translation status (no arguments), init, mark",
+    s = sub.add_parser("translation", help="translation status (no arguments), draft, mark",
                        description="Without a subcommand: show every translation's state and the next "
                                    "step. <id> is a tutorial id (directory under tutorials/, see ./tut "
                                    "list); <lang> is a language code such as ko.")
@@ -431,11 +425,9 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--all", action="store_true",
                    help="every tutorial whose translation is missing or behind: ./tut translation draft --all ko")
     d.add_argument("--force", action="store_true", help="re-translate a reviewed, up-to-date translation")
-    for name, help_ in (("init", "start a translation: copy README.md and add the language to langs"),
-                        ("mark", "after translating: record that it matches the current README.md")):
-        m = tsub.add_parser(name, help=help_)
-        m.add_argument("id", help="tutorial id, e.g. llmisvc-anatomy")
-        m.add_argument("lang", help="language code, e.g. ko")
+    m = tsub.add_parser("mark", help="after reviewing: record that it matches the current README.md")
+    m.add_argument("id", help="tutorial id, e.g. llmisvc-anatomy")
+    m.add_argument("lang", help="language code, e.g. ko")
     s.set_defaults(fn=cmd_translation)
 
     s = sub.add_parser("site", help="assemble the MkDocs source tree")

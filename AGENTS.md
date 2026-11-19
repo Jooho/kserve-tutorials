@@ -39,8 +39,7 @@ make tools ENV=<name>/vN    # download an environment's CLI tools ahead of time 
 eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
 ./tut translation draft <id> ko   # AI draft via TUT_TRANSLATOR=claude|copilot|codex|cmd:...
-./tut translation init <id> ko # start one by hand (copies README.md, adds ko to langs)
-./tut translation mark <id> ko # after translating: matches the current README.md
+./tut translation mark <id> ko # after reviewing: matches the current README.md
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
 
