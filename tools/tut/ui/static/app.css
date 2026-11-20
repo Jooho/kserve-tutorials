@@ -223,3 +223,5 @@ select.chip.verchip { background: var(--panel); color: var(--text); cursor: poin
 #list li.group.group { color: var(--text); }
 .verrow { display: flex; gap: 6px; flex: 1 1 100%; order: -1; }
 .verrow select { flex: 1; }
+#term-new { background: transparent; color: #c9d1d9; border-color: #3a4252; padding: 0 8px; }
+#term-new:hover { border-color: var(--accent); }

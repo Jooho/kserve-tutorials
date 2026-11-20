@@ -84,6 +84,40 @@ __tut_run() {{
   done
   printf '\e]777;tut;end;%s;%s\a' "$idx" "$rc"
 }}
+# Extra shells (⧉ in the UI: a terminal in its own browser tab) start with the
+# variables and directory of the tutorial shell: the tutorial shell writes them
+# to env.sh at every prompt (exported variables, and variables a step set), and
+# an extra shell sources that file at start and on "↻".
+__tut_base_vars=" $(compgen -v | tr '\n' ' ') "
+__tut_save_env() {{
+  local v tmp="$TUT_UI_DIR/env.sh.tmp"
+  {{
+    printf 'cd %q 2>/dev/null\n' "$PWD"
+    for v in $(compgen -e); do
+      case "$v" in PWD|OLDPWD|SHLVL|_|TERM|COLUMNS|LINES|PS1|PROMPT_COMMAND|TUT_UI_DIR|HISTCONTROL|BASH*) continue ;; esac
+      printf 'export %s=%q\n' "$v" "${{!v}}"
+    done
+    for v in $(compgen -v); do
+      case "$__tut_base_vars" in *" $v "*) continue ;; esac
+      case "$v" in __tut*|BASH*|FUNCNAME|PIPESTATUS|COMP*|cur|prev|words|cword|v|tmp) continue ;; esac
+      declare -p "$v" 2>/dev/null | grep -Eq '^declare -[a-zA-Z]*[rxaA]' && continue
+      printf '%s=%q\n' "$v" "${{!v}}"
+    done
+  }} > "$tmp" 2>/dev/null && mv -f "$tmp" "$TUT_UI_DIR/env.sh"
+}}
+__tut_load_env() {{
+  if [ -n "$TUT_ENV_FROM" ] && [ -f "$TUT_ENV_FROM" ]; then
+    . "$TUT_ENV_FROM" && printf '\e[2m(variables and directory of the tutorial shell loaded)\e[0m\n'
+  else
+    printf '\e[2m(the tutorial shell has not started yet: nothing to load)\e[0m\n'
+  fi
+}}
+if [ -n "$TUT_ENV_FROM" ]; then
+  PS1='\[\e[35m\]shell:{tid}\[\e[0m\] \[\e[2m\]\W\[\e[0m\] $ '
+  __tut_load_env
+else
+  PROMPT_COMMAND=__tut_save_env
+fi
 # The prompt ends with an invisible "ready" marker. Readline draws PS1 only
 # after it has taken over the terminal, so once the UI sees the marker, text it
 # types is read by readline instead of being echoed by the tty (PROMPT_COMMAND
@@ -95,8 +129,10 @@ PS1="$PS1\[\e]777;tut;ready;0\a\]"
 class ShellSession:
     def __init__(self, tid: str, repo: Path, kserve_version: str | None,
                  on_output: Callable[[str], None], on_event: Callable[[dict], None],
-                 collection: str | None = None, extra_env: dict[str, str] | None = None):
+                 collection: str | None = None, extra_env: dict[str, str] | None = None,
+                 env_from: Path | None = None):
         self.tid = tid
+        self.env_from = env_from              # extra shell: load the tutorial shell's env.sh
         self.collection = collection          # learning path this shell was opened from
         self.extra_env = dict(extra_env or {})  # its shared vars (e.g. NS)
         self.repo = repo
@@ -124,6 +160,8 @@ class ShellSession:
         env = {k: v for k, v in os.environ.items() if not k.startswith("TUT_")}
         env.update(TERM="xterm-256color", TUT_UI="1", HISTCONTROL="ignorespace")
         env.update(self.extra_env)
+        if self.env_from is not None:
+            env["TUT_ENV_FROM"] = str(self.env_from)
         if self.kserve_version:
             env["KSERVE_VERSION"] = self.kserve_version
         else:

@@ -678,6 +678,8 @@ $("#continue").onclick = () => {
 $("#run-all").onclick = () => run(steps().map((b) => b.idx));
 $("#cleanup").onclick = () => run(S.doc.blocks.filter((b) => b.role === "cleanup").map((b) => b.idx), false);
 $("#stop").onclick = () => send({ type: "interrupt" });
+// ⧉ another terminal for this tutorial, alone in a new browser tab (static/shell.html)
+$("#term-new").onclick = () => { if (S.current) window.open(`/shell/${encodeURIComponent(S.current)}`, "_blank"); };
 $("#restart").onclick = () => { if (confirm("Start a new shell? Variables in the current shell are lost.")) startShell(); };
 
 // ------------------------------------------------------------- environment

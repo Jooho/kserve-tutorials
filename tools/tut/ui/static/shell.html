@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>shell</title>
+  <link rel="stylesheet" href="/static/vendor/xterm.css">
+  <style>
+    :root { --bg: #0f1218; --text: #dfe3ea; --muted: #8b93a5; --border: #262c38; --accent: #5c7cfa; }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+      font: 13px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { display: flex; flex-direction: column; }
+    .bar { display: flex; gap: 12px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); }
+    .bar .muted { color: var(--muted); }
+    .bar .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .bar button { margin-left: auto; background: transparent; color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+    .bar button:hover { border-color: var(--accent); }
+    #term { flex: 1; min-height: 0; padding: 4px 0 0 6px; }
+  </style>
+</head>
+<body>
+  <!-- ⧉ in the main UI: a terminal alone, next to the tutorial. It starts with the
+       tutorial shell's variables and directory; closing the tab ends the shell. -->
+  <div class="bar">
+    <strong id="who">shell</strong>
+    <span class="muted mono" id="ctx"></span>
+    <button id="reload" title="Load the tutorial shell's current variables and directory again">↻ variables</button>
+  </div>
+  <div id="term"></div>
+  <script src="/static/vendor/xterm.js"></script>
+  <script src="/static/vendor/addon-fit.js"></script>
+  <script src="/static/shell.js"></script>
+</body>
+</html>
