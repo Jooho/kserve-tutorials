@@ -48,7 +48,8 @@ LLMInferenceServices, `describe` and logs for the tutorial's namespace and
 2. Fix the root cause in the right place (step 2). "Flaky" is not a root
    cause; a job gets one re-run at most.
 3. Never skip, delete or weaken a `verify` block to get green.
-4. Push; CI re-runs only what your change affects.
+4. Push; CI re-runs only what your change affects (`./tut affected --base origin/main`
+   shows it; docs/handbook.md § 7 has the rules).
 5. Add a lesson to docs/authoring.md § Rules learned from CI, and a lint rule
    if it can be checked mechanically.
 

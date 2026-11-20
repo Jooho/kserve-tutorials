@@ -1,8 +1,14 @@
 # AGENTS.md — instructions for AI agents
 
 This repository holds KServe tutorials whose READMEs are executed by CI and by
-a local UI. It is maintained mostly by AI agents, so the rules live in files
-you must read, not in anyone's memory. CI enforces them.
+a local UI. It is maintained mostly by AI agents (Claude Code, Codex): you are
+expected to know this repository better than the maintainer does. So the
+rules and the reasons live in files you must read, not in anyone's memory, and
+CI enforces them.
+
+**First time here, or structural work?** Read [docs/handbook.md](docs/handbook.md):
+what is built, the decisions already made, the code map, CI, and what is easy
+to break. Then the document for your task below.
 
 ## Before you start: read the document for your task
 
@@ -15,7 +21,9 @@ you must read, not in anyone's memory. CI enforces them.
 | Change `envs/`, `lib/` (shared parts) | docs/authoring.md § Shared parts, then RFC §4.6 |
 | Change `tools/`, `schema/`, rules or workflows | [docs/rfc/0001-repository-structure.md](docs/rfc/0001-repository-structure.md) |
 | Release, `stable` branch, Makefile or release workflow | [docs/release.md](docs/release.md) |
-| Plan or pick up structural work | [docs/backlog.md](docs/backlog.md) — known problems with evidence; update an item's status when you finish it |
+| Plan or pick up structural work | [docs/handbook.md](docs/handbook.md), then [docs/backlog.md](docs/backlog.md) — known problems with evidence; update an item's status when you finish it |
+| Translate a tutorial | docs/authoring.md § Translations |
+| Anything else / you are unsure | [docs/handbook.md](docs/handbook.md) |
 
 If the document and the code disagree, stop and report it; do not guess.
 
@@ -23,7 +31,8 @@ If the document and the code disagree, stop and report it; do not guess.
 
 `make help` lists the same commands as make targets (`make check` = lint +
 tests + site, what CI checks without a cluster; `make precommit` = `./tut sync`
-first, then `make check`).
+first, then `make check`, then the translations still to do;
+`make precommit TRANSLATE=1` also drafts the missing ones with `TUT_AI`).
 
 ```bash skip
 make setup                  # .venv with the toolkit's Python packages (Python 3.11+)
@@ -42,7 +51,9 @@ make new T=<id> [TITLE=".."] [OWNER=<handle>]   # new tutorial from tutorials/_t
 ./tut project [--get <key>]         # what project.yaml says (product name, version_var, ...)
 eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
-./tut translation draft <id> ko   # AI draft via TUT_TRANSLATOR=claude|copilot|codex|cmd:...
+./tut translation draft <id> ko   # AI draft via TUT_AI=claude|copilot|codex|cmd:...
+./tut translation todo         # only what needs work (make precommit prints it)
+./tut affected --base origin/main   # which tutorials CI will execute for this branch
 ./tut translation mark <id> ko # after reviewing: matches the current README.md
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
@@ -76,6 +87,22 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
     `owners` fields by `./tut sync`: never edit it by hand.
 12. **Never push to `stable`.** Only the release workflow moves it, and only
     forward to a fully verified commit of `main` (docs/release.md).
+
+## How to work (every task)
+
+1. **New branch from the latest `main`** for each change (`git fetch origin`
+   first). Never base a branch on another unmerged branch.
+2. **One feature per PR.** A PR's base is always `main`.
+3. **Commit only after `make precommit`** passes (0 errors). For a refactor,
+   prove it changes nothing: compare `./tut run <id> --dry-run`, `./tut list`
+   and the site before and after.
+4. **Open a PR, merge, push to `stable` or change repository settings only when
+   the maintainer asked for it in the conversation.** Approval for one PR does
+   not carry over to the next unless they said so.
+5. **When CI fails, find the root cause** (docs/ci-playbook.md). Never re-run
+   hoping it passes more than once; never weaken a check.
+6. **Finish with the knowledge in the repository:** backlog item, lesson, or a
+   line in docs/handbook.md § Decisions — not only in the chat.
 
 ## Translations
 
