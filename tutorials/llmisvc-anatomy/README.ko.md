@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=5abd5fc4d05a -->
+<!-- tut-translation source=README.md sha=e3230344d781 -->
 # 한 번의 Apply, 열 개의 리소스 — LLMInferenceService 해부
 
 <!-- tut:header -->
@@ -379,6 +379,13 @@ echo "$GATEWAY_URL"
 "$TUT_LIB/llmisvc/v1/completion.sh" "$GATEWAY_URL" facebook/opt-125m "Kubernetes is"
 ```
 
+> **답의 내용은 신경 쓰지 마세요.** `facebook/opt-125m`은 파라미터 1억 2500만 개의
+> 아주 작은 *base* 모델로, 튜토리얼 전체가 CPU에서 몇 분 안에 돌도록 고른 것입니다.
+> 지시를 따르지 않고 글을 이어 쓰기만 하므로 엉뚱한 문장이 나오기 쉽고, 20 토큰에서
+> 끊깁니다(`"finish_reason": "length"`). 이 단계가 확인하는 것은 경로입니다. 요청이
+> Gateway와 스케줄러를 거쳐 vLLM에 닿고 텍스트가 돌아왔다는 것입니다. `temperature`가
+> 0이라 매번 같은 답이 나옵니다.
+
 <details>
 <summary>lib/llmisvc/v1/gateway-url.sh</summary>
 
@@ -411,13 +418,14 @@ echo "http://${node_ip}:${node_port}/${ns}/${name}"
 
 ```bash skip
 #!/usr/bin/env bash
-# Usage: completion.sh <url> <model> [prompt] [max_tokens]
+# Usage: completion.sh <url> <model> [prompt] [max_tokens] [temperature]
 # Sends POST <url>/v1/completions, prints the JSON answer and fails unless
-# the first choice contains text.
+# the first choice contains text. temperature defaults to 0 (greedy): the same
+# prompt gives the same answer every run, as in the tutorial text.
 set -euo pipefail
-url="${1:?url}"; model="${2:?model}"; prompt="${3:-Kubernetes is}"; max="${4:-20}"
-body=$(python3 -c 'import json,sys; print(json.dumps({"model":sys.argv[1],"prompt":sys.argv[2],"max_tokens":int(sys.argv[3])}))' \
-  "$model" "$prompt" "$max")
+url="${1:?url}"; model="${2:?model}"; prompt="${3:-Kubernetes is}"; max="${4:-20}"; temp="${5:-0}"
+body=$(python3 -c 'import json,sys; print(json.dumps({"model":sys.argv[1],"prompt":sys.argv[2],"max_tokens":int(sys.argv[3]),"temperature":float(sys.argv[4])}))' \
+  "$model" "$prompt" "$max" "$temp")
 curl -sf "${url}/v1/completions" -H "Content-Type: application/json" -d "$body" \
   | python3 -c 'import json, sys; r = json.load(sys.stdin); print(json.dumps(r, indent=2)); assert r["choices"][0]["text"], "empty completion"'
 ```
