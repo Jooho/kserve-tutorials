@@ -104,7 +104,7 @@ class UI:
         revalidate them (ETag) instead of mixing a new index.html with a cached
         old app.js, which left the tutorial list empty."""
         resp = await handler(request)
-        if request.path == "/" or request.path.startswith("/static/"):
+        if request.path == "/" or request.path.startswith(("/static/", "/shell/")):
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
@@ -114,6 +114,50 @@ class UI:
         if request.query.get("token"):
             resp.set_cookie("tut_token", self.token, httponly=True, samesite="Strict")
         return resp
+
+    async def shell_page(self, request):
+        """⧉: a terminal alone in its own browser tab (static/shell.html)."""
+        self.tutorial_or_404(request.match_info["tid"])
+        return web.FileResponse(STATIC / "shell.html")
+
+    async def ws_shell(self, request):
+        """One extra shell per connection: it starts with the tutorial shell's
+        variables and directory (env.sh), and ends when the tab is closed."""
+        tid = request.match_info["tid"]
+        self.tutorial_or_404(tid)
+        ws = web.WebSocketResponse(heartbeat=30)
+        await ws.prepare(request)
+        main = self.sessions.get(tid)
+        env_file = (main.tmp / "env.sh") if main and main.alive else None
+
+        def send(msg: dict):
+            if not ws.closed:
+                asyncio.ensure_future(ws.send_str(json.dumps(msg)))
+
+        sess = ShellSession(tid, self.root, main.kserve_version if main else None,
+                            on_output=lambda data: send({"type": "output", "data": data}),
+                            on_event=lambda ev: None,
+                            env_from=env_file or (self.root / ".no-tutorial-shell-yet"))
+        info = {"type": "info", "tid": tid, "linked": env_file is not None, "ns": None}
+        if env_file and env_file.exists():
+            m = re.search(r"^export NS=(\S+)$", env_file.read_text(), re.M)
+            info["ns"] = m.group(1) if m else None
+        await ws.send_str(json.dumps(info))
+        sess.start()
+        try:
+            async for msg in ws:
+                if msg.type != WSMsgType.TEXT:
+                    continue
+                m = json.loads(msg.data)
+                if m.get("type") == "input":
+                    sess.write(m["data"])
+                elif m.get("type") == "resize":
+                    sess.resize(int(m["cols"]), int(m["rows"]))
+                elif m.get("type") == "reload":
+                    sess.write(" __tut_load_env\r")
+        finally:
+            sess.stop()
+        return ws
 
     async def api_tutorials(self, request):
         out = []
@@ -403,6 +447,8 @@ class UI:
             web.post("/api/sync", self.api_sync),
             web.post("/api/tutorials/{tid}/translation", self.api_translate),
             web.get("/ws/{tid}", self.ws),
+            web.get("/shell/{tid}", self.shell_page),
+            web.get("/ws/shell/{tid}", self.ws_shell),
             web.get("/files/{path:.+}", self.files),
             web.static("/static", STATIC),
         ])

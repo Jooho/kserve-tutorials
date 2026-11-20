@@ -101,3 +101,63 @@ def test_internal_commands_never_show_on_screen(tmp_path):
     shown = "\n".join(line.rstrip() for line in screen.display)
     assert "block-24" in shown
     assert "__tut_run" not in shown, shown
+
+
+def test_extra_shell_gets_the_tutorial_shells_variables_and_directory(tmp_path):
+    """⧉ opens a terminal in its own tab: it starts with what the tutorial shell has
+    (exported or set by a step) and its directory, and ↻ loads newer values."""
+    import time
+    work = tmp_path / "work"
+    work.mkdir()
+    out_extra = []
+
+    async def main():
+        t = ShellSession("t", tmp_path, "v0.18.0", lambda _: None, lambda _: None)
+        t.start()
+        t.run_queue([{"idx": 0, "role": "run",
+                      "code": f'export NS=demo\nGATEWAY_URL="http://gw:80/a b"\ncd {work}'}], True)
+        await asyncio.wait_for(t.queue_task, 20)
+        env_file = t.tmp / "env.sh"
+        for _ in range(100):                       # written at the next prompt
+            if env_file.exists() and "GATEWAY_URL" in env_file.read_text():
+                break
+            await asyncio.sleep(0.05)
+        x = ShellSession("t", tmp_path, "v0.18.0", out_extra.append, lambda _: None, env_from=env_file)
+        x.start()
+        await asyncio.wait_for(x.prompt_ready.wait(), 20)
+        x.write('echo "[$NS|$GATEWAY_URL|$PWD]"\r')
+        # a later step in the tutorial shell, then ↻ in the extra shell
+        t.run_queue([{"idx": 1, "role": "run", "code": "export NS=changed"}], True)
+        await asyncio.wait_for(t.queue_task, 20)
+        await asyncio.sleep(0.5)
+        x.write(" __tut_load_env\r")
+        x.write('echo "[after:$NS]"\r')
+        for _ in range(100):
+            if "[after:changed]" in "".join(out_extra):
+                break
+            await asyncio.sleep(0.05)
+        t.stop(); x.stop()
+
+    asyncio.run(main())
+    out = "".join(out_extra)
+    assert f"[demo|http://gw:80/a b|{work}]" in out, out[-2000:]
+    assert "[after:changed]" in out, out[-2000:]
+    assert "shell:t" in out                              # its prompt says it is an extra shell
+
+
+def test_shell_page_is_served_with_its_script():
+    import asyncio as aio
+    from aiohttp.test_utils import TestClient, TestServer
+    from tut.model import REPO_ROOT
+    from tut.ui.server import UI
+
+    async def main():
+        ui = UI(REPO_ROOT)
+        async with TestClient(TestServer(ui.app())) as c:
+            h = {"X-Tut-Token": ui.token}
+            r = await c.get("/shell/llmisvc-anatomy", headers=h)
+            assert r.status == 200 and "/static/shell.js" in await r.text()
+            assert r.headers.get("Cache-Control") == "no-cache"
+            assert (await c.get("/shell/no-such-tutorial", headers=h)).status == 404
+            assert (await c.get("/shell/llmisvc-anatomy")).status == 403          # token required
+    aio.run(main())
