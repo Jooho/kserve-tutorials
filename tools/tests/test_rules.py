@@ -40,17 +40,29 @@ kubectl delete ns "$NS" --ignore-not-found
 
 def meta(tid, **kw):
     m = {"id": tid, "title": {"en": tid}, "summary": {"en": "s"}, "status": "stable",
-         "env": "kind-x/v1", "kserve": {"default": "v0.18.0", "tested": ["v0.18.0"]},
+         "env": "kind-x/v1", "versions": {"default": "v0.18.0", "tested": ["v0.18.0"]},
          "langs": ["en"], "group": "g"}
     m.update(kw)
     return m
 
 
+PROJECT_YAML = (Path(__file__).resolve().parents[2] / "project.yaml").read_text()
+
+
+def make_project(root: Path, text: str = PROJECT_YAML):
+    """project.yaml of a test repository: the real one (KServe) unless given."""
+    p = root / "project.yaml"
+    if not p.exists():
+        root.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+
+
 def make_env(root: Path, ref="kind-x/v1", frozen=True, kmin="v0.17.0"):
+    make_project(root)
     d = root / "envs" / ref
     d.mkdir(parents=True)
     (d / "profile.yaml").write_text(yaml.safe_dump(
-        {"id": ref, "description": "d", "frozen": frozen, "kserve": {"min": kmin}, "requires": []}))
+        {"id": ref, "description": "d", "frozen": frozen, "versions": {"min": kmin}, "requires": []}))
     for s in ("setup.sh", "teardown.sh"):
         (d / s).write_text("#!/bin/sh\n")
         (d / s).chmod(0o755)
@@ -60,6 +72,7 @@ def make_env(root: Path, ref="kind-x/v1", frozen=True, kmin="v0.17.0"):
 
 
 def make_tut(root: Path, tid, readme=GOOD_README, **kw):
+    make_project(root)
     d = root / "tutorials" / tid
     (d / "manifests").mkdir(parents=True)
     (d / "manifests" / "cm.yaml").write_text("kind: ConfigMap\nmetadata: {name: x}\n")
@@ -148,12 +161,12 @@ def test_M001_unpinned_image(repo):
 
 
 def test_T004_default_not_tested(repo):
-    make_tut(repo, "t", kserve={"default": "v0.19.0", "tested": ["v0.18.0"]})
+    make_tut(repo, "t", versions={"default": "v0.19.0", "tested": ["v0.18.0"]})
     assert "T004" in codes(repo)
 
 
 def test_T005_version_outside_env_range(repo):
-    make_tut(repo, "t", kserve={"default": "v0.16.0", "tested": ["v0.16.0"]})
+    make_tut(repo, "t", versions={"default": "v0.16.0", "tested": ["v0.16.0"]})
     assert "T005" in codes(repo)
 
 

@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KServe Tutorials</title>
+  <title>Tutorials</title>
   <link rel="stylesheet" href="/static/vendor/xterm.css">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <header class="topbar">
     <button class="icon-btn" id="toggle-sidebar" title="Show / hide the tutorial list" aria-label="Toggle tutorial list">☰</button>
-    <div class="brand">KServe Tutorials <span class="muted">local runner</span></div>
+    <div class="brand">Tutorials <span class="muted">local runner</span></div>
     <div class="seg" id="fontsize" title="Text size (document and terminal)">
       <button data-d="-1" aria-label="Smaller text">A−</button><span id="fs-val"></span><button data-d="1" aria-label="Larger text">A+</button>
     </div>
@@ -32,10 +32,10 @@
         <select id="addtag" aria-label="Filter by tag"><option value="">＋ tag</option></select>
         <button id="showtags" class="icon-btn" aria-pressed="false" title="Show the tags of each tutorial">#&nbsp;tags</button>
         <div class="verrow">
-          <select id="verfilter" aria-label="KServe version" title="Show only the tutorials tested on this KServe version"></select>
-          <button id="matrix-btn" class="icon-btn" title="Which tutorial is tested on which KServe version">▦</button>
+          <select id="verfilter" aria-label="Version" title="Show only the tutorials tested on this version"></select>
+          <button id="matrix-btn" class="icon-btn" title="Which tutorial is tested on which version">▦</button>
         </div>
-        <select id="sort" aria-label="Sort"><option value="title">Sort: title</option><option value="status">Sort: status</option><option value="kserve">Sort: newest KServe</option></select>
+        <select id="sort" aria-label="Sort"><option value="title">Sort: title</option><option value="status">Sort: status</option><option value="version">Sort: newest version</option></select>
       </div>
       <div id="tagchips"></div>
       <ul id="list"></ul>

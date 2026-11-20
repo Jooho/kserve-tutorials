@@ -5,8 +5,8 @@ Tutorial metadata
   T001 tutorial.yaml missing / invalid against schema/tutorial.schema.json
   T002 `id` must equal the directory name
   T003 `env` must reference an existing envs/<name>/<version>
-  T004 kserve.default must be listed in kserve.tested
-  T005 every tested KServe version must be supported by the env profile
+  T004 versions.default must be listed in versions.tested
+  T005 every tested version must be supported by the env profile (versions.min/max)
   T006 deprecated/archived tutorials need a `deprecation` block
   T007 stable tutorials must use a frozen env profile
   T008 env_options must be options the env declares, with allowed values
@@ -14,7 +14,7 @@ Tutorial metadata
 Documents (README.md and translations)
   D001 shell code blocks need exactly one role: run | verify | cleanup | skip
   D002 generated regions are stale -> run `./tut sync`
-  D003 hard-coded KServe version outside generated regions
+  D003 hard-coded product version (project.yaml name + vX.Y) outside generated regions
   D004 broken relative link or image
   D005 tut:include must point inside the tutorial directory
   D006 the tut:setup region must exist and come before any other run/verify block
@@ -52,6 +52,9 @@ Script modules (lib/<name>/v<N>)
   L004 stable tutorials must only use frozen modules
   L005 module is not used by any tutorial (warning)
 
+Project
+  P001 project.yaml missing or invalid against schema/project.schema.json
+
 Environment profiles
   E001 profile.yaml invalid, or setup.sh / teardown.sh / README.md missing or not executable
   E002 a frozen profile was modified (compare with --base)
@@ -69,13 +72,19 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from . import catalog, generate, markdown, shared
+from . import catalog, generate, markdown, project, shared
 from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
                     load_modules, load_schema, load_tutorials)
 
 TRANSLATION_RE = re.compile(
     r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)((?:\s+[a-z]+=\S+)*)\s*-->")
-HARDCODED_VERSION_RE = re.compile(r"kserve[^\n]{0,60}?\bv\d+\.\d+(\.\d+)?\b", re.I)
+
+
+def hardcoded_version_re(name: str) -> re.Pattern:
+    """`<product> ... v0.18.0` on one line, e.g. "KServe v0.18.0" (D003)."""
+    return re.compile(re.escape(name) + r"[^\n]{0,60}?\bv\d+\.\d+(\.\d+)?\b", re.I)
+
+
 NOT_IDEMPOTENT = [
     (re.compile(r"\bkubectl\s+create\s+(?!token\b)(?!.*--dry-run)"),
      "`kubectl create` fails with AlreadyExists the second time; use `kubectl apply` "
@@ -163,6 +172,11 @@ class Linter:
         self.tutorials = load_tutorials(root)
         self.envs = load_envs(root)
         self.modules = load_modules(root)
+        try:
+            self.project = project.load(root)
+            self.project_error = None
+        except project.ProjectError as e:
+            self.project, self.project_error = None, str(e)
 
     def err(self, code, path, msg, line=None):
         self.findings.append(Finding("error", code, path, line, msg))
@@ -172,6 +186,9 @@ class Linter:
 
     # ------------------------------------------------------------------ run
     def run(self) -> list[Finding]:
+        if self.project_error:
+            self.err("P001", project.path(self.root), self.project_error)
+            return self.findings            # every other rule needs the project
         schema = load_schema("tutorial.schema.json")
         self.shared_defs = shared.definitions(self.tutorials)
         for t in self.tutorials:
@@ -203,12 +220,12 @@ class Linter:
         env = self.envs.get(t.env_ref) if t.env_ref else None
         if t.env_ref and env is None:
             self.err("T003", f, f"env {t.env_ref!r} does not exist under envs/")
-        if t.kserve_default and t.kserve_default not in t.kserve_tested:
-            self.err("T004", f, f"kserve.default {t.kserve_default} is not in kserve.tested")
+        if t.default_version and t.default_version not in t.tested_versions:
+            self.err("T004", f, f"versions.default {t.default_version} is not in versions.tested")
         if env:
-            for ver in t.kserve_tested:
+            for ver in t.tested_versions:
                 if not env.supports(ver):
-                    self.err("T005", f, f"env {env.ref} does not support KServe {ver}")
+                    self.err("T005", f, f"env {env.ref} does not support {self.project.name} {ver}")
             if t.status == "stable" and not env.frozen:
                 self.err("T007", f, f"stable tutorial uses env {env.ref}, which is not frozen")
         opts = t.env_options
@@ -237,8 +254,8 @@ class Linter:
             dep = t.meta.get("deprecation") or {}
             if not dep.get("reason"):
                 self.err("T006", f, f"status {t.status} requires deprecation.reason")
-            if t.status == "archived" and not dep.get("last_supported_kserve"):
-                self.err("T006", f, "status archived requires deprecation.last_supported_kserve")
+            if t.status == "archived" and not dep.get("last_supported_version"):
+                self.err("T006", f, "status archived requires deprecation.last_supported_version")
 
     # ------------------------------------------------------------ documents
     def lint_docs(self, t: Tutorial):
@@ -315,11 +332,13 @@ class Linter:
                              f"(defined: {known})", at)
         # D003 hard-coded versions
         region_lines = _region_lines(doc)
+        hardcoded = hardcoded_version_re(self.project.name)
         for n, line in enumerate(text.split("\n"), 1):
             if n in region_lines or "tut-allow-version" in line:
                 continue
-            if HARDCODED_VERSION_RE.search(line):
-                self.err("D003", path, "hard-coded KServe version; use $KSERVE_VERSION or "
+            if hardcoded.search(line):
+                self.err("D003", path, f"hard-coded {self.project.name} version; use "
+                         f"${self.project.version_var} or "
                          "tutorial.yaml (or mark the line with <!-- tut-allow-version -->)", n)
         # D004 links
         for n, line in _strip_code(text):

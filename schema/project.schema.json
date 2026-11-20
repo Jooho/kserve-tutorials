@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "project.yaml",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "title", "version_var"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "name": {"description": "Product name, e.g. KServe.", "type": "string", "minLength": 1},
+    "title": {"$ref": "#/$defs/localized"},
+    "intro": {"$ref": "#/$defs/localized"},
+    "version_var": {
+      "description": "Shell variable that holds the version a tutorial runs with.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "upstream": {
+      "description": "GitHub owner/repo whose latest release the weekly canary uses.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "example": {
+      "description": "A finished tutorial `./tut draft` shows the AI as the model to imitate.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "glossary": {
+      "description": "Product terms that translations keep in English.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "localized": {
+      "type": "object",
+      "required": ["en"],
+      "additionalProperties": {"type": "string", "minLength": 1},
+      "properties": {"en": {"type": "string", "minLength": 1}}
+    }
+  }
+}

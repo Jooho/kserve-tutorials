@@ -20,7 +20,7 @@ Write down, before changing anything:
 
 | Question | Where it goes |
 |---|---|
-| Which KServe version does it install / assume? | `kserve.default`, `kserve.tested` |
+| Which KServe version does it install / assume? | `versions.default`, `versions.tested` |
 | How is the cluster created and KServe installed? | Choose or create an env profile (step 2) |
 | What does it need from a previous tutorial? | Must be re-created inside this tutorial (step 4) |
 | Which KServe features does it exercise? Level? | `tags` (from `catalog/tags.yaml`) |

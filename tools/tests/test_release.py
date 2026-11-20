@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import subprocess
 
+from test_rules import make_project
 from tut import release
 
 
@@ -22,15 +23,15 @@ def test_next_version_is_date_based_and_counts_within_month():
 
 
 def test_verdict_requires_a_passing_report_for_every_entry(tmp_path):
-    expected = [{"tutorial": "a", "kserve_version": "v0.18.0"},
-                {"tutorial": "a", "kserve_version": "v0.19.0"},
-                {"tutorial": "b", "kserve_version": "v0.18.0"}]
+    expected = [{"tutorial": "a", "version": "v0.18.0"},
+                {"tutorial": "a", "version": "v0.19.0"},
+                {"tutorial": "b", "version": "v0.18.0"}]
     for name, status in (("a-v0.18.0", "passed"), ("a-v0.19.0", "failed")):
         d = tmp_path / f"report-release-{name}"
         d.mkdir()
         t, v = name.split("-", 1)
         (d / "report.json").write_text(json.dumps(
-            {"tutorial": t, "kserve_version": v, "status": status, "failed_at": "x"}))
+            {"tutorial": t, "version": v, "status": status, "failed_at": "x"}))
     ok, problems = release.verdict(release.load_reports(tmp_path), expected)
     assert not ok
     assert any("a @ v0.19.0: failed" in p for p in problems)
@@ -58,6 +59,7 @@ def test_stable_only_fast_forwards(tmp_path):
 
 def test_notes_list_results_and_changes(tmp_path):
     git(tmp_path, "init", "-q", "-b", "main")
+    make_project(tmp_path)
     (tmp_path / "tutorials/a").mkdir(parents=True)
     (tmp_path / "tutorials/a/README.md").write_text("x")
     git(tmp_path, "add", "."); git(tmp_path, "commit", "-qm", "first")
@@ -65,7 +67,7 @@ def test_notes_list_results_and_changes(tmp_path):
     (tmp_path / "tutorials/a/README.md").write_text("y")
     git(tmp_path, "commit", "-qam", "change a")
     sha = git(tmp_path, "rev-parse", "HEAD")
-    reports = [{"tutorial": "a", "kserve_version": "v0.18.0", "status": "passed", "duration_seconds": 600}]
+    reports = [{"tutorial": "a", "version": "v0.18.0", "status": "passed", "duration_seconds": 600}]
     text = release.notes("2026.11.1", sha, reports, repo="o/r", root=tmp_path)
     assert "git clone -b 2026.11.1 https://github.com/o/r.git" in text
     assert "| a | v0.18.0 | ✅ | 10 min |" in text

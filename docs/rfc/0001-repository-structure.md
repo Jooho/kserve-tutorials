@@ -110,7 +110,7 @@ env: kind-kserve/v1                 # a frozen profile (required for stable)
 env_options: {types: [llmisvc]}     # what the profile installs for this tutorial (T008)
 uses: [llmisvc/v1]                  # script modules, pinned
 namespace: llmisvc-anatomy          # default: id
-kserve:
+versions:                           # of the product named in project.yaml
   default: v0.18.0                  # what readers and PR CI use
   tested: [v0.18.0]                 # what the weekly CI runs
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
@@ -120,7 +120,7 @@ timeout_minutes: 60
 owners: [Jooho]
 deprecation:                        # deprecated / archived only
   reason: "..."
-  last_supported_kserve: v0.17.1
+  last_supported_version: v0.17.1
   replacement: other-tutorial
 ```
 
@@ -139,7 +139,7 @@ version still has to exist, or be deleted, on every branch. Per-tutorial
 declarations let each tutorial move at its own pace, and the catalog page
 "By KServe version" is generated from them.
 
-Readers use `kserve.default` unless they set `KSERVE_VERSION` themselves; the
+Readers use `versions.default` unless they set `KSERVE_VERSION` themselves; the
 generated setup block does `export KSERVE_VERSION="${KSERVE_VERSION:-<default>}"`.
 
 ### 4.5 Lifecycle
@@ -153,12 +153,12 @@ draft ──► stable ──► deprecated ──► archived
 | `draft` | Being written | Runs on PR | D007 is a warning, any env allowed |
 | `stable` | Recommended | PR + weekly + canary | Must use a frozen env (T007), must verify (D007) |
 | `deprecated` | Still works, being replaced | PR + weekly + canary | Needs `deprecation.reason` |
-| `archived` | Kept for reference, frozen | Not executed | Needs `deprecation.reason` and `last_supported_kserve` |
+| `archived` | Kept for reference, frozen | Not executed | Needs `deprecation.reason` and `last_supported_version` |
 
 **Example: WVA is removed from KServe.** The canary run (§4.10) fails for the
 WVA tutorial only and opens an issue for it. The owner either:
 
-- **archives** it: `status: archived`, `deprecation.last_supported_kserve: v0.17.1`.
+- **archives** it: `status: archived`, `deprecation.last_supported_version: v0.17.1`.
   The page shows a banner, the catalog stops listing it under newer versions,
   CI stops running it. One file changes.
 - **rewrites** it for the replacement feature: a normal PR to that directory,
@@ -279,13 +279,13 @@ of `tools/tut/lint.py`.
 | T001 | `tutorial.yaml` exists and matches `schema/tutorial.schema.json` |
 | T002 | `id` equals the directory name |
 | T003 | `env` references an existing profile |
-| T004 | `kserve.default` is in `kserve.tested` |
-| T005 | Every tested version is supported by the profile (`kserve.min`/`max`) |
+| T004 | `versions.default` is in `versions.tested` |
+| T005 | Every tested version is supported by the profile (`versions.min`/`max`) |
 | T006 | `deprecated`/`archived` have a `deprecation` block |
 | T007 | `stable` tutorials use a frozen profile |
 | D001 | Every shell block has exactly one role |
 | D002 | Generated regions are up to date |
-| D003 | No hard-coded KServe version outside generated regions (escape: `<!-- tut-allow-version -->`) |
+| D003 | No hard-coded product version (`project.yaml` name, e.g. KServe) outside generated regions (escape: `<!-- tut-allow-version -->`) |
 | D004 | Relative links and images resolve |
 | D005 | `tut:include` stays inside the tutorial directory |
 | D006 | `tut:setup` exists and precedes every other run/verify block |
@@ -297,6 +297,7 @@ of `tools/tut/lint.py`.
 | M001 | Container images are pinned (no `latest`, no missing tag) |
 | G001 | Tags are listed in `catalog/tags.yaml` (suggests the closest) |
 | G002 | `catalog/tags.yaml` is valid |
+| P001 | `project.yaml` exists and matches `schema/project.schema.json` |
 | C001–C004 | Collections are valid; members exist, appear once; archived members have a replacement (warning) |
 | O001 | `.github/CODEOWNERS` matches the `owners` fields |
 | L001 | Modules are valid and their scripts executable |
@@ -315,8 +316,8 @@ reviewed, tested change too.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `ci.yml` | pull request, push to main | lint (`--base`), rule tests, site build; then **executes only affected tutorials** with their `kserve.default` |
-| `scheduled.yml` | weekly + manual | **Full matrix:** every runnable tutorial × every `kserve.tested` version. **Canary:** the latest KServe release against every stable/deprecated tutorial that does not list it yet. Failures open or update one issue per tutorial. |
+| `ci.yml` | pull request, push to main | lint (`--base`), rule tests, site build; then **executes only affected tutorials** with their `versions.default` |
+| `scheduled.yml` | weekly + manual | **Full matrix:** every runnable tutorial × every `versions.tested` version. **Canary:** the latest KServe release against every stable/deprecated tutorial that does not list it yet. Failures open or update one issue per tutorial. |
 | `release.yml` | manual (`make release`) | Full matrix at one commit of `main`; if everything passes, fast-forwards `stable`, tags `YYYY.MM.N`, publishes the site |
 | `site.yml` | push to `stable`, called by `release.yml` | Builds and publishes the site to GitHub Pages |
 

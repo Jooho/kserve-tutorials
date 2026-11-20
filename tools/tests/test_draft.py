@@ -33,6 +33,7 @@ FAKE_AI = textwrap.dedent('''
 def repo(tmp_path):
     for d in ("envs", "lib", "catalog", "schema", "docs"):
         shutil.copytree(REPO_ROOT / d, tmp_path / d)
+    shutil.copy(REPO_ROOT / "project.yaml", tmp_path / "project.yaml")
     shutil.copytree(REPO_ROOT / "tutorials" / "_template", tmp_path / "tutorials" / "_template")
     shutil.copy(REPO_ROOT / "AGENTS.md", tmp_path / "AGENTS.md")
     (tmp_path / "catalog" / "collections").mkdir(exist_ok=True)

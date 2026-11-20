@@ -28,7 +28,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import generate, lint, markdown, scaffold, shared
+from . import generate, lint, markdown, project, scaffold, shared
 from .model import REPO_ROOT, MODULE_REF_RE, load_envs, load_modules, load_tutorials
 
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", ".tools"}
@@ -145,11 +145,12 @@ def prune_assets(tdir: Path, assets: list[str]) -> list[str]:
 def parts_catalog(root: Path = REPO_ROOT) -> str:
     """Everything a new tutorial can reuse, and who already uses it."""
     tutorials = [t for t in load_tutorials(root) if not t.errors]
+    name = project.load(root).name
     out = ["# Reusable parts", "",
            "Use these instead of writing the same thing again. Declare envs and helper",
            "modules in tutorial.yaml (`env:`, `uses:`); use shared steps with one line.", ""]
     out += ["## Environments (`env:` in tutorial.yaml)", "",
-            "An env creates the cluster and installs KServe; the generated setup step runs it.",
+            f"An env creates the cluster and installs {name}; the generated setup step runs it.",
             "Pick what to install with env_options. If no env and no option fits, do NOT create",
             "one: write the setup as steps and add a TODO to the notes.", ""]
     for ref, env in sorted(load_envs(root).items()):
@@ -157,7 +158,7 @@ def parts_catalog(root: Path = REPO_ROOT) -> str:
         tools = (env.path / "tools.env").read_text().strip() if (env.path / "tools.env").exists() else ""
         options = env.meta.get("options") or {}
         out += [f"### `{ref}`", "", f"- what: {env.meta.get('description', '').strip()}",
-                f"- KServe: {env.meta.get('kserve', {})}", f"- frozen: {env.meta.get('frozen', False)}",
+                f"- {name} versions: {env.meta.get('versions', {})}", f"- frozen: {env.meta.get('frozen', False)}",
                 f"- use: `env: {ref}`" + (" plus `env_options:` (see options)" if options else ""),
                 f"- used by: {', '.join(users) or '-'}",
                 f"- details: envs/{ref}/README.md, envs/{ref}/setup.sh"]
@@ -193,20 +194,22 @@ def parts_catalog(root: Path = REPO_ROOT) -> str:
 def build_prompt(tid: str, inp: Path, work: Path, files: list[str], skipped: list[str],
                  root: Path = REPO_ROOT, assets: list[str] | None = None) -> str:
     rel = lambda p: p.relative_to(root)
+    proj = project.load(root)
+    example = (f"- tutorials/{proj.example}/: a finished tutorial to imitate (README.md, tutorial.yaml, manifests/)\n"
+               if proj.example else "")
     big = f"\nToo big to copy (mention them if they matter): {', '.join(skipped)}" if skipped else ""
     if assets:
         big += ("\nImages and binary files are ALREADY copied into tutorials/" + tid + "/ at the same "
                 "relative path (you cannot write binary files): " + ", ".join(assets) +
                 ". Link images with relative paths, e.g. ![Architecture](images/architecture.svg); "
                 "refer to the other files by those paths. Copies nothing refers to are removed afterwards.")
-    return f"""You turn a folder of TESTED work into a KServe tutorial in this repository's format.
+    return f"""You turn a folder of TESTED work into a {proj.name} tutorial in this repository's format.
 Work in the repository at {root}.
 
 Read first (fully):
 - AGENTS.md and docs/authoring.md: the rules; lint enforces them
 - {rel(work)}/parts.md: envs, helper scripts and shared steps you can reuse
-- tutorials/llmisvc-anatomy/: a finished tutorial to imitate (README.md, tutorial.yaml, manifests/)
-- tutorials/{tid}/: the scaffold to fill in (from tutorials/_template/)
+{example}- tutorials/{tid}/: the scaffold to fill in (from tutorials/_template/)
 
 The input (a copy; the author's original is not touched): {rel(inp)}/
 Files: {", ".join(files)}{big}
@@ -214,16 +217,16 @@ Files: {", ".join(files)}{big}
 Goal: tutorials/{tid}/ becomes a tutorial a reader can follow and CI can run:
 - README.md is the source: every command the reader runs is a ```bash run|verify|cleanup|skip block.
   Keep the commands the author tested. Change one only to meet a rule (safe to run twice,
-  $KSERVE_VERSION instead of a hard-coded version, kubectl wait instead of sleep, no colors/echo
+  ${proj.version_var} instead of a hard-coded version, kubectl wait instead of sleep, no colors/echo
   decoration) and list every such change in the notes.
 - Inline the steps of helper scripts; leave out decoration (color codes, banners, print functions).
-- Cluster creation and KServe installation belong to an env (`env:`). If an env in parts.md fits,
+- Cluster creation and {proj.name} installation belong to an env (`env:`). If an env in parts.md fits,
   use it and drop those steps. If none fits, keep them as steps and say so in the notes.
 - Use helper scripts and shared steps from parts.md where they do exactly what is needed.
 - Kubernetes YAML goes to tutorials/{tid}/manifests/ and is shown with <!-- tut:include manifests/x.yaml -->.
   Other files the steps need (code, data) go under tutorials/{tid}/ too.
 - Add verify blocks that prove each claim (retry=N delay=S where things take time) and a cleanup.
-- Fill tutorial.yaml: title, summary, tags (from catalog/tags.yaml), kserve versions, requires,
+- Fill tutorial.yaml: title, summary, tags (from catalog/tags.yaml), versions, requires,
   owners (keep the scaffold's), status: draft, langs: [en].
 - Prose: short, explain what each step does and why, in English.
 

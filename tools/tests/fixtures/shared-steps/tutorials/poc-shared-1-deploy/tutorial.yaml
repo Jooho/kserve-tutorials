@@ -8,7 +8,7 @@ summary:
 status: draft
 group: poc
 namespace: poc-shared-1-deploy
-kserve:
+versions:
   default: v0.18.0
   tested: [v0.18.0]
 tags: [beginner]

@@ -21,7 +21,7 @@ from aiohttp import WSMsgType, web
 
 from .. import lint as tlint
 from .. import markdown as tmd
-from .. import shared
+from .. import project, shared
 from ..model import LANGS, REPO_ROOT, load_tutorials, version_key
 from .session import ShellSession
 
@@ -134,7 +134,7 @@ class UI:
             if not ws.closed:
                 asyncio.ensure_future(ws.send_str(json.dumps(msg)))
 
-        sess = ShellSession(tid, self.root, main.kserve_version if main else None,
+        sess = ShellSession(tid, self.root, main.version if main else None,
                             on_output=lambda data: send({"type": "output", "data": data}),
                             on_event=lambda ev: None,
                             env_from=env_file or (self.root / ".no-tutorial-shell-yet"))
@@ -166,17 +166,18 @@ class UI:
                 "id": t.id, "title": {l: t.title(l) for l in ("en", "ko")},
                 "summary": {l: t.summary(l) for l in ("en", "ko")},
                 "status": t.status, "env": t.env_ref, "uses": t.uses,
-                "kserve": {"default": t.kserve_default, "tested": t.kserve_tested},
+                "versions": {"default": t.default_version, "tested": t.tested_versions},
                 "tags": t.meta.get("tags", []) or [], "gpu": t.needs_gpu, "langs": t.langs,
                 "group": t.meta.get("group"),
                 "replacement": (t.meta.get("deprecation") or {}).get("replacement"),
             })
-        versions = sorted({v for t in out for v in t["kserve"]["tested"]}, key=version_key,
+        versions = sorted({v for t in out for v in t["versions"]["tested"]}, key=version_key,
                           reverse=True)
-        return web.json_response({"tutorials": out, "versions": versions})
+        return web.json_response({"tutorials": out, "versions": versions,
+                                  "project": project.load(self.root).as_json()})
 
     async def api_catalog(self, request):
-        """Collections resolved for a KServe version, uncollected tutorials, tags."""
+        """Collections resolved for a product version, uncollected tutorials, tags."""
         from .. import catalog
         version = request.query.get("version") or None
         tutorials = list(self.tutorials().values())
@@ -240,7 +241,7 @@ class UI:
                 "prev": col.members[pos - 1] if pos > 0 else None,
                 "next": col.members[pos + 1] if pos + 1 < len(col.members) else None},
             "session": {"alive": tid in self.sessions and self.sessions[tid].alive,
-                        "kserve_version": self.sessions[tid].kserve_version
+                        "version": self.sessions[tid].version
                         if tid in self.sessions else None},
         })
 
@@ -377,7 +378,7 @@ class UI:
         if sess and sess.alive:
             await ws.send_str(json.dumps({"type": "output", "data": "".join(sess.scrollback)}))
             await ws.send_str(json.dumps({"type": "session", "state": "started",
-                                          "kserve_version": sess.kserve_version,
+                                          "version": sess.version,
                                           "collection": sess.collection, "vars": sess.extra_env}))
         try:
             async for msg in ws:
@@ -387,7 +388,7 @@ class UI:
                 sess = self.sessions.get(tid)
                 kind = m.get("type")
                 if kind == "start" or (kind == "restart"):
-                    version = m.get("kserve_version") or None
+                    version = m.get("version") or None
                     if sess:
                         sess.stop()
                     self.block_states[tid] = {}
@@ -469,7 +470,7 @@ async def _cmd(*args: str, timeout: float = 10) -> str:
 def serve(port: int = 8080, open_browser: bool = True, root: Path = REPO_ROOT):
     ui = UI(root)
     url = f"http://127.0.0.1:{port}/?token={ui.token}"
-    print(f"KServe tutorials UI: {url}\n(commands run on this machine as you; Ctrl+C to stop)",
+    print(f"{project.load(root).name} tutorials UI: {url}\n(commands run on this machine as you; Ctrl+C to stop)",
           flush=True)
     if open_browser:
         webbrowser.open(url)

@@ -13,7 +13,7 @@ env: kind-kserve/v1             # a FROZEN profile under envs/ (required for sta
 env_options: {types: [kserve], mode: standard}   # what to install: envs/kind-kserve/v1/profile.yaml
 # uses: [llmisvc/v1]            # shared script modules under lib/, pinned
 namespace: my-tutorial          # defaults to the id
-kserve:
+versions:
   default: v0.18.0              # what readers and PR CI use
   tested: [v0.18.0]             # what the weekly CI runs; must include default
 tags: [llmisvc, beginner]       # from catalog/tags.yaml; add a tag there if none fits
@@ -24,5 +24,5 @@ owners: [your-github-handle]
 # deprecation:                  # required for deprecated / archived
 #   reason: "WVA was removed from KServe."
 #   since: "2026-11"
-#   last_supported_kserve: v0.17.1
+#   last_supported_version: v0.17.1
 #   replacement: other-tutorial-id

@@ -33,6 +33,7 @@ def root(tmp_path_factory) -> Path:
     r = tmp_path_factory.mktemp("repo")
     for d in ("schema", "envs", "lib", "catalog"):
         shutil.copytree(REPO_ROOT / d, r / d)
+    shutil.copy(REPO_ROOT / "project.yaml", r / "project.yaml")
     for p in (r / "catalog" / "collections").glob("*.yaml"):
         p.unlink()
     (r / "tools").mkdir()

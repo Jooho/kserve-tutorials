@@ -77,7 +77,7 @@ def load_collections(root: Path = REPO_ROOT) -> list[Collection]:
 
 
 def _available(t: Tutorial, version: str | None) -> bool:
-    return t.status != "archived" and (version is None or version in t.kserve_tested)
+    return t.status != "archived" and (version is None or version in t.tested_versions)
 
 
 def _replacement(t: Tutorial, by_id: dict[str, Tutorial], version: str | None) -> Tutorial | None:

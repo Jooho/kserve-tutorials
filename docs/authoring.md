@@ -20,6 +20,26 @@ Start with `make new T=<id> [TITLE="..."] [OWNER=<github-handle>]` (or
 and starts as `status: draft`, English only (translate later with
 `./tut translation draft`).
 
+### The project: `project.yaml`
+
+The toolkit (`tools/`, `schema/`) names no product. What it shows or writes
+about the product comes from `project.yaml` at the repository root [P001]:
+
+| Field | Used for |
+|---|---|
+| `name` | labels: "Tested with KServe v0.18.0", the UI's version picker, release notes, D003 |
+| `title`, `intro` | the site's home page, the UI's title, release names |
+| `version_var` | the shell variable a tutorial reads its version from (`$KSERVE_VERSION`); the setup step exports it, `./tut run --version` sets it |
+| `upstream` | the GitHub repo whose latest release the weekly canary runs against |
+| `example` | the finished tutorial `./tut draft` shows the AI |
+| `glossary` | product terms translations keep in English |
+
+So a tutorial's versions live under `versions:` in `tutorial.yaml` (not under
+the product's name), an env declares the versions it can install under
+`versions: {min, max}`, and `./tut project --get <key>` prints a value for
+scripts. `./tut run --kserve-version` still works: `--<project id>-version` is
+an alias of `--version`.
+
 ## 2. Blocks
 
 | Fence | Meaning |

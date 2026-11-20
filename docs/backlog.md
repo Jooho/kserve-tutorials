@@ -14,7 +14,7 @@ Status: ☐ open · ◐ in progress · ☑ done
 |---|---|---|---|
 | A1 | ☐ | Split environments into **contract + check + provisioners**: `contract.yaml` (what a tutorial needs: KServe version, CRDs, Gateway reachable, webhooks answering), `check.sh` (validates *any* current cluster), `provision/kind.sh` (one way to satisfy it) | Tutorials must work on the reader's own cluster, not only on a kind we create |
 | A2 | ☐ | **Bring-your-own-cluster mode**: setup uses the current cluster if `check.sh` passes, provisions kind only when asked | Today setup always creates kind and refuses other clusters |
-| A3 | ☐ | **Environment tests on their own**: `./tut env test <env> --kserve-version X` (provision → check → teardown); CI runs env jobs first and marks tutorials "blocked by env" instead of failing them | Install failures showed up as tutorial failures (CI-001, CI-002) |
+| A3 | ☐ | **Environment tests on their own**: `./tut env test <env> --version X` (provision → check → teardown); CI runs env jobs first and marks tutorials "blocked by env" instead of failing them | Install failures showed up as tutorial failures (CI-001, CI-002) |
 | A4 | ◐ | **Create the kind cluster ourselves** with a pinned kind version and node image (Kubernetes version); keep using KServe's `hack/kserve-install.sh` only for the KServe stack — *kind is now pinned per environment (v0.30.0 → kindest/node v1.34.0); cluster creation still via KServe's script* | kind and `kindest/node` versions came from the CI runner image (v1.37.0 that day), so results could change without any commit |
 | A5 | ◐ | **cloud-provider-kind**: pinned release binary instead of `go install …@latest` (slow, unpinned, failed on a proxy.golang.org error); document macOS/Windows needs `sudo` and port mapping; doctor checks it is running — *pinned v0.12.0 release binary done; macOS sudo handling open* | CI-002; the reason we run cloud-provider-kind is real LoadBalancer IPs, like a cloud |
 | A6 | ☐ | **Gateway address module**: read the address from Gateway / LLMInferenceService status (same code on kind+cloud-provider-kind, EKS, OpenShift); verify it is reachable; on macOS use cloud-provider-kind's localhost mapping; `port-forward` only as a last resort, announced by doctor | `gateway-url.sh` uses `docker inspect kind-worker` + NodePort: Linux-only |
@@ -45,7 +45,7 @@ Status: ☐ open · ◐ in progress · ☑ done
 
 | # | Status | Item | Why / evidence |
 |---|---|---|---|
-| C1 | ☐ | **Decide how tutorials handle version-specific content** (separate tutorial versions, per-version blocks, or `kserve.tested` ranges + new tutorial) | KServe master removed the scheduler's tokenizer sidecar; `llmisvc-anatomy` explains and verifies three containers |
+| C1 | ☐ | **Decide how tutorials handle version-specific content** (separate tutorial versions, per-version blocks, or `versions.tested` ranges + new tutorial) | KServe master removed the scheduler's tokenizer sidecar; `llmisvc-anatomy` explains and verifies three containers |
 | C2 | ☐ | Update `llmisvc-anatomy` for the next KServe release once C1 is decided (the canary will flag it) | Same as C1 |
 | C3 | ◐ | Korean translation of `llmisvc-anatomy` | AI draft (Claude Code) in PR; needs a human review, then `./tut translation mark llmisvc-anatomy ko` |
 | C5 | ☑ | **Catalog**: tags registry (`catalog/tags.yaml`, G001 with suggestions), collections as owned reading paths resolved per KServe version (archived → replacement), sidebar views Collections / All (sort) / Versions + matrix, tag filter, search; CODEOWNERS generated from `owners` | One flat list could not show paths, versions or tags as tutorials multiply |
@@ -68,3 +68,18 @@ Status: ☐ open · ◐ in progress · ☑ done
 | D10 | ☐ | Protect the `stable` branch (block force push/deletion, only GitHub Actions may push) — repository setting, needs a maintainer | docs/release.md § Repository settings |
 | D11 | ☐ | Rename the tutorial status `stable` (e.g. `ready`) so it is not confused with the `stable` branch | Same word, two meanings |
 | D12 | ☐ | Optionally start a dry-run release automatically when the weekly run is fully green | Less manual work once the release flow is trusted |
+
+## E. One engine, many projects (KServe, Kuadrant, llm-d, vLLM, ...)
+
+Plan: engine (`tut`) / platform parts (shared kind, ingress, cert-manager,
+helpers) / one content repository per project with its `project.yaml`, dropped
+into `engine/projects/<id>`. Cross-project tutorials are out of scope.
+
+| # | Status | Item | Why / evidence |
+|---|---|---|---|
+| E1 | ☑ | **`project.yaml`**: product name, title, intro, `version_var`, canary upstream, glossary; `versions:` instead of `kserve:` in tutorial.yaml and env profiles; `--version` (alias `--<id>-version`); `./tut project`; P001 | The engine had "KServe" in 15 files (135 places) |
+| E2 | ☐ | **`ENGINE_ROOT` / `PROJECT_ROOT`**: split the single `REPO_ROOT` (tools/schema vs tutorials/envs/lib/catalog/project.yaml); same directory for now | Needed before the engine can live in its own repository |
+| E3 | ☐ | The env marker (`kube-system/tut-env`, fields `profile`, `kserve_version`) is read by the engine (`ui/server.py` env check, `doctor.py`); let the env profile declare how to read "what is installed" | Env knowledge in the engine; another project's env writes other fields |
+| E4 | ☐ | `.github/scripts/diagnose.sh` dumps KServe resources (InferenceService, LLMInferenceService, namespace `kserve`); move it to the env (`envs/<env>/diagnose.sh`) | Same; found while doing E1 |
+| E5 | ☐ | `mkdocs.yml` `site_name` and the language list (`LANGS = en, ko`) are per project; generate/read them from `project.yaml` | Same |
+| E6 | ☐ | `platform/` for parts every project shares; engine repository; CI clones the engine at a pinned version; UI project switcher | Steps 3–5 of the plan |

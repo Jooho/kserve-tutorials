@@ -46,18 +46,18 @@ def test_collection_members_must_exist_once(tmp_path):
 def test_archived_member_without_replacement_warns(tmp_path):
     make_env(tmp_path)
     make_tut(tmp_path, "old", status="archived",
-             deprecation={"reason": "gone", "last_supported_kserve": "v0.18.0"})
+             deprecation={"reason": "gone", "last_supported_version": "v0.18.0"})
     setup_catalog(tmp_path, ["old"])
     assert ("C004", "warning") in errors(tmp_path)
 
 
 def test_resolve_by_version_and_replacement(tmp_path):
     make_env(tmp_path)
-    make_tut(tmp_path, "a", kserve={"default": "v0.18.0", "tested": ["v0.18.0", "v0.19.0"]})
-    make_tut(tmp_path, "b", kserve={"default": "v0.18.0", "tested": ["v0.18.0"]})
+    make_tut(tmp_path, "a", versions={"default": "v0.18.0", "tested": ["v0.18.0", "v0.19.0"]})
+    make_tut(tmp_path, "b", versions={"default": "v0.18.0", "tested": ["v0.18.0"]})
     make_tut(tmp_path, "old", status="archived", deprecation={
-        "reason": "WVA removed", "last_supported_kserve": "v0.18.0", "replacement": "new"})
-    make_tut(tmp_path, "new", kserve={"default": "v0.19.0", "tested": ["v0.19.0"]})
+        "reason": "WVA removed", "last_supported_version": "v0.18.0", "replacement": "new"})
+    make_tut(tmp_path, "new", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
     setup_catalog(tmp_path, ["a", "b", "old", "ghost"])
     by_id = {t.id: t for t in load_tutorials(tmp_path)}
     col = catalog.load_collections(tmp_path)[0]

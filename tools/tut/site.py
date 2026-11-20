@@ -10,17 +10,11 @@ import re
 import shutil
 from pathlib import Path
 
-from . import generate, markdown
+from . import generate, markdown, project
 from .model import REPO_ROOT, load_envs, load_tutorials, version_key
 
 LANG_FILES = {"README.md": "index.md", "README.ko.md": "index.ko.md"}
 
-INTRO = {
-    "en": ("# KServe Tutorials\n\nHands-on tutorials for [KServe](https://kserve.github.io/website/). "
-           "Every tutorial is executed in CI against the KServe versions listed for it.\n"),
-    "ko": ("# KServe 튜토리얼\n\n[KServe](https://kserve.github.io/website/) 실습 튜토리얼 모음입니다. "
-           "모든 튜토리얼은 표시된 KServe 버전으로 CI에서 실제 실행되어 검증됩니다.\n"),
-}
 
 
 ROLE_TITLES = {"verify": "✔ verify", "cleanup": "🧹 cleanup", "skip": "optional"}
@@ -66,16 +60,18 @@ def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
         _copy_tree(t.path, out / "tutorials" / t.id)
     for env in load_envs(root).values():
         _copy_tree(env.path, out / "envs" / env.ref)
+    proj = project.load(root)
     for lang, name in (("en", "index.md"), ("ko", "index.ko.md")):
-        body = INTRO[lang] + "\n" + generate.render_catalog(tutorials, lang, root) + "\n"
+        intro = f"# {proj.text('title', lang)}\n\n{proj.text('intro', lang)}\n".replace("\n\n\n", "\n")
+        body = intro + "\n" + generate.render_catalog(tutorials, lang, root) + "\n"
         (out / name).write_text(body)
-    # Per-version pages: "what can I run on KServe vX?"
-    versions = sorted({v for t in tutorials for v in t.kserve_tested}, key=version_key, reverse=True)
-    lines = ["# By KServe version", ""]
+    # Per-version pages: "what can I run on <product> vX?"
+    versions = sorted({v for t in tutorials for v in t.tested_versions}, key=version_key, reverse=True)
+    lines = [f"# By {proj.name} version", ""]
     for v in versions:
         lines += [f"## {v}", ""]
         for t in tutorials:
-            if v in t.kserve_tested and t.status != "archived":
+            if v in t.tested_versions and t.status != "archived":
                 lines.append(f"- [{t.title()}](tutorials/{t.id}/index.md) — {t.summary()}")
         lines.append("")
     (out / "versions.md").write_text("\n".join(lines))

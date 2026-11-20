@@ -39,6 +39,7 @@ make new T=<id> [TITLE=".."] [OWNER=<handle>]   # new tutorial from tutorials/_t
 ./tut ui                    # local web UI: run a tutorial step by step
 ./tut list [--tag T] [--status S] [--collection C]   # one line per tutorial
 ./tut show <id>                     # everything about one tutorial
+./tut project [--get <key>]         # what project.yaml says (product name, version_var, ...)
 eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
 ./tut translation draft <id> ko   # AI draft via TUT_TRANSLATOR=claude|copilot|codex|cmd:...

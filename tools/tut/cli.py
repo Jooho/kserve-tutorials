@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import doctor, generate, lint, plan, release, runner, site
+from . import doctor, generate, lint, plan, project, release, runner, site
 from .model import REPO_ROOT, load_tutorials
 
 
@@ -45,8 +45,8 @@ def _rows(a):
     elif a.sort == "status":
         rank = {"stable": 0, "deprecated": 1, "draft": 2, "archived": 3}
         ts.sort(key=lambda t: (rank.get(t.status, 9), t.id))
-    elif a.sort == "kserve":
-        ts.sort(key=lambda t: (max((version_key(v) for v in t.kserve_tested), default=(0,)), t.id),
+    elif a.sort == "version":
+        ts.sort(key=lambda t: (max((version_key(v) for v in t.tested_versions), default=(0,)), t.id),
                 reverse=True)
     else:
         ts.sort(key=lambda t: t.id)
@@ -55,7 +55,7 @@ def _rows(a):
 
 def _show(t, cols):
     """The detailed view of one tutorial (./tut show, ./tut list --long)."""
-    kv = ", ".join(f"{v} (default)" if v == t.kserve_default else v for v in t.kserve_tested)
+    kv = ", ".join(f"{v} (default)" if v == t.default_version else v for v in t.tested_versions)
     parts = [f"env {t.env_ref}"] if t.env_ref else []
     parts += [f"lib {u}" for u in t.uses]
     langs = ["en (source)"] + [f"{l} {lint.TRANSLATION_STATES[lint.translation_state(t, l)]}"
@@ -66,7 +66,7 @@ def _show(t, cols):
     print(f"  {t.title()}")
     if t.summary():
         print(f"  {t.summary()}")
-    print(f"  KServe       {kv}")
+    print(f"  {_product():<13}{kv}")
     if parts:
         print(f"  uses         {'  ·  '.join(parts)}")
     if req:
@@ -95,7 +95,7 @@ def cmd_list(a):
     ts, cols = _rows(a)
     if a.json:
         print(json.dumps([{
-            "id": t.id, "title": t.title(), "status": t.status, "kserve": t.meta.get("kserve"),
+            "id": t.id, "title": t.title(), "status": t.status, "versions": t.meta.get("versions"),
             "env": t.env_ref, "uses": t.uses, "tags": t.meta.get("tags", []),
             "translations": {l: lint.translation_state(t, l) for l in LANG_NAME if l != "en"},
             "collections": [c.id for c in cols if t.id in c.members],
@@ -114,14 +114,14 @@ def cmd_list(a):
     rows = []
     for t in ts:
         from .model import version_key
-        vs = sorted(t.kserve_tested, key=version_key)
-        kv = (vs[-1] + ("*" if vs[-1] == t.kserve_default else "") + (f" +{len(vs) - 1}" if len(vs) > 1 else "")
+        vs = sorted(t.tested_versions, key=version_key)
+        kv = (vs[-1] + ("*" if vs[-1] == t.default_version else "") + (f" +{len(vs) - 1}" if len(vs) > 1 else "")
               ) if vs else "-"
         tr = " ".join(f"{l}{lang_mark[lint.translation_state(t, l)]}" for l in LANG_NAME if l != "en")
         inc = ",".join(f"{c.id}#{c.members.index(t.id) + 1}" for c in cols if t.id in c.members)
         rows.append([t.id, t.status, kv, tr, inc or "-",
                      " ".join(t.meta.get("tags") or [])])
-    head = ["ID", "STATUS", "KSERVE", "TRANSL.", "COLLECTION", "TAGS"]
+    head = ["ID", "STATUS", _product().upper(), "TRANSL.", "COLLECTION", "TAGS"]
     width = shutil.get_terminal_size((120, 20)).columns
     w = [min(max(len(r[i]) for r in rows + [head]), cap)
          for i, cap in enumerate((34, 10, 14, 7, 22, 999))]
@@ -133,7 +133,7 @@ def cmd_list(a):
     for r in rows:
         print(line(r))
     print(f"\n{len(ts)} tutorial(s)")
-    print("KSERVE: newest tested, * = default, +n = more versions · TRANSL.: ✓ ok ~ AI draft ! behind ? unmarked - none")
+    print(f"{_product().upper()}: newest tested, * = default, +n = more versions · TRANSL.: ✓ ok ~ AI draft ! behind ? unmarked - none")
     print("Details: ./tut show <id> · filter: --tag --status --collection · step through: ./tut ui")
 
 
@@ -196,7 +196,7 @@ def cmd_new(a):
     todo = [] if a.title else ["title and summary"]
     todo += [] if a.owner else ["owners (your GitHub handle)"]
     print(f"created {rel}/ from the template (status: draft)\n\nNext:\n"
-          f"  1. edit {rel}/tutorial.yaml: {', '.join(todo + ['tags', 'kserve', 'requires'])}\n"
+          f"  1. edit {rel}/tutorial.yaml: {', '.join(todo + ['tags', 'versions', 'requires'])}\n"
           f"  2. write {rel}/README.md (guide: docs/authoring.md); replace manifests/example.yaml\n"
           f"  3. once the English is done, translate: ./tut translation draft {a.new_id} ko\n"
           f"  4. make precommit, then ./tut ui (or ./tut run {a.new_id})")
@@ -222,20 +222,36 @@ def cmd_lint(a):
 
 
 def cmd_run(a):
-    return runner.run(_tutorial(a.id), kserve_version=a.kserve_version, keep=a.keep,
+    return runner.run(_tutorial(a.id), version=a.version, keep=a.keep,
                       dry_run=a.dry_run, teardown_env=a.teardown_env,
                       report=Path(a.report) if a.report else None,
                       keep_on_failure=a.keep_on_failure, twice=a.twice)
 
 
+def cmd_project(a):
+    try:
+        proj = project.load(REPO_ROOT)
+    except project.ProjectError as e:
+        sys.exit(str(e))
+    data = proj.as_json()
+    if a.get:
+        if a.get not in data:
+            sys.exit(f"unknown key {a.get!r}; keys: {', '.join(data)}")
+        v = data[a.get]
+        print(v.get("en", "") if isinstance(v, dict) else v or "")
+        return 0
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    return 0
+
+
 def cmd_affected(a):
     m = plan.pr_matrix(a.base)
-    print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['kserve_version']}" for e in m))
+    print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['version']}" for e in m))
 
 
 def cmd_matrix(a):
     m = plan.canary_matrix(a.canary) if a.canary else plan.scheduled_matrix()
-    print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['kserve_version']}" for e in m))
+    print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['version']}" for e in m))
 
 
 def cmd_translation(a):
@@ -393,15 +409,35 @@ def cmd_ui(a):
     serve(port=a.port, open_browser=not a.no_browser)
 
 
+def _project():
+    try:
+        return project.load(REPO_ROOT)
+    except project.ProjectError:
+        return None
+
+
+def _product() -> str:
+    """The product's name from project.yaml (e.g. KServe), for labels."""
+    proj = _project()
+    return proj.name if proj else "Product"
+
+
+def _version_aliases() -> list[str]:
+    """`--<project id>-version` (e.g. --kserve-version) also works for --version."""
+    proj = _project()
+    return [f"--{proj.id}-version"] if proj else []
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="tut", description="KServe tutorials toolkit")
+    p = argparse.ArgumentParser(prog="tut", description=f"{_product()} tutorials toolkit")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("list", help="one line per tutorial (details: ./tut show <id>)")
     s.add_argument("--status", choices=["draft", "stable", "deprecated", "archived"])
     s.add_argument("--tag", help="only tutorials with this tag (see catalog/tags.yaml)")
     s.add_argument("--collection", help="only this collection, in reading order")
-    s.add_argument("--sort", choices=["id", "status", "kserve"], default="id")
+    s.add_argument("--sort", choices=["id", "status", "version"], default="id",
+                   help="version: newest tested version first")
     s.add_argument("--long", "-l", action="store_true", help="the detailed view for every tutorial")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_list)
@@ -446,9 +482,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--base", help="git ref to compare with (enables frozen-env check)")
     s.set_defaults(fn=cmd_lint)
 
+    s = sub.add_parser("project", help="what project.yaml says (name, version_var, upstream, ...)")
+    s.add_argument("--get", metavar="KEY", help="print one value, e.g. --get upstream (for scripts)")
+    s.set_defaults(fn=cmd_project)
+
     s = sub.add_parser("run", help="execute a tutorial README end to end")
     s.add_argument("id")
-    s.add_argument("--kserve-version", help="override kserve.default")
+    s.add_argument("--version", *_version_aliases(), dest="version", metavar="VERSION",
+                   help=f"{_product()} version to run with (default: versions.default in tutorial.yaml)")
     s.add_argument("--keep", action="store_true", help="skip cleanup blocks")
     s.add_argument("--twice", action="store_true",
                    help="run every step twice (same shell and cluster) to prove the steps are safe to repeat")
@@ -541,8 +582,8 @@ def _values(dest: str) -> list[str]:
         return sorted(catalog.load_tags(REPO_ROOT).get("tags") or {})
     if dest == "collection":
         return [c.id for c in catalog.load_collections(REPO_ROOT)]
-    if dest == "kserve_version":
-        return sorted({v for t in load_tutorials(REPO_ROOT) for v in t.kserve_tested},
+    if dest == "version":
+        return sorted({v for t in load_tutorials(REPO_ROOT) for v in t.tested_versions},
                       key=version_key, reverse=True)
     if dest == "set":
         return [f"{k}=" for k in CONFIG_KEYS]

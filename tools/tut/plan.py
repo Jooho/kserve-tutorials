@@ -2,7 +2,7 @@
 
 `./tut affected --base <ref>`  tutorials touched by a change (PR runs)
 `./tut matrix --scheduled`      every runnable tutorial x every tested version
-`./tut matrix --canary <ver>`   stable/deprecated tutorials against a new KServe version
+`./tut matrix --canary <ver>`   stable/deprecated tutorials against a new version of the product
 
 Blast radius rules (the reason envs are versioned):
   tutorials/<id>/**           -> <id>
@@ -29,6 +29,7 @@ def changed_files(base: str, root: Path = REPO_ROOT) -> list[str]:
 # Files that change how *every* tutorial runs; a change here runs them all.
 EXECUTION_PATHS = (
     "tools/tut/runner.py", "tools/tut/markdown.py", "tools/tut/generate.py",
+    "tools/tut/project.py", "project.yaml",
     "tools/install-tools.sh", "tools/local-config.sh",
     ".github/workflows/run-tutorials.yml", ".github/scripts/diagnose.sh",
 )
@@ -57,20 +58,20 @@ def affected(paths: list[str], tutorials: list[Tutorial]) -> list[Tutorial]:
 
 
 def entry(t: Tutorial, version: str) -> dict:
-    return {"tutorial": t.id, "kserve_version": version, "env": t.env_ref}
+    return {"tutorial": t.id, "version": version, "env": t.env_ref}
 
 
 def pr_matrix(base: str, root: Path = REPO_ROOT) -> list[dict]:
     ts = [t for t in affected(changed_files(base, root), load_tutorials(root)) if not t.errors]
-    return [entry(t, t.kserve_default) for t in ts if t.ci_runnable and t.kserve_default]
+    return [entry(t, t.default_version) for t in ts if t.ci_runnable and t.default_version]
 
 
 def scheduled_matrix(root: Path = REPO_ROOT) -> list[dict]:
     return [entry(t, v) for t in load_tutorials(root) if not t.errors and t.ci_runnable
-            for v in t.kserve_tested]
+            for v in t.tested_versions]
 
 
 def canary_matrix(version: str, root: Path = REPO_ROOT) -> list[dict]:
     return [entry(t, version) for t in load_tutorials(root)
             if not t.errors and t.ci_runnable and t.status in ("stable", "deprecated")
-            and version not in t.kserve_tested]
+            and version not in t.tested_versions]
