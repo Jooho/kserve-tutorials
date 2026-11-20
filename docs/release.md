@@ -16,7 +16,7 @@ PR ──(lint + affected e2e)──▶ main ──(release: full matrix passes)
    back-ports, no direct pushes to `stable`.
 2. **Nothing is released unless the full matrix passes** at that exact commit
    (`./tut matrix --scheduled`: every tutorial that CI can run × every
-   version in its `kserve.tested`). A missing report counts as a failure.
+   version in its `versions.tested`). A missing report counts as a failure.
 3. Rules, tests and the site build must pass at that commit (`make check`).
 4. Versions are dates: `YYYY.MM.N`, `N` starting at 0 each month. A release is
    a snapshot that was verified on a given day, not an API version.

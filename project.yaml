@@ -1,0 +1,33 @@
+# What this repository's tutorials are about.
+#
+# The tut engine (tools/, schema/) is generic. Everything it shows or writes
+# that names the product comes from this file: page titles, "Tested with
+# KServe v0.18.0", the shell variable that holds the version, the release the
+# weekly canary checks. Another project (Kuadrant, llm-d, vLLM, ...) keeps the
+# same engine and ships its own project.yaml.
+id: kserve
+name: KServe                     # "Tested with KServe v0.18.0", "KServe v0.18.0"
+title:
+  en: KServe Tutorials
+  ko: KServe 튜토리얼
+intro:                           # first paragraph of the site's home page (Markdown)
+  en: >-
+    Hands-on tutorials for [KServe](https://kserve.github.io/website/).
+    Every tutorial is executed in CI against the KServe versions listed for it.
+  ko: >-
+    [KServe](https://kserve.github.io/website/) 실습 튜토리얼 모음입니다.
+    모든 튜토리얼은 표시된 KServe 버전으로 CI에서 실제 실행되어 검증됩니다.
+version_var: KSERVE_VERSION      # shell variable a tutorial reads its version from
+upstream: kserve/kserve          # GitHub repo whose latest release the weekly canary runs against
+example: llmisvc-anatomy         # finished tutorial ./tut draft shows the AI as the model
+glossary:                        # product terms translations keep in English
+  - KServe
+  - LLMInferenceService
+  - LLMInferenceServiceConfig
+  - InferenceService
+  - InferencePool
+  - InferenceGraph
+  - EPP
+  - vLLM
+  - LeaderWorkerSet
+  - LWS

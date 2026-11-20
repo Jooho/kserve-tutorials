@@ -27,7 +27,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import markdown
+from . import markdown, project
 
 BEGIN, END = "<<<TUT-TRANSLATION-BEGIN>>>", "<<<TUT-TRANSLATION-END>>>"
 LANG_NAMES = {"ko": "Korean (한국어)"}
@@ -39,13 +39,6 @@ PRESETS = {
               "-o", "{outfile}", "{prompt}"],
 }
 
-# Names that stay in English in every language (APIs, products, resources).
-KEEP_ENGLISH = [
-    "KServe", "LLMInferenceService", "LLMInferenceServiceConfig", "InferenceService",
-    "InferencePool", "InferenceGraph", "HTTPRoute", "Gateway", "Envoy", "EPP", "vLLM",
-    "LeaderWorkerSet", "LWS", "Deployment", "Service", "ServiceAccount", "Secret",
-    "ConfigMap", "Pod", "Kind", "kubectl", "Hugging Face", "OwnerReference",
-]
 
 
 class TranslationError(Exception):
@@ -77,9 +70,13 @@ def configured() -> Translator | None:
     return Translator(spec, argv[:i] + extra + argv[i:])
 
 
-def build_prompt(source: str, lang: str) -> str:
+def build_prompt(source: str, lang: str, proj: "project.Project | None" = None) -> str:
+    """`proj` names the product and its terms (project.yaml); without it only the
+    common Kubernetes terms are kept in English."""
     name = LANG_NAMES.get(lang, lang)
-    return f"""Translate this KServe tutorial README from English to {name}.
+    product = f"{proj.name} " if proj else ""
+    keep = proj.keep_english() if proj else list(project.COMMON_GLOSSARY)
+    return f"""Translate this {product}tutorial README from English to {name}.
 
 A program checks your output; if any rule is broken the translation is discarded.
 1. Translate prose, headings, list and table text, link text and image alt text.
@@ -88,7 +85,7 @@ A program checks your output; if any rule is broken the translation is discarded
 3. Keep every HTML comment line exactly (`<!-- ... -->`), and keep everything
    between a `<!-- tut:... -->` line and the next `<!-- /tut -->` line unchanged.
 4. Keep link and image targets (the part in parentheses) unchanged.
-5. Keep these names in English: {", ".join(KEEP_ENGLISH)}.
+5. Keep these names in English: {", ".join(keep)}.
 6. Do not add, remove or reorder sections, steps, code blocks or notes.
 Use a natural technical {name} style for engineers.
 
@@ -192,7 +189,7 @@ def draft_one(t, lang: str, tr: Translator, root: Path | None = None) -> DraftRe
     root = root or REPO_ROOT
     src = t.readme("en").read_text()
     try:
-        text = extract(run(tr, build_prompt(src, lang)))
+        text = extract(run(tr, build_prompt(src, lang, project.load(root))))
     except (TranslationError, subprocess.TimeoutExpired) as e:
         return DraftResult(False, str(e))
     problems = check(src, text)

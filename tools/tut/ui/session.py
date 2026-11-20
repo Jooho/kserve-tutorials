@@ -28,6 +28,8 @@ import termios
 from pathlib import Path
 from typing import Callable
 
+from .. import project
+
 SHELLRC = Path(__file__).parent / "shellrc.sh"
 
 
@@ -127,7 +129,7 @@ PS1="$PS1\[\e]777;tut;ready;0\a\]"
 
 
 class ShellSession:
-    def __init__(self, tid: str, repo: Path, kserve_version: str | None,
+    def __init__(self, tid: str, repo: Path, version: str | None,
                  on_output: Callable[[str], None], on_event: Callable[[dict], None],
                  collection: str | None = None, extra_env: dict[str, str] | None = None,
                  env_from: Path | None = None):
@@ -136,7 +138,7 @@ class ShellSession:
         self.collection = collection          # learning path this shell was opened from
         self.extra_env = dict(extra_env or {})  # its shared vars (e.g. NS)
         self.repo = repo
-        self.kserve_version = kserve_version
+        self.version = version                # product version (project.yaml version_var)
         self.on_output = on_output
         self.on_event = on_event
         self.tmp = Path(tempfile.mkdtemp(prefix=f"tut-ui-{tid}-"))
@@ -162,10 +164,11 @@ class ShellSession:
         env.update(self.extra_env)
         if self.env_from is not None:
             env["TUT_ENV_FROM"] = str(self.env_from)
-        if self.kserve_version:
-            env["KSERVE_VERSION"] = self.kserve_version
+        var = project.load(self.repo).version_var
+        if self.version:
+            env[var] = self.version
         else:
-            env.pop("KSERVE_VERSION", None)
+            env.pop(var, None)
         self.prompt_ready = asyncio.Event()
         master, slave = pty.openpty()
         self.proc = subprocess.Popen(
@@ -177,7 +180,7 @@ class ShellSession:
         os.set_blocking(master, False)
         asyncio.get_running_loop().add_reader(master, self._read)
         self.on_event({"type": "session", "state": "started",
-                       "kserve_version": self.kserve_version, "collection": self.collection,
+                       "version": self.version, "collection": self.collection,
                        "vars": self.extra_env})
 
     def stop(self):

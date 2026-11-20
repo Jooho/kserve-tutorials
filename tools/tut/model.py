@@ -38,12 +38,12 @@ class EnvProfile:
     def frozen(self) -> bool:
         return bool(self.meta.get("frozen", False))
 
-    def supports(self, kserve_version: str) -> bool:
-        ks = self.meta.get("kserve", {}) or {}
+    def supports(self, version: str) -> bool:
+        ks = self.meta.get("versions", {}) or {}
         lo, hi = ks.get("min"), ks.get("max")
-        if lo and version_key(kserve_version) < version_key(lo):
+        if lo and version_key(version) < version_key(lo):
             return False
-        if hi and version_key(kserve_version) > version_key(hi):
+        if hi and version_key(version) > version_key(hi):
             return False
         return True
 
@@ -94,12 +94,13 @@ class Tutorial:
         return list(self.meta.get("langs", ["en"]))
 
     @property
-    def kserve_default(self) -> str | None:
-        return (self.meta.get("kserve") or {}).get("default")
+    def default_version(self) -> str | None:
+        """Version of the project's product (project.yaml) readers and PR CI use."""
+        return (self.meta.get("versions") or {}).get("default")
 
     @property
-    def kserve_tested(self) -> list[str]:
-        return list((self.meta.get("kserve") or {}).get("tested", []))
+    def tested_versions(self) -> list[str]:
+        return list((self.meta.get("versions") or {}).get("tested", []))
 
     @property
     def namespace(self) -> str:

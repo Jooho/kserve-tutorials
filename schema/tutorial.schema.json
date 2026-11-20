@@ -8,7 +8,7 @@
     "title",
     "summary",
     "status",
-    "kserve",
+    "versions",
     "langs"
   ],
   "properties": {
@@ -56,7 +56,7 @@
       "type": "string",
       "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
     },
-    "kserve": {
+    "versions": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -75,7 +75,8 @@
             "$ref": "#/$defs/version"
           }
         }
-      }
+      },
+      "description": "Versions of the project's product (project.yaml name) this tutorial runs on."
     },
     "requires": {
       "type": "object",
@@ -133,11 +134,11 @@
         "since": {
           "type": "string"
         },
-        "last_supported_kserve": {
-          "$ref": "#/$defs/version"
-        },
         "replacement": {
           "type": "string"
+        },
+        "last_supported_version": {
+          "$ref": "#/$defs/version"
         }
       }
     },

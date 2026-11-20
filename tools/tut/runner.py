@@ -18,11 +18,11 @@ import sys
 import time
 from pathlib import Path
 
-from . import markdown
+from . import markdown, project
 from .model import REPO_ROOT, Tutorial
 
 
-def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
+def build_script(t: Tutorial, version: str | None, keep: bool,
                  keep_on_failure: bool = False, passes: int = 1) -> tuple[str, list[markdown.Block]]:
     doc = markdown.parse(t.readme("en").read_text())
     blocks = [b for b in doc.blocks if b.is_shell and b.role in ("run", "verify", "cleanup")]
@@ -33,8 +33,9 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
         f"cd {shlex.quote(str(REPO_ROOT))}",
         f"export TUT_ID={shlex.quote(t.id)}",
     ]
-    if kserve_version:
-        out.append(f"export KSERVE_VERSION={shlex.quote(kserve_version)}")
+    if version:
+        var = project.load(t.path.parent.parent).version_var
+        out.append(f"export {var}={shlex.quote(version)}")
     out += [
         "TUT_BLOCK=''",
         "__tut_failed=0",
@@ -98,19 +99,20 @@ def build_script(t: Tutorial, kserve_version: str | None, keep: bool,
 
 
 
-def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
+def run(t: Tutorial, version: str | None = None, keep: bool = False,
         dry_run: bool = False, teardown_env: bool = False,
         report: Path | None = None, keep_on_failure: bool = False, twice: bool = False) -> int:
-    script, steps = build_script(t, kserve_version, keep, keep_on_failure, 2 if twice else 1)
+    script, steps = build_script(t, version, keep, keep_on_failure, 2 if twice else 1)
     if dry_run:
         sys.stdout.write(script)
         return 0
-    version = kserve_version or t.kserve_default
+    version = version or t.default_version
+    name = project.load(t.path.parent.parent).name
     state_file = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / f"tut-{t.id}-{os.getpid()}.state"
     env = dict(os.environ, TUT_STATE_FILE=str(state_file))
     timeout = int(t.meta.get("timeout_minutes", 45)) * 60
     started = time.time()
-    print(f"▶ {t.id} with KServe {version} ({len(steps)} steps, timeout {timeout // 60}m)", flush=True)
+    print(f"▶ {t.id} with {name} {version} ({len(steps)} steps, timeout {timeout // 60}m)", flush=True)
     # Run the script from a file, not `bash -c <script>`: with -c the whole tutorial
     # is in the shell's command line, so a step like `pkill -f "[p]ort-forward ..."`
     # matched the runner itself and killed it (CI-008). A reader's terminal never
@@ -129,7 +131,7 @@ def run(t: Tutorial, kserve_version: str | None = None, keep: bool = False,
         script_file.unlink(missing_ok=True)
     result = {
         "tutorial": t.id,
-        "kserve_version": version,
+        "version": version,
         "env": t.env_ref,
         "status": "passed" if rc == 0 else "failed",
         "failed_at": failed_at,

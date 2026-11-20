@@ -12,6 +12,7 @@ from tut.model import REPO_ROOT
 def repo(tmp_path):
     for d in ("envs", "lib", "catalog", "schema"):
         shutil.copytree(REPO_ROOT / d, tmp_path / d)
+    shutil.copy(REPO_ROOT / "project.yaml", tmp_path / "project.yaml")
     shutil.copytree(REPO_ROOT / "tutorials" / "_template", tmp_path / "tutorials" / "_template")
     (tmp_path / ".github").mkdir()
     return tmp_path

@@ -1,6 +1,6 @@
 """Release process: promote a verified `main` commit to the `stable` branch.
 
-    main ──(every runnable tutorial × every tested KServe version passes)──▶ stable + tag
+    main ──(every runnable tutorial × every tested version passes)──▶ stable + tag
 
 Releases are named by date: YYYY.MM.N (N starts at 0 each month). `stable`
 only ever moves forward to a commit of `main` (fast-forward), so there are no
@@ -15,6 +15,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from . import project
 from .model import REPO_ROOT, load_tutorials
 
 TAG_RE = re.compile(r"^(\d{4})\.(\d{2})\.(\d+)$")
@@ -47,11 +48,11 @@ def load_reports(reports_dir: Path) -> list[dict]:
 
 
 def verdict(reports: list[dict], expected: list[dict]) -> tuple[bool, list[str]]:
-    """Every expected {tutorial, kserve_version} must have a passing report."""
+    """Every expected {tutorial, version} must have a passing report."""
     problems = []
-    got = {(r["tutorial"], r["kserve_version"]): r for r in reports}
+    got = {(r["tutorial"], r["version"]): r for r in reports}
     for e in expected:
-        key = (e["tutorial"], e["kserve_version"])
+        key = (e["tutorial"], e["version"])
         r = got.get(key)
         if r is None:
             problems.append(f"{key[0]} @ {key[1]}: no report (job did not run or crashed)")
@@ -78,24 +79,25 @@ def notes(version: str, sha: str, reports: list[dict], repo: str = "<owner>/<rep
           root: Path = REPO_ROOT) -> str:
     tags = [t for t in release_tags(root) if t != version]
     prev = tags[-1] if tags else None
-    out = [f"## KServe Tutorials {version}", "",
+    proj = project.load(root)
+    out = [f"## {proj.text('title')} {version}", "",
            f"Commit `{sha[:7]}` of `main`, promoted to `{STABLE_BRANCH}` after every runnable "
-           "tutorial passed on every KServe version it lists.", "",
+           f"tutorial passed on every {proj.name} version it lists.", "",
            "```bash", f"git clone -b {version} https://github.com/{repo}.git", "```", ""]
-    out += ["### Verification", "", "| Tutorial | KServe | Result | Duration |", "|---|---|---|---|"]
-    for r in sorted(reports, key=lambda r: (r["tutorial"], r["kserve_version"])):
+    out += ["### Verification", "", f"| Tutorial | {proj.name} | Result | Duration |", "|---|---|---|---|"]
+    for r in sorted(reports, key=lambda r: (r["tutorial"], r["version"])):
         icon = "✅" if r["status"] == "passed" else "❌"
-        out.append(f"| {r['tutorial']} | {r['kserve_version']} | {icon} | "
+        out.append(f"| {r['tutorial']} | {r['version']} | {icon} | "
                    f"{round(r.get('duration_seconds', 0) / 60)} min |")
     if not reports:
         out.append("| — | — | no CI-runnable tutorials | — |")
     out += ["", "### Tutorials in this release", "",
-            "| Tutorial | Status | Tested KServe | Environment |", "|---|---|---|---|"]
+            f"| Tutorial | Status | Tested {proj.name} | Environment |", "|---|---|---|---|"]
     for t in load_tutorials(root):
         if t.errors:
             continue
         note = "" if t.ci_runnable else " (not run in CI)"
-        out.append(f"| {t.id} | {t.status}{note} | {', '.join(t.kserve_tested)} | `{t.env_ref}` |")
+        out.append(f"| {t.id} | {t.status}{note} | {', '.join(t.tested_versions)} | `{t.env_ref}` |")
     if prev:
         changed = _git("diff", "--name-only", f"{prev}..{sha}", root=root).split("\n")
         parts = sorted({"/".join(Path(p).parts[:2]) if p.startswith("tutorials/") else

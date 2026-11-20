@@ -2,7 +2,7 @@
 #
 #   plan     resolve the commit, check it is on main and that stable can
 #            fast-forward to it, run rules and tests, pick the version
-#   verify   every runnable tutorial x every tested KServe version, at that commit
+#   verify   every runnable tutorial x every tested version, at that commit
 #   publish  only if everything passed: move stable, tag, GitHub Release, site
 #
 # dry_run (default) does everything except moving stable, tagging and deploying.
@@ -102,7 +102,7 @@ jobs:
             exit 0
           fi
           git push origin "$sha:refs/heads/stable"
-          gh release create "$version" --target "$sha" --title "KServe Tutorials $version" --notes-file notes.md
+          gh release create "$version" --target "$sha" --title "$(./tut project --get title) $version" --notes-file notes.md
           echo "published=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with: {name: release-notes, path: notes.md}

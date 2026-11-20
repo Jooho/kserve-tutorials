@@ -7,7 +7,7 @@
     "id",
     "description",
     "frozen",
-    "kserve",
+    "versions",
     "requires"
   ],
   "properties": {
@@ -23,7 +23,7 @@
       "description": "Once true the profile must never change; create the next version instead.",
       "type": "boolean"
     },
-    "kserve": {
+    "versions": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -36,7 +36,8 @@
         "max": {
           "$ref": "#/$defs/version"
         }
-      }
+      },
+      "description": "Product versions this env can install (min, optional max)."
     },
     "requires": {
       "description": "Host tools the setup script expects.",

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import markdown, shared
+from . import markdown, project, shared
 from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, load_envs, load_modules, load_tutorials,
                     readme_name, version_key)
 
@@ -71,12 +71,17 @@ def env_tool_dirs(env_ref: str, root: Path = REPO_ROOT) -> list[str]:
     return out
 
 
+def _root(t: Tutorial) -> Path:
+    return t.path.parent.parent
+
+
 def render_setup(t: Tutorial) -> str:
     env = t.env_ref
+    var = project.load(_root(t)).version_var
     lines = [
         "```bash run",
         f"# {GEN_NOTE['en']}",
-        f'export KSERVE_VERSION="${{KSERVE_VERSION:-{t.kserve_default}}}"',
+        f'export {var}="${{{var}:-{t.default_version}}}"',
         f'export NS="${{NS:-{t.namespace}}}"',
         'export REPO_ROOT="$(git rev-parse --show-toplevel)"',
         'source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any',
@@ -100,16 +105,17 @@ def render_setup(t: Tutorial) -> str:
 
 def render_header(t: Tutorial, lang: str) -> str:
     st = STATUS_TEXT[lang].get(t.status, t.status)
-    tested = ", ".join(t.kserve_tested) or "—"
+    name = project.load(_root(t)).name
+    tested = ", ".join(t.tested_versions) or "—"
     env = t.env_ref or "—"
     env_link = f"[`{env}`](../../envs/{env}/)" if t.env_ref else env
     if lang == "ko":
         gpu = "필요" if t.needs_gpu else "불필요"
-        line = (f"> **상태:** {st} · **검증된 KServe:** {tested} · "
+        line = (f"> **상태:** {st} · **검증된 {name}:** {tested} · "
                 f"**환경:** {env_link} · **GPU:** {gpu}")
     else:
         gpu = "required" if t.needs_gpu else "not required"
-        line = (f"> **Status:** {st} · **Tested with KServe:** {tested} · "
+        line = (f"> **Status:** {st} · **Tested with {name}:** {tested} · "
                 f"**Environment:** {env_link} · **GPU:** {gpu}")
     out = [f"<!-- {GEN_NOTE[lang]} -->", line]
     others = [l for l in t.langs if l != lang]
@@ -120,13 +126,13 @@ def render_header(t: Tutorial, lang: str) -> str:
     dep = t.meta.get("deprecation")
     if t.status in ("deprecated", "archived") and dep:
         reason = dep.get("reason", "")
-        last = dep.get("last_supported_kserve")
+        last = dep.get("last_supported_version")
         repl = dep.get("replacement")
         label = "주의" if lang == "ko" else "Note"
         msg = f"> **{label}:** {reason}"
         if last:
-            msg += (f" 마지막 지원 KServe: {last}." if lang == "ko"
-                    else f" Last supported KServe: {last}.")
+            msg += (f" 마지막 지원 {name}: {last}." if lang == "ko"
+                    else f" Last supported {name}: {last}.")
         if repl:
             msg += (f" 대체 튜토리얼: [{repl}](../{repl}/)." if lang == "ko"
                     else f" Replacement: [{repl}](../{repl}/).")
@@ -138,14 +144,15 @@ def render_catalog(tutorials: list[Tutorial], lang: str = "en", root: Path = REP
     from . import catalog
     visible = [t for t in tutorials if not t.errors]
     by_id = {t.id: t for t in visible}
-    hdr = ("| Tutorial | Status | Tested KServe | Tags | Environment | GPU |",
+    name = project.load(root).name
+    hdr = (f"| Tutorial | Status | Tested {name} | Tags | Environment | GPU |",
            "|---|---|---|---|---|---|")
     rows = []
     for t in visible:
         st = STATUS_TEXT[lang].get(t.status, t.status)
         tags = " ".join(f"`{x}`" for x in t.meta.get("tags", []) or [])
         rows.append(f"| [{t.title(lang)}](tutorials/{t.id}/) | {st} | "
-                    f"{', '.join(t.kserve_tested)} | {tags} | `{t.env_ref or '—'}` | "
+                    f"{', '.join(t.tested_versions)} | {tags} | `{t.env_ref or '—'}` | "
                     f"{'yes' if t.needs_gpu else 'no'} |")
     cols = []
     for c in catalog.load_collections(root):
@@ -160,13 +167,13 @@ def render_catalog(tutorials: list[Tutorial], lang: str = "en", root: Path = REP
     for t in visible:
         if t.status == "archived":
             continue
-        for v in t.kserve_tested:
+        for v in t.tested_versions:
             by_version.setdefault(v, []).append(t)
     out = ["<!-- " + GEN_NOTE[lang].replace("tutorial.yaml", "tutorials/*/tutorial.yaml") + " -->",
            *hdr, *rows]
     if cols:
         out += ["", "**Collections** (reading paths)", *cols]
-    out += ["", "**By KServe version**", ""]
+    out += ["", f"**By {name} version**", ""]
     for v in sorted(by_version, key=version_key, reverse=True):
         links = ", ".join(f"[{t.id}](tutorials/{t.id}/)" for t in by_version[v])
         out.append(f"- **{v}**: {links}")

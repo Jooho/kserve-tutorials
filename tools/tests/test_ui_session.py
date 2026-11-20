@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
+from test_rules import make_project
 from tut.ui.session import ShellSession
+
+
+@pytest.fixture(autouse=True)
+def project_yaml(tmp_path):
+    make_project(tmp_path)          # the session exports project.yaml's version_var
 
 
 def run_session(tmp_path, blocks, stop_on_fail=True, timeout=20):

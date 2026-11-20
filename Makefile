@@ -76,13 +76,13 @@ ui: ## Start the local runner UI
 list: ## List tutorials
 	./tut list
 
-run: ## Run a tutorial end to end: make run T=<id> [V=<kserve-version>]
-	@test -n "$(T)" || { echo "usage: make run T=<tutorial-id> [V=<kserve-version>]"; exit 2; }
-	./tut run $(T) $(if $(V),--kserve-version $(V))
+run: ## Run a tutorial end to end: make run T=<id> [V=<version>]
+	@test -n "$(T)" || { echo "usage: make run T=<tutorial-id> [V=<version>]"; exit 2; }
+	./tut run $(T) $(if $(V),--version $(V))
 
 run-keep: ## Like run, but keep resources when a step fails
-	@test -n "$(T)" || { echo "usage: make run-keep T=<tutorial-id> [V=<kserve-version>]"; exit 2; }
-	./tut run $(T) $(if $(V),--kserve-version $(V)) --keep-on-failure
+	@test -n "$(T)" || { echo "usage: make run-keep T=<tutorial-id> [V=<version>]"; exit 2; }
+	./tut run $(T) $(if $(V),--version $(V)) --keep-on-failure
 
 matrix: ## What a release and the weekly run verify
 	./tut matrix --scheduled

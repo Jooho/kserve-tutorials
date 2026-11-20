@@ -1,4 +1,4 @@
-# Reusable: execute a matrix of {tutorial, kserve_version} and upload one JSON report each.
+# Reusable: execute a matrix of {tutorial, version} and upload one JSON report each.
 name: run-tutorials
 on:
   workflow_call:
@@ -11,7 +11,7 @@ permissions: {contents: read}
 
 jobs:
   run:
-    name: ${{ matrix.tutorial }} @ ${{ matrix.kserve_version }}
+    name: ${{ matrix.tutorial }} @ ${{ matrix.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -40,7 +40,7 @@ jobs:
       - name: Run tutorial
         run: |
           ./tut run "${{ matrix.tutorial }}" \
-            --kserve-version "${{ matrix.kserve_version }}" \
+            --version "${{ matrix.version }}" \
             --twice --keep-on-failure --report report.json
       - name: Diagnostics (on failure)
         if: failure()
@@ -53,15 +53,16 @@ jobs:
         run: |
           if [ -f report.json ]; then
             python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json; r = json.load(open("report.json"))
+          import json, subprocess; r = json.load(open("report.json"))
+          name = subprocess.run(["./tut", "project", "--get", "name"], capture_output=True, text=True).stdout.strip()
           icon = "✅" if r["status"] == "passed" else "❌"
-          print(f"{icon} **{r['tutorial']}** on KServe {r['kserve_version']} — {r['status']} in {r['duration_seconds']}s")
+          print(f"{icon} **{r['tutorial']}** on {name} {r['version']} — {r['status']} in {r['duration_seconds']}s")
           if r["failed_at"]: print(f"\nFailed at `{r['failed_at']}`")
           PY
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: report-${{ inputs.label }}-${{ matrix.tutorial }}-${{ matrix.kserve_version }}
+          name: report-${{ inputs.label }}-${{ matrix.tutorial }}-${{ matrix.version }}
           path: report.json
           if-no-files-found: ignore

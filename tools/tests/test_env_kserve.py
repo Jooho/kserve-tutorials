@@ -162,6 +162,7 @@ def test_lint_T008_env_options(tmp_path):
     from tut import generate, lint
     for d in ("envs", "lib", "catalog", "schema"):
         shutil.copytree(REPO_ROOT / d, tmp_path / d)
+    shutil.copy(REPO_ROOT / "project.yaml", tmp_path / "project.yaml")
     for p in (tmp_path / "catalog" / "collections").glob("*.yaml"):
         p.unlink()
     shutil.copytree(REPO_ROOT / "tutorials" / "_template", tmp_path / "tutorials" / "t")

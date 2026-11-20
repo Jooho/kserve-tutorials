@@ -1,11 +1,11 @@
-# Weekly: every tutorial x every tested KServe version, plus a canary run of
-# stable tutorials against the latest KServe release. Failures become issues.
+# Weekly: every tutorial x every tested version, plus a canary run of
+# stable tutorials against the latest upstream release (project.yaml upstream). Failures become issues.
 name: scheduled
 on:
   schedule: [{cron: "17 4 * * 1"}]   # Mondays 04:17 UTC
   workflow_dispatch:
     inputs:
-      canary_version: {description: "KServe version for the canary (default: latest release)", required: false}
+      canary_version: {description: "Version for the canary (default: latest release of project.yaml upstream)", required: false}
 
 permissions: {contents: read}
 
@@ -25,7 +25,7 @@ jobs:
         env: {GH_TOKEN: "${{ github.token }}"}
         run: |
           v="${{ inputs.canary_version }}"
-          [ -n "$v" ] || v=$(gh api repos/kserve/kserve/releases/latest --jq .tag_name)
+          [ -n "$v" ] || v=$(gh api "repos/$(./tut project --get upstream)/releases/latest" --jq .tag_name)
           echo "canary_version=$v" >> "$GITHUB_OUTPUT"
           echo "full=$(./tut matrix --scheduled --json)" >> "$GITHUB_OUTPUT"
           echo "canary=$(./tut matrix --canary "$v" --json)" >> "$GITHUB_OUTPUT"

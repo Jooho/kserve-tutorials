@@ -1,4 +1,4 @@
-// KServe tutorials — local runner UI.
+// Tutorials — local runner UI (product name from project.yaml).
 "use strict";
 
 const $ = (s) => document.querySelector(s);
@@ -16,6 +16,22 @@ const S = {
   runVersions: JSON.parse(store.get("tut.runVersions", "{}")),
 };
 S.version = store.get("tut.verfilter", "");
+if (store.get("tut.sort", "") === "kserve") store.set("tut.sort", "version");   // renamed
+
+// The product the tutorials are about (project.yaml), e.g. KServe.
+S.project = { name: "", title: { en: "Tutorials" } };
+const P = () => S.project.name;
+function applyProject(p) {
+  if (!p) return;
+  S.project = p;
+  const title = p.title[S.lang] || p.title.en;
+  document.title = title;
+  $(".brand").firstChild.textContent = title + " ";
+  $("#verfilter").setAttribute("aria-label", `${p.name} version`);
+  $("#verfilter").title = `Show only the tutorials tested on this ${p.name} version`;
+  $("#matrix-btn").title = `Which tutorial is tested on which ${p.name} version`;
+  const o = $('#sort option[value="version"]'); if (o) o.textContent = `Sort: newest ${p.name}`;
+}
 
 // ------------------------------------------------------------- terminal
 const term = new Terminal({
@@ -40,10 +56,10 @@ function send(msg) {
 // ------------------------------------------------------------- sidebar
 async function loadList() {
   const r = await fetch("/api/tutorials").then((r) => r.json());
-  S.tutorials = r.tutorials; S.versions = r.versions;
+  S.tutorials = r.tutorials; S.versions = r.versions; applyProject(r.project);
   const sel = $("#verfilter");
-  sel.innerHTML = `<option value="">All KServe versions</option>` +
-    S.versions.map((v) => `<option value="${v}">KServe ${v}</option>`).join("");
+  sel.innerHTML = `<option value="">All ${P()} versions</option>` +
+    S.versions.map((v) => `<option value="${v}">${P()} ${v}</option>`).join("");
   if (!S.versions.includes(S.version)) S.version = "";
   sel.value = S.version;
   await loadCatalog();
@@ -54,7 +70,7 @@ async function loadList() {
 }
 
 // ------------------------------------------------------------- catalog views
-// Collections are resolved on the server for the selected KServe version
+// Collections are resolved on the server for the selected product version
 // (tools/tut/catalog.py); this code only displays them.
 Object.assign(S, { view: ["groups", "collections", "all"].includes(store.get("tut.view", "")) ? store.get("tut.view") : "groups", sort: store.get("tut.sort", "title"),
                    tagFilter: new Set(), catalog: null, collapsed: new Set(JSON.parse(store.get("tut.collapsed", "[]"))) });
@@ -90,7 +106,7 @@ function item(t, { n = null, note = "", dim = false, extra = "", col = "" } = {}
   const on = t.id === S.current && (col || null) === (S.group || null);
   return `<li data-id="${t.id}" ${col ? `data-col="${col}"` : ""} class="${on ? "on" : ""} ${dim ? "untested" : ""} ${extra}">
     <div class="t">${n ? `<span class="num">${n}</span>` : ""}${title}</div>
-    <div class="meta"><span>${statusLabel(t.status)}</span><span>${t.kserve.tested.join(", ")}</span>
+    <div class="meta"><span>${statusLabel(t.status)}</span><span>${t.versions.tested.join(", ")}</span>
       ${t.gpu ? "<span>GPU</span>" : ""}${note ? `<span class="note">${note}</span>` : ""}</div>
     ${tags ? `<div class="tags">${tags}</div>` : ""}</li>`;
 }
@@ -102,7 +118,7 @@ function renderList() {
   $("#tagchips").innerHTML = [...S.tagFilter].map((x) =>
     `<span class="tag on" data-untag="${x}" title="Remove filter">#${x} ✕</span>`).join("");
   const v = S.version, html = [];                      // the version filter applies to every view
-  const onVersion = (t) => !v || t.kserve.tested.includes(v);
+  const onVersion = (t) => !v || t.versions.tested.includes(v);
   if (!S.catalog) return;
   const heading = (id, title, desc, rows, kind) => {      // a collapsible section of the list
     const shown = rows.filter(Boolean);
@@ -140,7 +156,7 @@ function renderList() {
     const order = { stable: 0, deprecated: 1, draft: 2, archived: 3 };
     const ts = S.tutorials.filter((t) => matches(t) && onVersion(t)).sort((a, b) =>
       S.sort === "status" ? (order[a.status] - order[b.status]) || a.title.en.localeCompare(b.title.en)
-      : S.sort === "kserve" ? vcmp(b.kserve.tested.slice().sort(vcmp).at(-1) || "v0.0.0", a.kserve.tested.slice().sort(vcmp).at(-1) || "v0.0.0")
+      : S.sort === "version" ? vcmp(b.versions.tested.slice().sort(vcmp).at(-1) || "v0.0.0", a.versions.tested.slice().sort(vcmp).at(-1) || "v0.0.0")
       : (a.title[S.lang] || a.title.en).localeCompare(b.title[S.lang] || b.title.en));
     ts.forEach((t) => html.push(item(t)));
   }
@@ -151,10 +167,10 @@ function renderMatrix() {
   const vs = S.version ? [S.version] : S.versions;    // the Versions filter applies here too
   const rows = S.tutorials.filter(matches).map((t) => `<tr data-id="${t.id}" class="${t.status === "archived" ? "archived" : ""}">
     <td>${esc(t.title[S.lang] || t.title.en)} <span class="muted">${statusLabel(t.status)}</span></td>
-    ${vs.map((ver) => t.kserve.tested.includes(ver)
-      ? `<td class="yes ${ver === t.kserve.default ? "default" : ""}" title="${ver === t.kserve.default ? "default version" : "tested"}">✓</td>`
+    ${vs.map((ver) => t.versions.tested.includes(ver)
+      ? `<td class="yes ${ver === t.versions.default ? "default" : ""}" title="${ver === t.versions.default ? "default version" : "tested"}">✓</td>`
       : "<td></td>").join("")}</tr>`).join("");
-  $("#matrix").innerHTML = `<h2>${S.lang === "ko" ? "KServe 버전별 튜토리얼" : "Tutorials by KServe version"}</h2>
+  $("#matrix").innerHTML = `<h2>${S.lang === "ko" ? `${P()} 버전별 튜토리얼` : `Tutorials by ${P()} version`}</h2>
     <p class="muted">✓ = run and verified in CI on that version; outlined = the tutorial's default version.</p>
     <table><thead><tr><th>Tutorial</th>${vs.map((v) => `<th>${v}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
   $("#matrix").hidden = false; $("#doc-wrap").hidden = true; $("#empty").hidden = true;
@@ -213,11 +229,11 @@ $("#lang").addEventListener("click", (e) => {
 document.querySelectorAll("#lang button").forEach((x) => x.classList.toggle("on", x.dataset.lang === S.lang));
 
 const currentMeta = () => S.tutorials.find((t) => t.id === S.current);
-// The KServe version a tutorial runs with: picked on its version chip (only
+// The product version a tutorial runs with: picked on its version chip (only
 // versions it was tested on), else its default.
 function sessionVersionFor(t) {
   const v = S.runVersions[t.id];
-  return v && t.kserve.tested.includes(v) ? v : t.kserve.default;
+  return v && t.versions.tested.includes(v) ? v : t.versions.default;
 }
 
 // ------------------------------------------------------------- document
@@ -471,7 +487,7 @@ $("#chips").addEventListener("change", (e) => {
   S.runVersions[t.id] = want; store.set("tut.runVersions", JSON.stringify(S.runVersions));
   renderChips(); loadEnv();
   if (want !== S.sessionVersion &&
-      confirm(`Start a new shell with KServe ${want}? Variables in the current shell are lost.`)) startShell();
+      confirm(`Start a new shell with ${P()} ${want}? Variables in the current shell are lost.`)) startShell();
 });
 $("#chips").addEventListener("click", (e) => {
   const open = e.target.closest("[data-open]");
@@ -486,11 +502,11 @@ $("#chips").addEventListener("click", (e) => {
 function renderChips() {
   const t = currentMeta(); if (!t) return;
   const v = sessionVersionFor(t);
-  const tested = t.kserve.tested.slice().sort(vcmp).reverse();
+  const tested = t.versions.tested.slice().sort(vcmp).reverse();
   const verChip = tested.length > 1
-    ? `<select class="chip verchip" id="runver" title="KServe version this tutorial's shell uses (only versions it was tested on)">${
-        tested.map((x) => `<option value="${x}" ${x === v ? "selected" : ""}>KServe ${x}${x === t.kserve.default ? " (default)" : ""}</option>`).join("")}</select>`
-    : `<span class="chip" title="The only KServe version this tutorial is tested on">KServe ${v}</span>`;
+    ? `<select class="chip verchip" id="runver" title="${P()} version this tutorial's shell uses (only versions it was tested on)">${
+        tested.map((x) => `<option value="${x}" ${x === v ? "selected" : ""}>${P()} ${x}${x === t.versions.default ? " (default)" : ""}</option>`).join("")}</select>`
+    : `<span class="chip" title="The only ${P()} version this tutorial is tested on">${P()} ${v}</span>`;
   $("#chips").innerHTML = [
     `<span class="chip">${statusLabel(t.status)}</span>`,
     verChip,
@@ -692,7 +708,7 @@ async function loadEnv() {
   const bar = $("#envbar");
   let cls = "warn", msg;
   if (!e.docker || !e.kubectl) msg = `Missing tools: ${["docker", "kubectl"].filter((x) => !e[x]).join(", ")}. Install them before running.`;
-  else if (!e.cluster) msg = `No Kind cluster yet. The <b>setup</b> step creates <span class="mono">${esc(t.env)}</span> with KServe ${sessionVersionFor(t)} (takes several minutes).`;
+  else if (!e.cluster) msg = `No Kind cluster yet. The <b>setup</b> step creates <span class="mono">${esc(t.env)}</span> with ${P()} ${sessionVersionFor(t)} (takes several minutes).`;
   else if (e.built_as === want) { cls = "ok"; msg = `Kind cluster ready: <span class="mono">${esc(e.built_as)}</span>. The setup step will reuse it.`; }
   else msg = `A Kind cluster exists but was built as <span class="mono">${esc(e.built_as || "unknown")}</span>, not <span class="mono">${esc(want)}</span>. Setup will stop; delete it with <span class="mono">envs/${esc(t.env)}/teardown.sh</span> or set TUT_ENV_RECREATE=1.`;
   bar.className = "envbar " + cls; bar.innerHTML = msg;
@@ -714,8 +730,8 @@ function connect() {
       if (m.state === "started") {
         // A shell opened in the other mode has the wrong vars (e.g. NS): start a new one.
         if ((m.collection || null) !== (S.group || null)) { started = true; startShell(); return; }
-        started = true; S.sessionVersion = m.kserve_version;
-        $("#term-title").textContent = `Terminal — ${S.current} · KServe ${m.kserve_version || "default"}`;
+        started = true; S.sessionVersion = m.version;
+        $("#term-title").textContent = `Terminal — ${S.current} · ${P()} ${m.version || "default"}`;
         refit();
       } else if (m.state === "exited" || m.state === "stopped") {
         $("#term-title").textContent = "Terminal — shell exited (↻ New shell)";
@@ -734,7 +750,7 @@ function startShell() {
   updateProgress();
   select(firstPending(), false);
   term.reset();
-  send({ type: "start", kserve_version: sessionVersionFor(t), cols: term.cols, rows: term.rows,
+  send({ type: "start", version: sessionVersionFor(t), cols: term.cols, rows: term.rows,
          collection: S.group || null });
   loadEnv();
 }
