@@ -278,6 +278,8 @@ def cmd_translation(a):
         return
     if a.tcmd == "draft":
         return _translation_draft(a, langs)
+    if a.tcmd == "todo":
+        return _translation_todo(langs)
     if a.lang not in langs:
         sys.exit(f"unknown language {a.lang!r}; supported: {', '.join(langs)}")
     t = _tutorial(a.id)
@@ -290,38 +292,80 @@ def cmd_translation(a):
     print(f"marked {p.relative_to(REPO_ROOT)} as a translation of the current README.md")
 
 
+TODO_STATES = ("missing", "behind", "unmarked")   # an AI can (re)draft these
+
+
+def _translation_todo(langs) -> int:
+    """What `make precommit` prints at the end: translations that need work,
+    and how to get them done. Prints nothing when every translation is current."""
+    draftable, review = [], []
+    for t in load_tutorials(REPO_ROOT):
+        if t.errors:
+            continue
+        for l in langs:
+            st = lint.translation_state(t, l)
+            if st in TODO_STATES:
+                draftable.append(f"  {l}  {lint.TRANSLATION_STATES[st]:<16} {t.id}")
+            elif st == "draft":
+                review.append(f"  {l}  review tutorials/{t.id}/README.{l}.md, then: "
+                              f"./tut translation mark {t.id} {l}")
+    if draftable:
+        print("\nTranslations to write (make precommit TRANSLATE=1 drafts them with your TUT_AI;"
+              "\nor one: ./tut translation draft <id> <lang>):")
+        print("\n".join(draftable))
+    if review:
+        print("\nAI translations waiting for a review:")
+        print("\n".join(review))
+    return 0
+
+
 def _translation_draft(a, langs):
     from . import translate
-    lang = a.lang if a.lang else a.id if a.all else None
     if a.all:
-        lang, a.id = a.id, None
+        # --all [lang]: every tutorial; without a language, every language
+        todo_langs = [a.id] if a.id else list(langs)
+        bad = [l for l in todo_langs if l not in langs]
+        if bad:
+            sys.exit(f"unknown language {bad[0]!r}; supported: {', '.join(langs)}")
+        rc = 0
+        for lang in todo_langs:
+            rc |= _translation_draft_lang(a, lang, None) or 0
+        return rc
+    if not a.id:
+        sys.exit("usage: ./tut translation draft <id> <lang>   or   ./tut translation draft --all [<lang>]")
+    lang = a.lang
     if lang not in langs:
         sys.exit(f"unknown language {lang!r}; supported: {', '.join(langs)}")
+    return _translation_draft_lang(a, lang, a.id)
+
+
+def _translation_draft_lang(a, lang: str, tid: str | None):
+    from . import translate
     try:
         tr = translate.configured()
     except translate.TranslationError as e:
         sys.exit(str(e))
     if tr is None:
-        sys.exit("No AI translator configured. Pick the CLI you are logged in to, e.g.\n"
-                 "  export TUT_TRANSLATOR=claude      # or copilot, codex, cmd:<command>\n"
-                 "  ./tut config TUT_TRANSLATOR=claude   # to remember it in .tut.env")
+        sys.exit("No AI CLI configured. Pick the one you are logged in to, e.g.\n"
+                 "  export TUT_AI=claude      # or copilot, codex, cmd:<command>\n"
+                 "  ./tut config TUT_AI=claude   # to remember it in .tut.env")
     if not tr.available:
-        sys.exit(f"TUT_TRANSLATOR={tr.name}, but `{tr.argv[0]}` is not on PATH")
-    if a.all:
+        sys.exit(f"TUT_AI={tr.name}, but `{tr.argv[0]}` is not on PATH")
+    if tid is None:
         targets = [t for t in load_tutorials(REPO_ROOT) if not t.errors
-                   and lint.translation_state(t, lang) in ("missing", "behind", "unmarked")]
+                   and lint.translation_state(t, lang) in TODO_STATES]
     else:
-        targets = [_tutorial(a.id)]
+        targets = [_tutorial(tid)]
         st = lint.translation_state(targets[0], lang)
         if st == "current" and not a.force:
-            sys.exit(f"{a.id} {lang} is up to date and reviewed; use --force to re-translate it")
+            sys.exit(f"{tid} {lang} is up to date and reviewed; use --force to re-translate it")
     if not targets:
         print(f"Nothing to translate into {lang}.")
         return 0
     failed = 0
     for t in targets:
         print(f"→ {t.id} → {lang} with {tr.name} …", flush=True)
-        r = translate.draft_one(t, lang, tr)
+        r = translate.draft_one(t, lang, tr, REPO_ROOT)
         if not r.ok:
             print(f"  ✗ {r.message}")
             if r.path:
@@ -518,15 +562,16 @@ def build_parser() -> argparse.ArgumentParser:
                                    "list); <lang> is a language code such as ko.")
     tsub = s.add_subparsers(dest="tcmd")
     tsub.add_parser("status", help="state of every translation (default)")
-    d = tsub.add_parser("draft", help="translate with your AI CLI (TUT_TRANSLATOR=claude|copilot|codex|cmd:...)",
-                        description="Translate README.md with the AI CLI set in TUT_TRANSLATOR. The result "
+    d = tsub.add_parser("draft", help="translate with your AI CLI (TUT_AI=claude|copilot|codex|cmd:...)",
+                        description="Translate README.md with the AI CLI set in TUT_AI. The result "
                                     "is checked (code, commands, regions, links unchanged) and written as an "
                                     "AI draft; review it, then `translation mark`.")
-    d.add_argument("id", help="tutorial id (or, with --all, the language)")
+    d.add_argument("id", nargs="?", help="tutorial id (or, with --all, the language; none = every language)")
     d.add_argument("lang", nargs="?", help="language code, e.g. ko")
     d.add_argument("--all", action="store_true",
-                   help="every tutorial whose translation is missing or behind: ./tut translation draft --all ko")
+                   help="every tutorial whose translation is missing or behind: ./tut translation draft --all [ko]")
     d.add_argument("--force", action="store_true", help="re-translate a reviewed, up-to-date translation")
+    tsub.add_parser("todo", help="only what needs work, with the next command (printed by make precommit)")
     m = tsub.add_parser("mark", help="after reviewing: record that it matches the current README.md")
     m.add_argument("id", help="tutorial id, e.g. llmisvc-anatomy")
     m.add_argument("lang", help="language code, e.g. ko")
