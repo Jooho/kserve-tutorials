@@ -684,6 +684,8 @@ addEventListener("keydown", (e) => {
 
 function setState(idx, state, ts) {
   S.states[idx] = state;
+  // the setup step creates or changes the cluster: show its new state
+  if ((state === "passed" || state === "failed") && S.doc?.blocks[idx]?.region === "setup") loadEnv();
   if (ts) (S.times ||= {})[idx] = ts;
   if (state === "passed" && S.advanceFrom === idx) { S.advanceFrom = null; select(nextAfter(idx)); }
   const el = document.querySelector(`.block[data-idx="${idx}"]`);
@@ -746,6 +748,9 @@ $("#term-new").onclick = () => { if (S.current) window.open(`/shell/${encodeURIC
 $("#restart").onclick = () => { if (confirm("Start a new shell? Variables in the current shell are lost.")) startShell(); };
 
 // ------------------------------------------------------------- environment
+// Also when coming back to the page: the cluster may have changed meanwhile
+// (a command typed in a terminal, another tutorial, kind delete ...).
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.current) loadEnv(); });
 async function loadEnv() {
   const t = currentMeta();
   if (!t.env) { $("#envbar").className = "envbar"; $("#envbar").innerHTML = ""; $("#envbar").hidden = true; return; }
@@ -754,7 +759,9 @@ async function loadEnv() {
   const want = `${t.env}@${sessionVersionFor(t)}`;
   const bar = $("#envbar");
   let cls = "warn", msg;
-  if (!e.docker || !e.kubectl) msg = `Missing tools: ${["docker", "kubectl"].filter((x) => !e[x]).join(", ")}. Install them before running.`;
+  // Docker is the reader's; kind and kubectl are installed by the setup step (.tools/)
+  if (!e.docker) msg = "Docker is not installed (or not on PATH). Install it before running.";
+  else if (!e.kind) msg = `No Kind cluster yet (kind is not installed yet either). The <b>setup</b> step installs the tools and creates <span class="mono">${esc(t.env)}</span> with ${P()} ${sessionVersionFor(t)} (takes several minutes).`;
   else if (!e.cluster) msg = `No Kind cluster yet. The <b>setup</b> step creates <span class="mono">${esc(t.env)}</span> with ${P()} ${sessionVersionFor(t)} (takes several minutes).`;
   else if (e.built_as === want) { cls = "ok"; msg = `Kind cluster ready: <span class="mono">${esc(e.built_as)}</span>. The setup step will reuse it.`; }
   else msg = `A Kind cluster exists but was built as <span class="mono">${esc(e.built_as || "unknown")}</span>, not <span class="mono">${esc(want)}</span>. Setup will stop; delete it with 🗑 Teardown (<span class="mono">envs/${esc(t.env)}/teardown.sh</span>) or set TUT_ENV_RECREATE=1.`;

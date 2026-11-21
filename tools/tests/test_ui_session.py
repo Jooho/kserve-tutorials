@@ -244,3 +244,34 @@ def test_cancelled_queue_resets_the_steps_that_never_started(tmp_path):
         if e.get("type") == "block":
             last[e["idx"]] = e["state"]
     assert last[1] == "idle" and last[2] == "idle" and last[5] == "passed"
+
+
+def test_env_check_finds_the_pinned_kind_and_kubectl_in_dot_tools(tmp_path, monkeypatch):
+    """The setup step installs kind/kubectl into .tools/<tool>/<version>/, not on
+    the system PATH; the env bar must find them there, or it keeps saying
+    "no cluster" after setup has built one."""
+    import json, os
+    from aiohttp.test_utils import TestClient, TestServer
+    from test_rules import make_env, make_tut
+    from tut.ui.server import UI
+
+    make_env(tmp_path)
+    (tmp_path / "envs" / "kind-x" / "v1" / "tools.env").write_text("KIND=v0.30.0\nKUBECTL=v1.34.13\n")
+    for tool, body in (("kind/v0.30.0/kind", 'echo tut'),
+                       ("kubectl/v1.34.13/kubectl", 'printf "kind-x/v1@v0.18.0"')):
+        p = tmp_path / ".tools" / tool
+        p.parent.mkdir(parents=True)
+        p.write_text(f"#!/bin/sh\n{body}\n")
+        p.chmod(0o755)
+    make_tut(tmp_path, "t")
+    monkeypatch.setenv("KIND_CLUSTER_NAME", "tut")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")              # no kind / kubectl on the system
+
+    async def main():
+        ui = UI(tmp_path)
+        async with TestClient(TestServer(ui.app())) as c:
+            r = await c.get("/api/tutorials/t/env", headers={"X-Tut-Token": ui.token})
+            return await r.json()
+    e = asyncio.run(main())
+    assert e["kind"] and e["kubectl"] and e["name"] == "tut"
+    assert e["cluster"] == "tut" and e["built_as"] == "kind-x/v1@v0.18.0"

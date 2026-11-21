@@ -375,15 +375,21 @@ class UI:
     async def api_env(self, request):
         t = self.tutorial_or_404(request.match_info["tid"])
         cluster = os.environ.get("KIND_CLUSTER_NAME", "kind")
-        res = {"env": t.env_ref, "name": cluster, "kind": bool(shutil.which("kind")),
-               "kubectl": bool(shutil.which("kubectl")), "docker": bool(shutil.which("docker")),
-               "cluster": None, "built_as": None}
-        if res["kind"]:
-            out = await _cmd("kind", "get", "clusters")
+        # kind and kubectl are the env's pinned ones in .tools/ (setup installs them
+        # there), else the system's: look in both, like the setup step's PATH does.
+        from .. import generate
+        dirs = [d.replace("$REPO_ROOT", str(self.root)) for d in generate.env_tool_dirs(t.env_ref, self.root)] \
+            if t.env_ref else []
+        path = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
+        kind, kubectl = shutil.which("kind", path=path), shutil.which("kubectl", path=path)
+        res = {"env": t.env_ref, "name": cluster, "kind": bool(kind), "kubectl": bool(kubectl),
+               "docker": bool(shutil.which("docker")), "cluster": None, "built_as": None}
+        if kind:
+            out = await _cmd(kind, "get", "clusters")
             res["cluster"] = cluster if cluster in out.split() else None
-        if res["cluster"] and res["kubectl"]:
+        if res["cluster"] and kubectl:
             res["built_as"] = (await _cmd(
-                "kubectl", "--context", f"kind-{cluster}", "-n", "kube-system", "get",
+                kubectl, "--context", f"kind-{cluster}", "-n", "kube-system", "get",
                 "configmap", "tut-env", "-o",
                 "jsonpath={.data.profile}@{.data.kserve_version}")).strip() or None
         return web.json_response(res)
