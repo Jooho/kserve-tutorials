@@ -233,6 +233,12 @@ class UI:
         covered = shared.covered(col.members, tid, self.tutorials()) if col else {}
         lines = text.split("\n")
         blocks = []
+        # The tut:header line (status, tested versions, env, language links) is
+        # for GitHub and the site; the UI shows the same as chips, the env bar and
+        # its EN/KO switch. Blank it (same line count, so block lines still match).
+        for r in doc.regions:
+            if r.kind == "header":
+                lines[r.start:r.end + 1] = [""] * (r.end + 1 - r.start)
         # Replace each fenced block with a placeholder the front end hydrates.
         for i, b in reversed(list(enumerate(doc.blocks))):
             lines[b.line - 1:b.end] = ["", f'<div class="tut-block" data-idx="{i}"></div>', ""]
