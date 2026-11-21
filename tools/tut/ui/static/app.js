@@ -16,6 +16,19 @@ const S = {
   runVersions: JSON.parse(store.get("tut.runVersions", "{}")),
 };
 S.version = store.get("tut.verfilter", "");
+
+// Theme: auto (the OS setting), light or dark; remembered per browser.
+function applyTheme(t) {
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else { delete document.documentElement.dataset.theme; t = "auto"; }
+  store.set("tut.theme", t);
+  document.querySelectorAll("#theme button").forEach((b) => b.classList.toggle("on", b.dataset.theme === t));
+}
+applyTheme(store.get("tut.theme", "auto"));
+$("#theme").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) applyTheme(b.dataset.theme); });
+document.addEventListener("toggle", (e) => {
+  if (e.target.matches?.("details.pathbar")) store.set("tut.pathbar", e.target.open ? "open" : "closed");
+}, true);
 if (store.get("tut.sort", "") === "kserve") store.set("tut.sort", "version");   // renamed
 
 // The product the tutorials are about (project.yaml), e.g. KServe.
@@ -532,14 +545,19 @@ function groupBar() {
   if (!g) return "";
   const n = S.doc.blocks.filter((b) => (b.covered_by && b.role === "run") || b.group_skip).length;
   const vars = Object.entries(g.vars).map(([k, v]) => `${k}=${v}`).join(" ");
-  return `<div class="pathbar">
-    <span class="path-name">📚 ${esc(g.title[S.lang] || g.title.en)}</span> step ${g.n}/${g.total}
+  // Information only: folded to one line unless the reader opened it (remembered).
+  const open = store.get("tut.pathbar", "") === "open";
+  return `<details class="pathbar" ${open ? "open" : ""}>
+    <summary><span class="path-name">📚 ${esc(g.title[S.lang] || g.title.en)}</span> step ${g.n}/${g.total}
+      ${n ? `<span>· ${n} block(s) skipped</span>` : ""}</summary>
+    <div class="path-body">
     ${g.prev ? `<a href="#" data-open="${g.prev}">← ${esc(titleOf(g.prev))}</a>` : ""}
     ${g.next ? `<a href="#" data-open="${g.next}">${esc(titleOf(g.next))} →</a>` : ""}
     ${vars ? `<span class="mono" title="exported in this shell">${esc(vars)}</span>` : ""}
     ${n ? `<button class="btn" data-act="toggle-hidden">${S.showAll ? "hide" : "show"} ${n} skipped block(s)</button>` : ""}
     <button class="btn" data-act="standalone" title="Open with every step, as CI runs it">open standalone</button>
-  </div>`;
+    </div>
+  </details>`;
 }
 
 const RUNNABLE = new Set(["run", "verify"]);

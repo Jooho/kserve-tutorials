@@ -5,13 +5,23 @@
   --ok: #2f9e44; --bad: #e03131; --warn: #f08c00; --running: #1c7ed6;
   --term-bg: #0f1218;
 }
+/* theme: OS preference (Auto) unless the topbar picks Light or Dark (data-theme on <html>) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1218; --panel: #161a22; --text: #dfe3ea; --muted: #8b93a5; --border: #262c38;
     --accent: #5c7cfa; --code-bg: #1d222c;
     --run: #748ffc; --verify: #51cf66; --cleanup: #ffa94d; --skip: #adb5bd; --setup: #9775fa;
     --ok: #51cf66; --bad: #ff6b6b; --warn: #ffd43b; --running: #4dabf7;
+    color-scheme: dark;
   }
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f1218; --panel: #161a22; --text: #dfe3ea; --muted: #8b93a5; --border: #262c38;
+    --accent: #5c7cfa; --code-bg: #1d222c;
+    --run: #748ffc; --verify: #51cf66; --cleanup: #ffa94d; --skip: #adb5bd; --setup: #9775fa;
+    --ok: #51cf66; --bad: #ff6b6b; --warn: #ffd43b; --running: #4dabf7;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -184,10 +194,18 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 .block .hint a { color: var(--accent); }
 /* learning path = purple everywhere: sidebar heading, its items, the path bar */
 :root { --path: #7048e8; --path-bg: #f3f0ff; }
-@media (prefers-color-scheme: dark) { :root { --path: #9775fa; --path-bg: #231d3a; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --path: #9775fa; --path-bg: #231d3a; } }
+:root[data-theme="dark"] { --path: #9775fa; --path-bg: #231d3a; }
 #list li.group.path { color: var(--path); }
 #list li[data-col] { border-left: 3px solid var(--path); }
 .pathbar { border-color: var(--path); background: var(--path-bg); }
+details.pathbar { display: block; padding: 4px 10px; }
+details.pathbar > summary { display: flex; gap: 10px; align-items: center; cursor: pointer; list-style: none;
+  color: var(--muted); font-size: 13px; }
+details.pathbar > summary::-webkit-details-marker { display: none; }
+details.pathbar > summary::after { content: "▸ details"; margin-left: auto; font-size: 12px; }
+details.pathbar[open] > summary::after { content: "▾ hide"; }
+details.pathbar .path-body { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 6px 0 2px; }
 .pathbar .path-name { background: var(--path); color: #fff; font-weight: 650; padding: 1px 10px; border-radius: 999px; }
 /* tags under each tutorial: hidden until the "# tags" toggle is on */
 #list .tags { display: none; }

@@ -6,6 +6,7 @@
   <title>Tutorials</title>
   <link rel="stylesheet" href="/static/vendor/xterm.css">
   <link rel="stylesheet" href="/static/app.css">
+  <script>try { const t = localStorage.getItem("tut.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
   <header class="topbar">
@@ -16,6 +17,9 @@
     </div>
     <div class="seg" id="termpos" title="Terminal position">
       <button data-pos="bottom" aria-label="Terminal at the bottom">⬓ Bottom</button><button data-pos="right" aria-label="Terminal on the right">◨ Right</button>
+    </div>
+    <div class="seg" id="theme" title="Colours: follow the system, or always light / dark">
+      <button data-theme="auto">Auto</button><button data-theme="light" aria-label="Light theme">☀</button><button data-theme="dark" aria-label="Dark theme">☾</button>
     </div>
     <div class="seg" id="lang">
       <button data-lang="en" class="on">EN</button><button data-lang="ko">KO</button>
