@@ -144,7 +144,8 @@ function renderList() {
     const icon = kind === "path" ? "📚 " : kind === "group" ? "🗂 " : "";
     html.push(`<li class="group ${kind}" data-group="${id}" title="${esc(desc)}">${closed ? "▸" : "▾"} ${icon}${esc(title)}
       <span class="count">${shown.length}</span></li>`);
-    if (!closed) shown.forEach((r) => html.push(r));
+    // rows under a heading are marked, so they are indented as its members
+    if (!closed) shown.forEach((r) => html.push(r.replace(/^\s*<li /, '<li data-member="1" ')));
   };
   const tx = (o) => (o && (o[S.lang] || o.en)) || "";
   if (S.view === "groups") {
