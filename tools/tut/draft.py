@@ -313,17 +313,66 @@ def coverage(inp: Path, tdir: Path) -> tuple[list, list]:
 SYNC_OUTPUTS = {".github/CODEOWNERS", "README.md", "README.ko.md"}
 
 
-def changed_outside(before: set[str], tid: str, root: Path = REPO_ROOT) -> list[str]:
+def snapshot(root: Path = REPO_ROOT) -> dict[str, str]:
+    """What the working tree looks like before the AI runs: a content hash of
+    every file git reports as changed or untracked, and of the sync outputs.
+    Comparing hashes (not only which files are dirty) also catches an edit to a
+    file the author had already changed."""
+    return {p: _digest(root / p) for p in git_dirty(root) | SYNC_OUTPUTS}
+
+
+def _digest(path: Path) -> str:
+    import hashlib
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except (FileNotFoundError, IsADirectoryError):
+        return "-"
+
+
+def _outside_regions(text: str) -> str:
+    """A README without the bodies of its generated regions (what a person writes)."""
+    return markdown.replace_regions(text, lambda r: "")
+
+
+def changed_outside(before: dict[str, str], tid: str, root: Path = REPO_ROOT,
+                    collection: str | None = None, before_text: dict[str, str] | None = None) -> list[str]:
+    """Files changed during the run that the AI was not allowed to change:
+    anything but tutorials/<id>/ and build/, the collection named with
+    --collection (written by the program), and what `./tut sync` regenerates
+    (CODEOWNERS exactly as generated; root READMEs only inside their regions)."""
+    from . import catalog
     allowed = (f"tutorials/{tid}/", "build/")
-    now = git_dirty(root)
-    return sorted(p for p in now - before if not p.startswith(allowed) and p not in SYNC_OUTPUTS
-                  and not p.startswith("catalog/collections/"))        # --collection, written by us
+    now = {p: _digest(root / p) for p in git_dirty(root) | set(before)}
+    out = []
+    for p in sorted(now):
+        if p.startswith(allowed):
+            continue
+        was = before[p] if p in before else _digest_at_head(root, p)
+        if was == now[p]:
+            continue
+        if collection and p == f"catalog/collections/{collection}.yaml":
+            continue
+        if p == ".github/CODEOWNERS" and (root / p).exists() \
+                and (root / p).read_text() == catalog.codeowners(root):
+            continue
+        if p in ("README.md", "README.ko.md") and before_text is not None and (root / p).exists() \
+                and _outside_regions((root / p).read_text()) == _outside_regions(before_text.get(p, "")):
+            continue
+        out.append(p)
+    return out
+
+
+def _digest_at_head(root: Path, rel: str) -> str:
+    """Hash of a file as committed (for a file that was clean before the run)."""
+    import hashlib
+    r = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=root, capture_output=True)
+    return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else "-"
 
 
 def git_dirty(root: Path = REPO_ROOT) -> set[str]:
     r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=root,
                        capture_output=True, text=True)
-    return {line[3:].split(" -> ")[-1] for line in r.stdout.splitlines() if line}
+    return {line[3:].split(" -> ")[-1].strip('"') for line in r.stdout.splitlines() if line}
 
 
 def add_to_collection(col: str, tid: str, owner: str | None, root: Path = REPO_ROOT) -> Path:
@@ -368,7 +417,8 @@ def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
     if not src.is_dir():
         raise DraftError(f"{src} is not a folder")
     tid = tid or slug(src.name)
-    before = git_dirty(root)
+    before = snapshot(root)
+    before_text = {p: (root / p).read_text() for p in ("README.md", "README.ko.md") if (root / p).exists()}
     tdir = scaffold.new_tutorial(tid, title=title, owner=owner, root=root)   # raises on a bad / existing id
     work = root / "build" / "draft" / tid
     if work.exists():
@@ -400,7 +450,7 @@ def draft(src: Path, tid: str | None, title: str | None, agent: Agent,
         res.assets_removed.append("manifests/example.yaml (template)")
     res.assets_kept = [a for a in assets if a not in res.assets_removed]
     generate.sync(root)
-    res.outside = changed_outside(before, tid, root)
+    res.outside = changed_outside(before, tid, root, collection, before_text)
     res.problems = [f for f in lint.Linter(root).run() if f.path.resolve().is_relative_to(tdir.resolve())]
     res.found, res.missing = coverage(inp, tdir)
     (work / "report.md").write_text(render_report(res, src, root))

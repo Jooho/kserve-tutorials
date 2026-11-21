@@ -26,6 +26,10 @@ FAKE_AI = textwrap.dedent('''
     pathlib.Path(work, "notes.md").write_text("Replaced `sleep 60` with kubectl wait.\\n")
     if "--touch-outside" in sys.argv:
         pathlib.Path("AGENTS.md").write_text(pathlib.Path("AGENTS.md").read_text() + "\\nx\\n")
+    if "--touch-collection" in sys.argv:
+        pathlib.Path("catalog/collections/someone-elses.yaml").write_text("id: someone-elses\\n")
+    if "--touch-readme" in sys.argv:
+        pathlib.Path("README.md").write_text(pathlib.Path("README.md").read_text() + "\\nAdded by the AI.\\n")
 ''')
 
 
@@ -151,3 +155,26 @@ def test_collection_is_created_or_extended_by_the_program(repo, work):
     draft.add_to_collection("my-path", "second", None, root=repo)
     draft.add_to_collection("my-path", "second", None, root=repo)         # no duplicate
     assert col.read_text().count("  - second") == 1
+
+
+def test_outside_check_compares_content_not_only_dirty_paths(repo, work):
+    """A file the author had already changed, then changed again by the AI, is
+    reported (it used to pass because it was dirty before the run)."""
+    (repo / "AGENTS.md").write_text((repo / "AGENTS.md").read_text() + "\nmy local note\n")
+    r = draft.draft(work, "dirty-before", None, agent("--touch-outside"), root=repo, log=lambda *_: None)
+    assert r.outside == ["AGENTS.md"]
+
+
+def test_only_the_named_collection_and_real_sync_output_are_allowed(repo, work):
+    readme = repo / "README.md"
+    readme.write_text("# Tutorials\n\n<!-- tut:catalog -->\n<!-- /tut -->\n")
+    git = lambda *a: subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True)
+    git("add", "."); git("commit", "-qm", "readme")
+    # sync fills the catalog region of the root README: allowed
+    r = draft.draft(work, "sync-only", None, agent(), root=repo, log=lambda *_: None, collection="my-path")
+    assert r.outside == [] and "sync-only" in readme.read_text()
+    git("add", "."); git("commit", "-qm", "first draft")
+    # another collection, and prose added to the root README: reported
+    r = draft.draft(work, "too-much", None, agent("--touch-collection", "--touch-readme"), root=repo,
+                    log=lambda *_: None, collection="my-path")
+    assert r.outside == ["README.md", "catalog/collections/someone-elses.yaml"]
