@@ -61,7 +61,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `.github/workflows/` | `ci.yml`, `run-tutorials.yml`, `scheduled.yml`, `release.yml`, `site.yml` (§ 7) | with care |
 | `.github/scripts/` | `diagnose.sh` (cluster dump on failure), `report.py` (weekly issues) | with care |
 | `.github/CODEOWNERS` | **generated** by `./tut sync` from `owners` | never by hand |
-| `docs/` | this handbook, authoring, migration, CI playbook, release, backlog, RFC | keep in step with the code |
+| `docs/` | this handbook, authoring, migration, CI playbook, release, backlog, RFC, prompts (ready-made first messages for agents) | keep in step with the code |
 | `build/` | generated: drafts, rejected translations, site source (git-ignored) | tools |
 | `.venv/`, `.tools/`, `.tut.env` | toolkit, pinned CLI tools, personal settings (git-ignored) | the user's machine |
 
