@@ -8,6 +8,13 @@ description:
   en: From one YAML to the resources it creates, how a request is routed, how to observe it and how it scales.
   ko: YAML 하나가 만드는 리소스부터 요청 라우팅, 관측, 확장까지.
 owners: [Jooho]
+# As a learning path (UI), every member works in one namespace, so a later
+# member reuses what an earlier one created (shared step llmisvc-demo-model).
+# Standalone runs and CI ignore vars: each tutorial uses its own namespace.
+vars:
+  NS: llmisvc-deep-dive
 members:
   - llmisvc-anatomy
-  # planned (from the legacy repository): llmisvc-request-flow, llmisvc-monitoring, llmisvc-autoscaling
+  - llmisvc-request-flow
+  # planned (from the legacy repository): llmisvc-monitoring, llmisvc-autoscaling,
+  # llmisvc-traffic-control, llmisvc-aigateway-route, llmisvc-tracing

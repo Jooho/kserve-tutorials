@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=e3230344d781 -->
+<!-- tut-translation source=README.md sha=b1d6d0e24a7f -->
 # 한 번의 Apply, 열 개의 리소스 — LLMInferenceService 해부
 
 <!-- tut:header -->
@@ -55,9 +55,13 @@ kubectl get pods,svc,deploy,inferencepool,httproute -n "$NS" 2>/dev/null || true
 YAML 하나만 apply 합니다. well-known config가 자동으로 주입되므로
 별도의 `LLMInferenceServiceConfig`는 필요 없습니다.
 
+<!-- tut:define llmisvc-demo-model -->
+
 ```bash run
 kubectl apply -f manifests/llmisvc-cpu.yaml -n "$NS"
 ```
+
+<!-- /tut -->
 
 <details>
 <summary>manifests/llmisvc-cpu.yaml</summary>
