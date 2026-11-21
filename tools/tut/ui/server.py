@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import re
+import shlex
 import time
 import secrets
 import shutil
@@ -51,7 +52,10 @@ class UI:
     def broadcast(self, tid: str, msg: dict):
         if msg.get("type") == "block":
             msg = {**msg, "ts": time.time()}
-            self.block_states.setdefault(tid, {})[msg["idx"]] = msg
+            if msg["idx"] >= 0:                      # -1 = teardown, not a step of the README
+                self.block_states.setdefault(tid, {})[msg["idx"]] = msg
+            elif msg.get("state") == "passed":       # the cluster is gone: no step holds any more
+                self.block_states[tid] = {}
         data = json.dumps(msg)
         for ws in list(self.clients.get(tid, ())):
             if not ws.closed:
@@ -346,7 +350,7 @@ class UI:
     async def api_env(self, request):
         t = self.tutorial_or_404(request.match_info["tid"])
         cluster = os.environ.get("KIND_CLUSTER_NAME", "kind")
-        res = {"env": t.env_ref, "kind": bool(shutil.which("kind")),
+        res = {"env": t.env_ref, "name": cluster, "kind": bool(shutil.which("kind")),
                "kubectl": bool(shutil.which("kubectl")), "docker": bool(shutil.which("docker")),
                "cluster": None, "built_as": None}
         if res["kind"]:
@@ -415,6 +419,20 @@ class UI:
                     sess.run_queue(blocks, stop_on_fail=m.get("stop_on_fail", True))
                 elif kind == "interrupt":
                     sess.interrupt()
+                elif kind == "teardown":
+                    # 🗑 in the UI: the env's teardown.sh, in this shell, as a pseudo
+                    # block (index -1). Only when the shell is idle: queueing it
+                    # would cancel a running queue, and typing it while a step runs
+                    # would feed it to that step.
+                    t = self.tutorials().get(tid)
+                    if sess.busy:
+                        await ws.send_str(json.dumps({"type": "notice", "message":
+                            "A step is still running. Wait for it or press ■ Stop, then Teardown."}))
+                    elif t and t.env_ref:
+                        script = self.root / "envs" / t.env_ref / "teardown.sh"
+                        sess.run_queue([{"idx": -1, "role": "run", "code": shlex.quote(str(script)),
+                                         "attrs": {}, "label": f"teardown · envs/{t.env_ref}"}],
+                                       stop_on_fail=False)
         finally:
             self.clients.get(tid, set()).discard(ws)
         return ws

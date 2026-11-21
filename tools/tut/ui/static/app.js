@@ -16,6 +16,20 @@ const S = {
   runVersions: JSON.parse(store.get("tut.runVersions", "{}")),
 };
 S.version = store.get("tut.verfilter", "");
+
+// Theme: auto (the OS setting), light or dark; remembered per browser.
+function applyTheme(t) {
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else { delete document.documentElement.dataset.theme; t = "auto"; }
+  store.set("tut.theme", t);
+  document.querySelectorAll("#theme button").forEach((b) => b.classList.toggle("on", b.dataset.theme === t));
+  dispatchEvent(new Event("tut-theme"));
+}
+applyTheme(store.get("tut.theme", "auto"));
+$("#theme").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) applyTheme(b.dataset.theme); });
+document.addEventListener("toggle", (e) => {
+  if (e.target.matches?.("details.pathbar")) store.set("tut.pathbar", e.target.open ? "open" : "closed");
+}, true);
 if (store.get("tut.sort", "") === "kserve") store.set("tut.sort", "version");   // renamed
 
 // The product the tutorials are about (project.yaml), e.g. KServe.
@@ -35,10 +49,13 @@ function applyProject(p) {
 
 // ------------------------------------------------------------- terminal
 const term = new Terminal({
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 13,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: TUT_TERM.fontSize(),
   cursorBlink: true, scrollback: 5000, convertEol: false,
-  theme: { background: "#0f1218", foreground: "#dfe3ea" },
+  theme: TUT_TERM.theme(),       // static/term-theme.js, shared with the ⧉ tab
 });
+const applyTermTheme = () => { term.options.theme = TUT_TERM.theme(); };
+addEventListener("tut-theme", applyTermTheme);
+TUT_TERM.media.addEventListener("change", applyTermTheme);
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open($("#term"));
@@ -532,14 +549,19 @@ function groupBar() {
   if (!g) return "";
   const n = S.doc.blocks.filter((b) => (b.covered_by && b.role === "run") || b.group_skip).length;
   const vars = Object.entries(g.vars).map(([k, v]) => `${k}=${v}`).join(" ");
-  return `<div class="pathbar">
-    <span class="path-name">📚 ${esc(g.title[S.lang] || g.title.en)}</span> step ${g.n}/${g.total}
+  // Information only: folded to one line unless the reader opened it (remembered).
+  const open = store.get("tut.pathbar", "") === "open";
+  return `<details class="pathbar" ${open ? "open" : ""}>
+    <summary><span class="path-name">📚 ${esc(g.title[S.lang] || g.title.en)}</span> step ${g.n}/${g.total}
+      ${n ? `<span>· ${n} block(s) skipped</span>` : ""}</summary>
+    <div class="path-body">
     ${g.prev ? `<a href="#" data-open="${g.prev}">← ${esc(titleOf(g.prev))}</a>` : ""}
     ${g.next ? `<a href="#" data-open="${g.next}">${esc(titleOf(g.next))} →</a>` : ""}
     ${vars ? `<span class="mono" title="exported in this shell">${esc(vars)}</span>` : ""}
     ${n ? `<button class="btn" data-act="toggle-hidden">${S.showAll ? "hide" : "show"} ${n} skipped block(s)</button>` : ""}
     <button class="btn" data-act="standalone" title="Open with every step, as CI runs it">open standalone</button>
-  </div>`;
+    </div>
+  </details>`;
 }
 
 const RUNNABLE = new Set(["run", "verify"]);
@@ -676,7 +698,13 @@ function updateProgress() {
   const all = steps();
   const ok = all.filter((b) => S.states[b.idx] === "passed").length;
   const bad = all.filter((b) => S.states[b.idx] === "failed").length;
-  $("#progress").textContent = `${ok}/${all.length} passed${bad ? ` · ${bad} failed` : ""}`;
+  const done = all.length > 0 && ok === all.length;
+  const el = $("#progress");
+  el.textContent = `${done ? "✓ " : ""}${ok}/${all.length} passed${bad ? ` · ${bad} failed` : ""}`;
+  // every step passed: success colour; any failure: failure colour; else muted
+  el.classList.toggle("done", done);
+  el.classList.toggle("failed", bad > 0);
+  el.title = done ? "Every step passed in this shell" : bad ? "Some steps failed" : "";
 }
 
 function run(idxs, stopOnFail = true, focusTerminal = true) {
@@ -694,6 +722,24 @@ $("#continue").onclick = () => {
 $("#run-all").onclick = () => run(steps().map((b) => b.idx));
 $("#cleanup").onclick = () => run(S.doc.blocks.filter((b) => b.role === "cleanup").map((b) => b.idx), false);
 $("#stop").onclick = () => send({ type: "interrupt" });
+// 🗑 delete the Kind cluster (the env's teardown.sh), after asking: every tutorial on it loses its state.
+$("#teardown").onclick = async () => {
+  const t = currentMeta();
+  if (!t?.env) { alert("This tutorial has no environment: there is no cluster to delete."); return; }
+  // Say exactly which cluster goes, and warn when it was not built by these
+  // tutorials (no tut-env marker): it may be one the reader uses for something else.
+  const e = await fetch(`/api/tutorials/${S.current}/env`).then((r) => r.json()).catch(() => ({}));
+  const name = e.name || "kind";
+  if (e.kind && !e.cluster) { alert(`There is no Kind cluster named "${name}": nothing to delete.`); return; }
+  const what = !e.cluster ? `Kind cluster "${name}" (could not check it: kind is not on this machine's PATH)`
+    : e.built_as ? `Kind cluster "${name}", built by the tutorials as ${e.built_as}`
+    : `Kind cluster "${name}". WARNING: it was NOT built by these tutorials (no tut-env marker) — it may be a cluster you use for something else`;
+  if (!confirm(`Delete the ${what}?\n\nRuns envs/${t.env}/teardown.sh in this terminal. Everything on the ` +
+               "cluster is lost, for every tutorial using it. The next setup step builds a new one " +
+               "(several minutes).")) return;
+  send({ type: "teardown" });
+  term.focus();
+};
 // ⧉ another terminal for this tutorial, alone in a new browser tab (static/shell.html)
 $("#term-new").onclick = () => { if (S.current) window.open(`/shell/${encodeURIComponent(S.current)}`, "_blank"); };
 $("#restart").onclick = () => { if (confirm("Start a new shell? Variables in the current shell are lost.")) startShell(); };
@@ -710,11 +756,12 @@ async function loadEnv() {
   if (!e.docker || !e.kubectl) msg = `Missing tools: ${["docker", "kubectl"].filter((x) => !e[x]).join(", ")}. Install them before running.`;
   else if (!e.cluster) msg = `No Kind cluster yet. The <b>setup</b> step creates <span class="mono">${esc(t.env)}</span> with ${P()} ${sessionVersionFor(t)} (takes several minutes).`;
   else if (e.built_as === want) { cls = "ok"; msg = `Kind cluster ready: <span class="mono">${esc(e.built_as)}</span>. The setup step will reuse it.`; }
-  else msg = `A Kind cluster exists but was built as <span class="mono">${esc(e.built_as || "unknown")}</span>, not <span class="mono">${esc(want)}</span>. Setup will stop; delete it with <span class="mono">envs/${esc(t.env)}/teardown.sh</span> or set TUT_ENV_RECREATE=1.`;
+  else msg = `A Kind cluster exists but was built as <span class="mono">${esc(e.built_as || "unknown")}</span>, not <span class="mono">${esc(want)}</span>. Setup will stop; delete it with 🗑 Teardown (<span class="mono">envs/${esc(t.env)}/teardown.sh</span>) or set TUT_ENV_RECREATE=1.`;
   bar.className = "envbar " + cls; bar.innerHTML = msg;
 }
 
 // ------------------------------------------------------------- websocket
+const TEARDOWN_IDX = -1;      // the server runs teardown.sh as a pseudo block with this index
 function connect() {
   if (S.ws) { S.ws.onclose = null; S.ws.close(); }
   term.reset();
@@ -725,6 +772,11 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "output") term.write(m.data);
+    else if (m.type === "notice") alert(m.message);
+    else if (m.type === "block" && m.idx === TEARDOWN_IDX) {
+      if (m.state === "passed") { S.states = {}; renderDoc(); }   // the cluster is gone: no step holds
+      if (m.state !== "queued" && m.state !== "running") loadEnv();
+    }
     else if (m.type === "block") setState(m.idx, m.state === "idle" ? null : m.state, m.ts);
     else if (m.type === "session") {
       if (m.state === "started") {
@@ -758,7 +810,7 @@ function startShell() {
 // ------------------------------------------------------------- layout & text size
 // Remembered per browser (localStorage); the page works without it.
 const VIEW = {
-  fs: +store.get("tut.fs", 14), pos: store.get("tut.termpos", "bottom"),
+  fs: +store.get("tut.fs", 14), tfs: +store.get("tut.termfs", 14), pos: store.get("tut.termpos", "bottom"),
   sidebar: store.get("tut.sidebar", "shown"),
   termH: store.get("tut.termH", ""), termW: store.get("tut.termW", ""),
 };
@@ -766,7 +818,8 @@ function applyView() {
   const main = $(".main");
   document.documentElement.style.setProperty("--fs", VIEW.fs + "px");
   $("#fs-val").textContent = VIEW.fs + "px";
-  term.options.fontSize = Math.max(10, VIEW.fs - 1);
+  term.options.fontSize = VIEW.tfs;
+  $("#termfs-val").textContent = VIEW.tfs + "px";
   document.body.classList.toggle("term-right", VIEW.pos === "right");
   document.body.classList.toggle("sidebar-hidden", VIEW.sidebar === "hidden");
   document.querySelectorAll("#termpos button").forEach((b) => b.classList.toggle("on", b.dataset.pos === VIEW.pos));
@@ -777,6 +830,10 @@ function applyView() {
 $("#fontsize").addEventListener("click", (e) => {
   const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
   VIEW.fs = Math.min(24, Math.max(11, VIEW.fs + d)); store.set("tut.fs", VIEW.fs); applyView();
+});
+$("#termfs").addEventListener("click", (e) => {
+  const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
+  VIEW.tfs = Math.min(28, Math.max(10, VIEW.tfs + d)); store.set("tut.termfs", VIEW.tfs); applyView();
 });
 $("#termpos").addEventListener("click", (e) => {
   const pos = e.target.closest("button")?.dataset.pos; if (!pos) return;

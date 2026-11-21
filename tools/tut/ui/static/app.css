@@ -3,15 +3,27 @@
   --accent: #3b5bdb; --accent-text: #ffffff; --code-bg: #f1f3f6;
   --run: #3b5bdb; --verify: #2f9e44; --cleanup: #e67700; --skip: #868e96; --setup: #7048e8;
   --ok: #2f9e44; --bad: #e03131; --warn: #f08c00; --running: #1c7ed6;
-  --term-bg: #0f1218;
+  --term-bg: #ffffff; --term-fg: #1f2328; --term-muted: #6b7385; --term-border: #e1e4ea;
 }
+/* theme: OS preference (Auto) unless the topbar picks Light or Dark (data-theme on <html>) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1218; --panel: #161a22; --text: #dfe3ea; --muted: #8b93a5; --border: #262c38;
     --accent: #5c7cfa; --code-bg: #1d222c;
     --run: #748ffc; --verify: #51cf66; --cleanup: #ffa94d; --skip: #adb5bd; --setup: #9775fa;
     --ok: #51cf66; --bad: #ff6b6b; --warn: #ffd43b; --running: #4dabf7;
+    --term-bg: #1b2029; --term-fg: #e6e9ef; --term-muted: #9aa3b5; --term-border: #2e3542;
+    color-scheme: dark;
   }
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --term-bg: #1b2029; --term-fg: #e6e9ef; --term-muted: #9aa3b5; --term-border: #2e3542;
+    --bg: #0f1218; --panel: #161a22; --text: #dfe3ea; --muted: #8b93a5; --border: #262c38;
+    --accent: #5c7cfa; --code-bg: #1d222c;
+    --run: #748ffc; --verify: #51cf66; --cleanup: #ffa94d; --skip: #adb5bd; --setup: #9775fa;
+    --ok: #51cf66; --bad: #ff6b6b; --warn: #ffd43b; --running: #4dabf7;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -101,6 +113,9 @@ body.term-right .splitter { cursor: col-resize; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .btn:disabled { opacity: .5; cursor: default; }
 .progress { color: var(--muted); font-size: 13px; margin-right: 4px; }
+.progress.done, .progress.failed { font-weight: 650; padding: 2px 9px; border-radius: 999px; }
+.progress.done { color: #fff; background: #2b8a3e; }      /* same in both themes: white text stays readable */
+.progress.failed { color: #fff; background: #c92a2a; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
 .chip.warn { color: var(--warn); border-color: var(--warn); }
@@ -156,8 +171,12 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 
 /* terminal */
 .termpane { display: grid; grid-template-rows: 28px 1fr; min-height: 0; background: var(--term-bg); }
-.termbar { display: flex; gap: 12px; align-items: center; padding: 0 12px; font-size: 12px; color: #c9d1d9; border-bottom: 1px solid #262c38; }
-.termbar .muted { color: #8b93a5; }
+.termbar { display: flex; gap: 12px; align-items: center; padding: 0 12px; font-size: 12px; color: var(--term-fg); border-bottom: 1px solid var(--term-border); }
+.termbar .muted { color: var(--term-muted); }
+.termbar .term-seg { border-color: var(--term-border); }
+.termbar .term-seg button { padding: 0 7px; color: var(--term-muted); }
+#termfs-val { padding: 0 4px; color: var(--term-muted); font-size: 11px; min-width: 30px; text-align: center; }
+.btn.danger:hover { border-color: var(--bad); color: var(--bad); }
 #term { padding: 4px 0 0 8px; min-height: 0; }
 
 @media (max-width: 760px) {
@@ -181,10 +200,18 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 .block .hint a { color: var(--accent); }
 /* learning path = purple everywhere: sidebar heading, its items, the path bar */
 :root { --path: #7048e8; --path-bg: #f3f0ff; }
-@media (prefers-color-scheme: dark) { :root { --path: #9775fa; --path-bg: #231d3a; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --path: #9775fa; --path-bg: #231d3a; } }
+:root[data-theme="dark"] { --path: #9775fa; --path-bg: #231d3a; }
 #list li.group.path { color: var(--path); }
 #list li[data-col] { border-left: 3px solid var(--path); }
 .pathbar { border-color: var(--path); background: var(--path-bg); }
+details.pathbar { display: block; padding: 4px 10px; }
+details.pathbar > summary { display: flex; gap: 10px; align-items: center; cursor: pointer; list-style: none;
+  color: var(--muted); font-size: 13px; }
+details.pathbar > summary::-webkit-details-marker { display: none; }
+details.pathbar > summary::after { content: "▸ details"; margin-left: auto; font-size: 12px; }
+details.pathbar[open] > summary::after { content: "▾ hide"; }
+details.pathbar .path-body { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 6px 0 2px; }
 .pathbar .path-name { background: var(--path); color: #fff; font-weight: 650; padding: 1px 10px; border-radius: 999px; }
 /* tags under each tutorial: hidden until the "# tags" toggle is on */
 #list .tags { display: none; }
@@ -223,5 +250,5 @@ select.chip.verchip { background: var(--panel); color: var(--text); cursor: poin
 #list li.group.group { color: var(--text); }
 .verrow { display: flex; gap: 6px; flex: 1 1 100%; order: -1; }
 .verrow select { flex: 1; }
-#term-new { background: transparent; color: #c9d1d9; border-color: #3a4252; padding: 0 8px; }
+#term-new { background: transparent; color: var(--term-fg); border-color: var(--term-border); padding: 0 8px; }
 #term-new:hover { border-color: var(--accent); }

@@ -124,6 +124,8 @@ is a convenience; CI is the authority. What it does:
 - ✎ Edit for README or tutorial.yaml.
 - Creates a translation from a chip.
 - ⧉ opens an extra terminal tab with the tutorial shell's variables.
+- 🗑 Teardown runs the env's `teardown.sh` in the tutorial shell (pseudo block index -1, never a step state), only when no step is running, after a confirmation that names the cluster and warns when it has no `tut-env` marker; the steps reset once it passed.
+- The page theme is Auto / Light / Dark; both terminals (main and ⧉) follow it and share their own text size (`static/term-theme.js`).
 - Learning paths open with `?collection=`: covered `run` blocks are hidden, cleanup waits for the end, and the collection `vars` are exported.
 
 **Versions.** A tutorial lists `versions.default` (readers and PR CI) and
