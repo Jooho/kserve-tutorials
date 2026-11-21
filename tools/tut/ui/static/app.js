@@ -676,7 +676,13 @@ function updateProgress() {
   const all = steps();
   const ok = all.filter((b) => S.states[b.idx] === "passed").length;
   const bad = all.filter((b) => S.states[b.idx] === "failed").length;
-  $("#progress").textContent = `${ok}/${all.length} passed${bad ? ` · ${bad} failed` : ""}`;
+  const done = all.length > 0 && ok === all.length;
+  const el = $("#progress");
+  el.textContent = `${done ? "✓ " : ""}${ok}/${all.length} passed${bad ? ` · ${bad} failed` : ""}`;
+  // every step passed: success colour; any failure: failure colour; else muted
+  el.classList.toggle("done", done);
+  el.classList.toggle("failed", bad > 0);
+  el.title = done ? "Every step passed in this shell" : bad ? "Some steps failed" : "";
 }
 
 function run(idxs, stopOnFail = true, focusTerminal = true) {

@@ -101,6 +101,9 @@ body.term-right .splitter { cursor: col-resize; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .btn:disabled { opacity: .5; cursor: default; }
 .progress { color: var(--muted); font-size: 13px; margin-right: 4px; }
+.progress.done, .progress.failed { font-weight: 650; padding: 2px 9px; border-radius: 999px; }
+.progress.done { color: #fff; background: #2b8a3e; }      /* same in both themes: white text stays readable */
+.progress.failed { color: #fff; background: #c92a2a; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
 .chip.warn { color: var(--warn); border-color: var(--warn); }
