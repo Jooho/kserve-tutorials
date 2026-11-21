@@ -178,3 +178,14 @@ def test_editor_also_opens_tutorial_yaml_and_nothing_else(repo):
     assert st == 200
     assert "New title" in (repo / "tutorials" / "a" / "tutorial.yaml").read_text()
     assert ui_call(repo, "GET", "/api/tutorials/a/source?file=../../AGENTS.md")[0] == 400
+
+
+def test_ui_page_leaves_out_the_header_line(repo):
+    """Status / tested versions / env / language links are chips, the env bar and
+    the EN/KO switch in the UI; the tut:header line is only for GitHub and the site."""
+    generate.sync(repo)
+    readme = (repo / "tutorials" / "a" / "README.md").read_text()
+    assert "Tested with KServe" in readme
+    d = ui_get(repo, "/api/tutorials/a")
+    assert "Tested with KServe" not in d["html"] and "<h1" in d["html"]
+    assert any(b["role"] == "run" for b in d["blocks"])                 # blocks still line up

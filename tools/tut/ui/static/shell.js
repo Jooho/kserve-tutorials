@@ -16,8 +16,15 @@ const restyle = () => {
   TUT_TERM.applyPageTheme();
   term.options.theme = TUT_TERM.theme();
   term.options.fontSize = TUT_TERM.fontSize();
+  document.getElementById("fs-val").textContent = TUT_TERM.fontSize() + "px";
   try { refit(); } catch {}
 };
+document.getElementById("fs-val").textContent = TUT_TERM.fontSize() + "px";
+document.getElementById("termfs").addEventListener("click", (e) => {
+  const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
+  TUT_TERM.setFontSize(TUT_TERM.fontSize() + d);
+  restyle(); term.focus();
+});
 addEventListener("storage", (e) => { if (e.key === "tut.theme" || e.key === "tut.termfs") restyle(); });
 TUT_TERM.media.addEventListener("change", restyle);
 const fit = new FitAddon.FitAddon();

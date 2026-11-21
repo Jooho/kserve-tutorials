@@ -204,6 +204,8 @@ kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid curr
 :root[data-theme="dark"] { --path: #9775fa; --path-bg: #231d3a; }
 #list li.group.path { color: var(--path); }
 #list li[data-col] { border-left: 3px solid var(--path); }
+/* tutorials under a collection or group heading sit a little inside it */
+#list li[data-member] { margin-left: 14px; }
 .pathbar { border-color: var(--path); background: var(--path-bg); }
 details.pathbar { display: block; padding: 4px 10px; }
 details.pathbar > summary { display: flex; gap: 10px; align-items: center; cursor: pointer; list-style: none;
