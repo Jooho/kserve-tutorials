@@ -41,7 +41,7 @@ config: ## Remember personal settings in .tut.env: make config CLUSTER=tut (no a
 doctor: ## Check this machine: toolkit, Docker/host, environments (T=<id> for one tutorial)
 	./tut doctor $(if $(T),--tutorial $(T))
 
-tools: ## Download the CLI tools of an environment ahead of time (ENV=kind-llmisvc/v1; default all)
+tools: ## Download the CLI tools of an environment ahead of time (ENV=kind-kserve/v1; default all)
 	@for f in $(if $(ENV),envs/$(ENV)/tools.env,$(wildcard envs/*/*/tools.env)); do tools/install-tools.sh $$f; done
 
 new: ## Start a tutorial from the template: make new T=<id> [TITLE="..."] [OWNER=<github-handle>]
@@ -65,9 +65,11 @@ site: ## Build the static site into build/site
 check: ## Everything CI checks without a cluster: lint, tests, site
 	@$(MAKE) --no-print-directory lint test site
 
-precommit: ## Before every commit: ./tut sync, then make check (CI runs the same checks, without sync)
+precommit: ## Before every commit: ./tut sync, then make check. TRANSLATE=1 also drafts missing/behind translations with TUT_AI
 	./tut sync
+	$(if $(filter 1 yes true,$(TRANSLATE)),./tut translation draft --all && ./tut sync)
 	@$(MAKE) --no-print-directory check
+	@./tut translation todo
 	@if [ -n "$$(git status --short)" ]; then printf '\nNot committed yet (./tut sync may have updated some):\n'; git status --short; fi
 
 ui: ## Start the local runner UI

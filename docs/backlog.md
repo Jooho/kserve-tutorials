@@ -6,7 +6,7 @@ read this before starting structural work, pick items from here, and update
 the status and links when you finish one. Do not delete items; mark them done
 with the PR that closed them.
 
-Status: ☐ open · ◐ in progress · ☑ done
+Status: ☐ open · ◐ in progress · ☑ done · ⏸ deferred (see the section's decision)
 
 ## A. Platform and environments ("is the cluster really ready?")
 
@@ -34,7 +34,8 @@ Status: ☐ open · ◐ in progress · ☑ done
 | B6 | ☐ | **CI scenario: existing cluster** (provision first, then run the tutorial in bring-your-own mode) | Tests A2 |
 | B7 | ☑ | **CI scenario: run twice on the same cluster** (catches `AlreadyExists`, leftover state, partial re-runs from the UI) | Local runs are rarely on a clean cluster |
 | B9 | ☑ | **Personal settings without `export`**: `.tut.env` (`make config CLUSTER=tut`), loaded by `./tut`, the UI and every setup step; shell > file > default | A reader with an existing `kind` cluster had to remember `export KIND_CLUSTER_NAME=…` in every terminal |
-| B14 | ☑ | **AI translation drafts with the user's own AI CLI**: `TUT_TRANSLATOR=claude|copilot|codex|cmd:…`, `./tut translation draft <id> <lang>` / `--all`, mechanical check before writing, `reviewed=no` until marked | `init` only copied English and looked like a translation; translating by hand does not scale |
+| B15 | ☑ | **Translations on request only**: `make precommit TRANSLATE=1` drafts every missing/outdated translation with `TUT_AI`; plain `make precommit` lists them (`./tut translation todo`); `./tut sync` never translates (deterministic, offline) | Translating inside sync would make it slow, random and dependent on an AI login, and would chase unfinished English |
+| B14 | ☑ | **AI translation drafts with the user's own AI CLI**: `TUT_AI=claude|copilot|codex|cmd:…` (formerly `TUT_TRANSLATOR`), `./tut translation draft <id> <lang>` / `--all`, mechanical check before writing, `reviewed=no` until marked | `init` only copied English and looked like a translation; translating by hand does not scale |
 | B13 | ☑ | **`./tut list` scales and `./tut` has Tab completion**: one line per tutorial fitted to the terminal (`./tut show <id>` for details, `--collection` in reading order); completion of subcommands, options, ids, tags, collections, versions from the parser itself (`eval "$(./tut completion)"`, automatic in the UI terminal) | With dozens of tutorials the multi-line list was unreadable; ids and tags are hard to remember |
 | B12 | ☑ | **CLI that explains itself**: `./tut list` shows title, versions, env/lib, translation state, collections, tags (+ `--tag`, `--status`, `--json`); `./tut translation` shows every translation's state and the next command; `translation draft` starts one (AI); typos in ids get a suggestion; the UI says when a translation is behind the English source | `./tut list` printed one terse line and gave no hint what an id is or what to do next |
 | B11 | ☑ | **Notebook-style stepping**: ▶ Next / Shift+Enter runs the selected step and selects the next one on success; click a step to select it; Shift+Enter inside the terminal stays with bash | Readers want to go one step at a time, like Jupyter, rather than run to the end |
@@ -47,16 +48,16 @@ Status: ☐ open · ◐ in progress · ☑ done
 |---|---|---|---|
 | C1 | ☐ | **Decide how tutorials handle version-specific content** (separate tutorial versions, per-version blocks, or `versions.tested` ranges + new tutorial) | KServe master removed the scheduler's tokenizer sidecar; `llmisvc-anatomy` explains and verifies three containers |
 | C2 | ☐ | Update `llmisvc-anatomy` for the next KServe release once C1 is decided (the canary will flag it) | Same as C1 |
-| C3 | ◐ | Korean translation of `llmisvc-anatomy` | AI draft (Claude Code) in PR; needs a human review, then `./tut translation mark llmisvc-anatomy ko` |
-| C5 | ☑ | **Catalog**: tags registry (`catalog/tags.yaml`, G001 with suggestions), collections as owned reading paths resolved per KServe version (archived → replacement), sidebar views Collections / All (sort) / Versions + matrix, tag filter, search; CODEOWNERS generated from `owners` | One flat list could not show paths, versions or tags as tutorials multiply |
-| D13 | ☐ | Turn on "Require review from Code Owners" and required checks (`check`, `e2e`) for `main` — repository setting | CODEOWNERS only takes effect then; PR #3 was merged before its e2e finished |
+| C3 | ☑ | Korean translation of `llmisvc-anatomy` | AI draft reviewed and marked; kept up to date with the English (PR #24) |
+| C5 | ☑ | **Catalog**: tags registry (`catalog/tags.yaml`, G001 with suggestions), collections as owned reading paths resolved per KServe version (archived → replacement), sidebar views Groups / Collections / All with a version filter in each, version × tutorial matrix, tag filter, search; CODEOWNERS generated from `owners` | One flat list could not show paths, versions or tags as tutorials multiply |
 | C4 | ☐ | **Migrate the remaining tutorials** (legacy repository + local ones) with docs/migration-guide.md, one PR each, done with local Claude Code | The point of the repository |
 
 ## D. Process and publishing
 
 | # | Status | Item | Why / evidence |
 |---|---|---|---|
-| D1 | ◐ | Get PR #1 green, squash, run the final test | Green on [run 44412518216](https://github.com/Jooho/kserve-tutorials/actions/runs/44412518216) after 4 attempts (CI-001…004); squash + final test pending |
+| D1 | ☑ | Get PR #1 green, squash, run the final test | Green on [run 44412518216](https://github.com/Jooho/kserve-tutorials/actions/runs/44412518216) after 4 attempts (CI-001…004); merged |
+| D13 | ☐ | Turn on "Require review from Code Owners" and required checks (`check`, `e2e`) for `main` — repository setting | CODEOWNERS only takes effect then; PR #3 was merged before its e2e finished |
 | D2 | ☐ | After the first green run: `llmisvc-anatomy` → `stable`, freeze `envs/kind-kserve/v1` and `lib/llmisvc/v1` | T007/L004 |
 | D3 | ☐ | **Ready for the kserve organization**: Apache-2.0 LICENSE, DCO sign-off rule + check, no hard-coded `Jooho` URLs (derive from `github.repository`), CODEOWNERS, pinned public images only | Possible move under `kserve/` later |
 | D4 | ☐ | Bump GitHub Actions versions (Node 20 deprecation warnings on checkout, setup-python, upload-artifact, deploy-pages) | CI annotations |
@@ -71,15 +72,42 @@ Status: ☐ open · ◐ in progress · ☑ done
 
 ## E. One engine, many projects (KServe, Kuadrant, llm-d, vLLM, ...)
 
-Plan: engine (`tut`) / platform parts (shared kind, ingress, cert-manager,
-helpers) / one content repository per project with its `project.yaml`, dropped
-into `engine/projects/<id>`. Cross-project tutorials are out of scope.
+**Decision (2026-11-20): KServe only for now.** E1 is done and stays (it
+costs nothing and keeps the engine free of the product name). Everything
+else here waits until a second project actually exists; building it earlier
+would add structure nobody uses.
+
+Plan when it starts: engine (`tut`) / platform parts (shared kind, ingress,
+cert-manager, helpers) / one content repository per project with its
+`project.yaml`, dropped into `engine/projects/<id>`. Cross-project tutorials
+are out of scope.
+
+Design notes from the discussion, so it does not start from zero:
+
+- The gap is reproducibility, not code layout. "Verified on KServe v0.18.0"
+  really means "v0.18.0 plus whatever its installer pulled that day";
+  nothing records cert-manager, Gateway API, Envoy, LWS, Kubernetes versions
+  (see E7, which applies to KServe today).
+- Model: **component** (`platform/components/<name>/`: `install.sh
+  --version X`, `check.sh`, tested versions) → **stack / BOM** per project
+  (product version → pinned component versions) → **tutorial** picks the
+  product version and rarely overrides one component → **resolver** in the
+  engine computes the full lock, records it in the report, and uses its hash
+  as the cluster marker (same → reuse, different → add or stop).
+- An upstream installer (KServe's `hack/`) can stay a component that the
+  stack delegates to, as long as the installed versions are read back and
+  locked.
+- Questions to decide first: who pins dependency versions (tutorial vs stack;
+  stack recommended); who maintains the compatibility table (read upstream's
+  vs our own); is bring-your-own-cluster near (then A1 contract + check
+  first); how much cluster reuse matters locally; how "verified" is shown.
 
 | # | Status | Item | Why / evidence |
 |---|---|---|---|
 | E1 | ☑ | **`project.yaml`**: product name, title, intro, `version_var`, canary upstream, glossary; `versions:` instead of `kserve:` in tutorial.yaml and env profiles; `--version` (alias `--<id>-version`); `./tut project`; P001 | The engine had "KServe" in 15 files (135 places) |
-| E2 | ☐ | **`ENGINE_ROOT` / `PROJECT_ROOT`**: split the single `REPO_ROOT` (tools/schema vs tutorials/envs/lib/catalog/project.yaml); same directory for now | Needed before the engine can live in its own repository |
-| E3 | ☐ | The env marker (`kube-system/tut-env`, fields `profile`, `kserve_version`) is read by the engine (`ui/server.py` env check, `doctor.py`); let the env profile declare how to read "what is installed" | Env knowledge in the engine; another project's env writes other fields |
-| E4 | ☐ | `.github/scripts/diagnose.sh` dumps KServe resources (InferenceService, LLMInferenceService, namespace `kserve`); move it to the env (`envs/<env>/diagnose.sh`) | Same; found while doing E1 |
-| E5 | ☐ | `mkdocs.yml` `site_name` and the language list (`LANGS = en, ko`) are per project; generate/read them from `project.yaml` | Same |
-| E6 | ☐ | `platform/` for parts every project shares; engine repository; CI clones the engine at a pinned version; UI project switcher | Steps 3–5 of the plan |
+| E2 | ⏸ | **`ENGINE_ROOT` / `PROJECT_ROOT`**: split the single `REPO_ROOT` (tools/schema vs tutorials/envs/lib/catalog/project.yaml); same directory for now | Needed before the engine can live in its own repository |
+| E3 | ⏸ | The env marker (`kube-system/tut-env`, fields `profile`, `kserve_version`) is read by the engine (`ui/server.py` env check, `doctor.py`); let the env profile declare how to read "what is installed" | Env knowledge in the engine; another project's env writes other fields |
+| E4 | ⏸ | `.github/scripts/diagnose.sh` dumps KServe resources (InferenceService, LLMInferenceService, namespace `kserve`); move it to the env (`envs/<env>/diagnose.sh`) | Same; found while doing E1 |
+| E5 | ⏸ | `mkdocs.yml` `site_name` and the language list (`LANGS = en, ko`) are per project; generate/read them from `project.yaml` | Same |
+| E6 | ⏸ | `platform/` for parts every project shares; engine repository; CI clones the engine at a pinned version; UI project switcher | Steps 3–5 of the plan |
+| E7 | ☐ | **Record what was installed** (KServe today): after setup, read the versions actually running (KServe, cert-manager, Gateway API, Envoy Gateway, LWS, Kubernetes, kind) and put them in the run report and the UI env status | A green run cannot say which dependency versions it proved; first step towards a lock |

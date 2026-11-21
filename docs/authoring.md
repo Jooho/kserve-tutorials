@@ -148,9 +148,10 @@ being replaced) → `archived` (kept, not run). Deprecating or archiving needs a
 Codex CLI, or any command) — no API keys in this repository:
 
 ```bash skip
-export TUT_TRANSLATOR=claude                # or copilot, codex, cmd:<command>
+export TUT_AI=claude                        # or copilot, codex, cmd:<command>; or ./tut config TUT_AI=claude
 ./tut translation draft <id> ko             # one tutorial
-./tut translation draft --all ko            # every missing or outdated translation
+./tut translation draft --all [ko]          # every missing or outdated translation
+make precommit TRANSLATE=1                  # the same, as part of the pre-commit checks
 #   review the Korean text (git diff), fix what reads badly
 ./tut translation mark <id> ko              # only after a person or agent reviewed it
 ```
@@ -171,7 +172,12 @@ translation has the same shell blocks in the same order [D011]. When README.md
 changes later, lint warns that the translation is behind [D010] and the UI shows
 it to readers. Translation lag never blocks English changes or releases.
 
-## New tutorial from tested work: `./tut draft`
+Nothing translates on its own: `./tut sync` stays deterministic and offline,
+and plain `make precommit` only lists what is missing (`./tut translation
+todo`). Translate when the English is done, so the AI does not chase a moving
+text.
+
+## 8. New tutorial from tested work: `./tut draft`
 
 Start from the scripts, manifests and notes you tested by hand:
 
@@ -192,7 +198,7 @@ not in the tutorial). Finish in `./tut ui` (✎ Edit), then
 `./tut run <id> --twice`. Example of the material and the output:
 `docs/draft-example/`.
 
-## Shared steps and learning paths
+## 9. Shared steps and learning paths
 
 - **Shared step:** wrap steps another tutorial may need in
   `<!-- tut:define name -->` … `<!-- /tut -->`. Another tutorial writes
@@ -214,7 +220,7 @@ not in the tutorial). Finish in `./tut ui` (✎ Edit), then
   Save & sync). The "no KO translation · ＋ create it" chip makes an AI draft
   with `TUT_AI` (claude | copilot | codex).
 
-## 8. Before you open a PR
+## 10. Before you open a PR
 
 ```bash skip
 make precommit               # ./tut sync, then lint + tests + site (CI checks the same)
@@ -222,7 +228,7 @@ make precommit               # ./tut sync, then lint + tests + site (CI checks t
 ./tut run <id>               # or step through it with ./tut ui
 ```
 
-## 9. Rules learned from CI
+## 11. Rules learned from CI
 
 Each entry: what happened → the rule → evidence. Add one whenever you fix a
 failure a rule could have prevented (see AGENTS.md). Promote it to lint when it

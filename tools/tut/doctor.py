@@ -106,13 +106,13 @@ def toolkit_checks() -> list[Check]:
     from . import translate
     try:
         tr = translate.configured()
-        checks_tr = (Check("translator", OK, "not set (optional: TUT_TRANSLATOR=claude|copilot|codex)")
+        checks_tr = (Check("AI CLI", OK, "not set (optional: TUT_AI=claude|copilot|codex, for draft and translation)")
                      if tr is None else
-                     Check("translator", OK if tr.available else WARN,
+                     Check("AI CLI", OK if tr.available else WARN,
                            f"{tr.name}" + ("" if tr.available else f": `{tr.argv[0]}` not on PATH"),
                            "" if tr.available else f"install or log in to the {tr.name} CLI"))
     except translate.TranslationError as e:
-        checks_tr = Check("translator", WARN, str(e))
+        checks_tr = Check("AI CLI", WARN, str(e))
     missing, other = python_packages()
     venv = sys.prefix != sys.base_prefix
     detail = "; ".join(x for x in (f"missing: {', '.join(missing)}" if missing else "",

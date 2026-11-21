@@ -78,3 +78,35 @@ def test_draft_state_then_mark(repo):
 def repo(tmp_path):
     make_env(tmp_path)
     return tmp_path
+
+
+def test_precommit_translate_drafts_every_missing_translation(tmp_path, monkeypatch, capsys):
+    """make precommit TRANSLATE=1 = `./tut translation draft --all` (every language),
+    and `./tut translation todo` prints what is left; nothing when all is current."""
+    from tut import cli, generate
+    repo = tmp_path / "repo"
+    make_env(repo)
+    make_tut(repo, "a", status="draft")
+    generate.sync(repo)
+    monkeypatch.setattr(cli, "REPO_ROOT", repo)
+    script = tmp_path / "fake.py"
+    script.write_text(FAKE)
+    monkeypatch.delenv("TUT_TRANSLATOR", raising=False)
+    monkeypatch.setenv("TUT_AI", f"cmd:{sys.executable} {script} good")
+
+    cli.main(["translation", "todo"])
+    out = capsys.readouterr().out
+    assert "TRANSLATE=1" in out and "not translated" in out and " a" in out
+
+    assert cli.main(["translation", "draft", "--all"]) == 0          # no language: every language
+    t = next(x for x in load_tutorials(repo) if x.id == "a")
+    assert (t.path / "README.ko.md").exists() and lint.translation_state(t, "ko") == "draft"
+
+    capsys.readouterr()
+    cli.main(["translation", "todo"])
+    out = capsys.readouterr().out
+    assert "waiting for a review" in out and "./tut translation mark a ko" in out
+    lint.mark_translation(t, "ko")
+    capsys.readouterr()
+    cli.main(["translation", "todo"])
+    assert capsys.readouterr().out == ""

@@ -1,14 +1,15 @@
 """`./tut translation draft`: translate a tutorial README with an AI CLI the
 user is already logged in to — no API keys in this repository.
 
-Choose the tool with TUT_TRANSLATOR (shell, or `./tut config TUT_TRANSLATOR=…`):
+Choose the tool with TUT_AI (shell, or `./tut config TUT_AI=…`; the older name
+TUT_TRANSLATOR is still read):
 
   claude          Claude Code      claude -p <prompt>
   copilot         GitHub Copilot   copilot -p <prompt> -s
   codex           OpenAI Codex     codex exec --sandbox read-only … <prompt>
   cmd:<command>   anything else    <command> (prompt on stdin, translation on stdout)
 
-TUT_TRANSLATOR_ARGS adds flags (e.g. "--model sonnet").
+TUT_AI_ARGS adds flags (e.g. "--model sonnet").
 
 The model only returns text. Its output is checked by a program before it is
 written: every code block, command, generated region, HTML comment and link
@@ -64,7 +65,7 @@ def configured() -> Translator | None:
     if spec.startswith("cmd:"):
         return Translator("cmd", [spec[4:].strip()], shell=True)
     if spec not in PRESETS:
-        raise TranslationError(f"TUT_TRANSLATOR={spec!r}: use claude, copilot, codex or cmd:<command>")
+        raise TranslationError(f"TUT_AI={spec!r}: use claude, copilot, codex or cmd:<command>")
     argv = list(PRESETS[spec])
     i = argv.index("{prompt}")
     return Translator(spec, argv[:i] + extra + argv[i:])

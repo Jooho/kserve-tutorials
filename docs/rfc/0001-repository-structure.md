@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft — open for review |
+| Status | Accepted; kept up to date as the design changes (how it works today: [docs/handbook.md](../handbook.md)) |
 | Author | @Jooho |
 | Created | 2026-11-18 |
 
@@ -92,7 +92,9 @@ problems.
 │   ├── setup.sh                # idempotent
 │   ├── teardown.sh
 │   └── README.md
-├── schema/                     # JSON schemas for tutorial.yaml and profile.yaml
+├── catalog/                    # tags, groups, collections (learning paths), maintainers
+├── project.yaml                # the product: name, title, version variable, canary upstream
+├── schema/                     # JSON schemas for tutorial.yaml, profile.yaml, ...
 ├── tools/tut/                  # rules, runner, planner, site builder
 ├── tools/tests/                # tests for the rules themselves
 ├── docs/rfc/                   # design records like this one
@@ -170,11 +172,7 @@ No other tutorial is touched in either case.
 
 Shared setup and shared scripts are necessary (most tutorials need the same
 cluster and the same helpers) and dangerous (one edit changes all of them).
-Both are versioned the same way.
-
-Shared setup is necessary (most tutorials need the same cluster) and dangerous
-(one edit changes all of them). Profiles resolve this the way package managers
-do:
+Both are versioned the same way, as package managers do:
 
 - A profile is identified by `<name>/v<N>` and is **frozen** once a stable
   tutorial depends on it. `./tut lint --base` fails (E002) if a frozen profile
@@ -253,7 +251,9 @@ nothing is silently left untested.
 
 **Runner semantics** (`./tut run <id>`): all `run`/`verify` blocks are joined in
 document order into a single `bash -Eeuo pipefail` script, so variables and
-`cd` carry over exactly as in a reader's terminal. On failure it reports the
+`cd` carry over exactly as in a reader's terminal. The script runs from a file
+(not `bash -c`) and every block's code is pasted unchanged (CI-008, CI-009).
+On failure it reports the
 README line of the failing block (`tutorials/<id>/README.md:240 (verify 9/16)`),
 runs the cleanup blocks, and writes a JSON report for CI.
 
@@ -265,6 +265,7 @@ runs the cleanup blocks, and writes a JSON report for CI.
 | `<!-- tut:setup -->` | The first runnable block: KServe version, namespace, env `setup.sh` |
 | `<!-- tut:include <path> -->` | A file from the tutorial directory, as a code block |
 | `<!-- tut:catalog -->` | The catalog (root README) |
+| `<!-- tut:use <name> -->` | The steps another tutorial defines in `<!-- tut:define <name> -->` (shared steps, D014); the definition itself is the author's text |
 
 Lint fails when a region is stale (D002), so a manifest and the copy shown in
 the document can no longer disagree.
@@ -283,6 +284,7 @@ of `tools/tut/lint.py`.
 | T005 | Every tested version is supported by the profile (`versions.min`/`max`) |
 | T006 | `deprecated`/`archived` have a `deprecation` block |
 | T007 | `stable` tutorials use a frozen profile |
+| T008 | `env_options` are options the env declares, with allowed values |
 | D001 | Every shell block has exactly one role |
 | D002 | Generated regions are up to date |
 | D003 | No hard-coded product version (`project.yaml` name, e.g. KServe) outside generated regions (escape: `<!-- tut-allow-version -->`) |
@@ -294,11 +296,15 @@ of `tools/tut/lint.py`.
 | D009 | Markup is well formed (fences, regions, fence tokens) |
 | D010 | Translations carry a source marker; a stale marker is a warning |
 | D011 | Translations have the same sequence of shell block roles as the source |
+| D012 | Steps are safe to run twice (no bare `kubectl create`, `helm install`, `>>`, `kubectl delete` without `--ignore-not-found`) unless marked `once` |
+| D013 | The UI terminal's aliases (`k`, `kc`) do not appear in README blocks |
+| D014 | Shared steps: one definition per name, `use` an existing name, no markers inside a definition, no use of your own |
 | M001 | Container images are pinned (no `latest`, no missing tag) |
 | G001 | Tags are listed in `catalog/tags.yaml` (suggests the closest) |
 | G002 | `catalog/tags.yaml` is valid |
+| G003 | Every tutorial has a group from `catalog/groups.yaml` |
 | P001 | `project.yaml` exists and matches `schema/project.schema.json` |
-| C001–C004 | Collections are valid; members exist, appear once; archived members have a replacement (warning) |
+| C001–C005 | Collections are valid; members exist (C002), appear once (C003); archived members have a replacement (C004, warning); a learning path has 2+ members (C005, warning) |
 | O001 | `.github/CODEOWNERS` matches the `owners` fields |
 | L001 | Modules are valid and their scripts executable |
 | L002 | Every `lib/<module>` call is declared in `uses`, and declared modules exist |
@@ -331,7 +337,7 @@ KServe ships a release, each tutorial either passes (add the version to
 - A translation starts with `<!-- tut-translation source=README.md sha=<hash> -->`;
   the hash ignores generated regions, so `./tut sync` alone never makes a
   translation stale. AI drafts add `by=<tool> reviewed=no`.
-- `./tut translation draft` runs the AI CLI the user chose (`TUT_TRANSLATOR`:
+- `./tut translation draft` runs the AI CLI the user chose (`TUT_AI`:
   Claude Code, Copilot CLI, Codex CLI or any command) with fixed rules, then
   checks the result mechanically (code, commands, regions, comments, link
   targets unchanged) before writing it. No API keys live in the repository.
@@ -355,7 +361,9 @@ readers and for authors testing their own tutorials. `./tut ui` starts a
 local web application (127.0.0.1 only, protected by a token printed at
 start-up) that:
 
-- lists tutorials, filtered by the KServe version selected at the top;
+- lists tutorials in three views — **Groups** (by kind, each opens on its
+  own), **Collections** (learning paths) and **All** — each with a KServe
+  version filter, search, tag filter and a version × tutorial matrix;
 - renders the README with a card per block: ▶ Run, ⏭ Run to here,
   ▶ Run all, ■ Stop, 🧹 Cleanup; the state of each block (running, passed,
   failed, stopped) is shown on the card and in the terminal;
@@ -374,7 +382,14 @@ start-up) that:
 - lets the reader arrange it: full-width document, terminal at the bottom or
   on the right, collapsible tutorial list, text size (remembered per browser);
 - offers Tab completion for kubectl/helm/kind and the aliases `k`, `kc <ns>`
-  in its terminal only (never in tutorials, D013).
+  in its terminal only (never in tutorials, D013);
+- opens a learning path (a collection) as one journey: steps an earlier member
+  already ran are hidden, cleanup waits for the end, the path's `vars` are shared;
+- helps authors: the page shows the README as `./tut sync` will write it,
+  lists the tutorial's lint findings, edits README or tutorial.yaml next to
+  the preview, and drafts a missing translation with the user's AI CLI;
+- opens extra terminals in new browser tabs (⧉) that share the tutorial
+  shell's variables, for looking at the cluster while a long step runs.
 
 Because readers re-run steps, every step must be safe to run twice (D012), and
 CI proves it by running each tutorial twice in the same cluster.
@@ -434,6 +449,12 @@ AI works on top of the rules, never instead of them:
   log. An agent can propose a fix PR; that PR passes lint and executes the
   tutorial like any other.
 - Translations can be drafted by an agent; D011 and the marker keep them honest.
+- New tutorials start from tested work: `./tut draft <folder>` gives the
+  author's AI CLI the rules, an example and the reusable parts, lets it write
+  only the new tutorial, and reports what it changed or left out.
+- `docs/handbook.md` is the map for agents: decisions already made, code map,
+  CI, invariants. Agents are expected to know the repository better than its
+  maintainer, so knowledge must be written down there.
 
 ## 5. Alternatives considered
 
@@ -479,11 +500,12 @@ AI works on top of the rules, never instead of them:
 
 ## 7. Rollout
 
-1. **Skeleton** (this change): tooling, rules + tests, CI, site, template,
-   `kind-llmisvc/v1`, and `llmisvc-anatomy` migrated as the reference.
-2. **First green run** on GitHub Actions; adjust timeouts and the profile if
-   needed (a profile is not frozen until a stable tutorial passes on it).
-3. **Migration** of the remaining tutorials, one PR each, following
+1. ✅ **Skeleton**: tooling, rules + tests, CI, site, template,
+   `kind-llmisvc/v1` (since replaced by `kind-kserve/v1`), and
+   `llmisvc-anatomy` migrated as the reference.
+2. ✅ **First green run** on GitHub Actions (PR #1); profiles are frozen once a
+   stable tutorial passes on them (backlog D2).
+3. ◐ **Migration** of the remaining tutorials, one PR each, following
    `docs/migration-guide.md` (done locally with Claude Code).
 4. **Publish**: license, Pages, a pointer from `kserve-tutorials-legacy` to this repository.
 5. **Canary** enabled; first KServe release handled through the issue flow.

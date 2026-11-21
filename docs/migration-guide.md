@@ -14,6 +14,22 @@ these exact steps, so compare against it when in doubt.
   (`llmisvc-request-flow`, not `02-request-flow`). Order is expressed by
   the collection's member list (`catalog/collections/`).
 
+## The usual way: `./tut draft`, then steps 1–8 as the checklist
+
+Point `./tut draft` at the old tutorial's folder (in a clone of the legacy
+repository). Your AI CLI (`TUT_AI`) writes `tutorials/<id>/` in this format,
+using the rules below, the reference tutorial and the reusable parts:
+
+```bash skip
+./tut draft ../kserve-tutorials-legacy/llmisvc/02-request-flow \
+  --id llmisvc-request-flow --owner <github-handle> --collection llmisvc-deep-dive
+```
+
+Then read `build/draft/<id>/report.md` (lint, files changed elsewhere, old
+commands missing from the new README) and `notes.md` (what the AI changed and
+why). Use the steps below to check and finish the result. Doing it by hand is
+the same steps, in order.
+
 ## 1. Inventory the old tutorial
 
 Write down, before changing anything:
@@ -45,7 +61,7 @@ Write down, before changing anything:
 
 ```bash skip
 make new T=<id> TITLE="<English title>" OWNER=<github-handle>   # = ./tut new <id> ...
-rm tutorials/<id>/manifests/example.yaml
+rm tutorials/<id>/manifests/example.yaml     # the template's example (./tut draft removes it for you)
 ```
 
 Fill in `tutorial.yaml` (it starts as `status: draft`, English only). Pick `tags` from
@@ -106,7 +122,7 @@ On failure the runner prints the README line of the failing block.
 
 ## 7. Translation (if the old tutorial had one)
 
-1. `./tut translation draft <id> ko` — an AI draft with the same blocks and
+1. `./tut translation draft <id> ko` (or `make precommit TRANSLATE=1`) — an AI draft with the same blocks and
    `tut:` regions as `README.md` (without an AI CLI: copy `README.md` to
    `README.ko.md`).
 2. Bring in the old KO wording where it is better (and translate code comments);
@@ -117,8 +133,10 @@ On failure the runner prints the README line of the failing block.
 ## 8. Open the pull request
 
 - One tutorial per PR. CI runs lint, then executes only this tutorial.
-- When CI is green, change `status: draft` → `stable` (if its profile is
-  frozen) in the same PR or a follow-up.
+- When CI is green, change `status: draft` → `stable` in the same PR or a
+  follow-up. Stable needs frozen parts: the env and every `uses` module must
+  have `frozen: true` [T007, L004] (backlog D2: freezing `kind-kserve/v1` and
+  `llmisvc/v1` is still open).
 
 ## Checklist
 
