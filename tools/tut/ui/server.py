@@ -24,6 +24,7 @@ from .. import lint as tlint
 from .. import markdown as tmd
 from .. import project, shared
 from ..model import LANGS, REPO_ROOT, load_tutorials, version_key
+from . import sanitize
 from .session import ShellSession
 
 STATIC = Path(__file__).parent / "static"
@@ -110,6 +111,29 @@ class UI:
         resp = await handler(request)
         if request.path == "/" or request.path.startswith(("/static/", "/shell/")):
             resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+    @web.middleware
+    async def csp(self, request: web.Request, handler):
+        """Content-Security-Policy: the browser runs only our own script files.
+        README HTML is already cleaned (sanitize.py); this is the second line, so
+        an inline script or on*= handler that slipped through still cannot run.
+        Files from tutorials/envs/lib (/files/...) are served sandboxed: an SVG or
+        HTML file there cannot run script as this page either."""
+        if request.path.startswith("/files/"):
+            policy = "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'"
+        else:
+            policy = ("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; "
+                      "frame-ancestors 'none'; form-action 'none'; "
+                      "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
+                      f"connect-src 'self' ws://{request.host} wss://{request.host}")
+        try:
+            resp = await handler(request)
+        except web.HTTPException as e:       # error pages get the policy too
+            e.headers["Content-Security-Policy"] = policy
+            raise
+        if not resp.prepared:                  # a WebSocket has already sent its headers
+            resp.headers["Content-Security-Policy"] = policy
         return resp
 
     # --------------------------------------------------------------- routes
@@ -231,6 +255,7 @@ class UI:
         body = re.sub(r"<details>", '<details markdown="1">', body)
         html = md.markdown(body, extensions=["tables", "md_in_html", "sane_lists"])
         base = f"/files/tutorials/{tid}/"
+        html = sanitize.clean(html)        # README HTML may come from an untrusted branch
         html = re.sub(r'(src|href)="(?!https?:|#|/|mailto:)([^"]+)"',
                       lambda m: f'{m.group(1)}="{base}{m.group(2)}"', html)
         return web.json_response({
@@ -452,7 +477,7 @@ class UI:
             s.stop()
 
     def app(self) -> web.Application:
-        app = web.Application(middlewares=[self.auth, self.no_stale_assets])
+        app = web.Application(middlewares=[self.csp, self.auth, self.no_stale_assets])
         app.add_routes([
             web.get("/", self.index),
             web.get("/api/tutorials", self.api_tutorials),
