@@ -22,8 +22,13 @@ to the same `./tut config` command.
 ## Working with an AI agent
 
 Start the agent in the repository root. Claude Code reads `CLAUDE.md`, which
-imports `AGENTS.md`; Codex reads `AGENTS.md`. Then ask for the task in your own
-words, for example:
+imports `AGENTS.md`; Codex reads `AGENTS.md`. The agent remembers nothing from
+earlier sessions; the repository's documents are its memory.
+
+Start from a ready-made prompt in [docs/prompts.md](docs/prompts.md): building
+the context in a first session, migrating a tutorial, a new tutorial (from
+tested work or from scratch), fixing a CI failure. Or ask in your own words,
+for example:
 
 - "Turn ~/work/llmisvc-autoscaling (my tested scripts) into a tutorial in the
   llmisvc-deep-dive collection." The agent runs `./tut draft`, which uses your
@@ -75,6 +80,7 @@ missing.
 
 | Topic | Document |
 |---|---|
+| Prompts to start an agent on a task | [docs/prompts.md](docs/prompts.md) |
 | How the repository fits together, decisions, code map | [docs/handbook.md](docs/handbook.md) |
 | Writing or changing a tutorial | [docs/authoring.md](docs/authoring.md) |
 | Moving a tutorial from the legacy repository | [docs/migration-guide.md](docs/migration-guide.md) |
