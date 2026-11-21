@@ -22,6 +22,12 @@ const TUT_TERM = (() => {
     THEMES, media, choice, isDark,
     theme: () => THEMES[isDark() ? "dark" : "light"],
     fontSize: () => Math.min(28, Math.max(10, +get("tut.termfs", 14) || 14)),
+    // A− / A+ in either page; the other page follows through a "storage" event
+    setFontSize(px) {
+      const v = Math.min(28, Math.max(10, px));
+      try { localStorage.setItem("tut.termfs", v); } catch {}
+      return v;
+    },
     // <html data-theme> for the page's CSS, from the saved choice
     applyPageTheme() {
       const t = choice();

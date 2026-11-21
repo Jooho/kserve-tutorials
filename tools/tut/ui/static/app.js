@@ -833,7 +833,12 @@ $("#fontsize").addEventListener("click", (e) => {
 });
 $("#termfs").addEventListener("click", (e) => {
   const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
-  VIEW.tfs = Math.min(28, Math.max(10, VIEW.tfs + d)); store.set("tut.termfs", VIEW.tfs); applyView();
+  VIEW.tfs = TUT_TERM.setFontSize(VIEW.tfs + d); applyView();
+});
+// A− / A+ in a ⧉ tab (same browser) changes this terminal too
+addEventListener("storage", (e) => {
+  if (e.key === "tut.termfs") { VIEW.tfs = TUT_TERM.fontSize(); applyView(); }
+  if (e.key === "tut.theme") applyTheme(TUT_TERM.choice());
 });
 $("#termpos").addEventListener("click", (e) => {
   const pos = e.target.closest("button")?.dataset.pos; if (!pos) return;

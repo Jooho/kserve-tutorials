@@ -19,8 +19,11 @@
     .bar { display: flex; gap: 12px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); }
     .bar .muted { color: var(--muted); }
     .bar .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .bar button { margin-left: auto; background: transparent; color: var(--text); border: 1px solid var(--border);
+    .bar button { background: transparent; color: var(--text); border: 1px solid var(--border);
       border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+    .bar .fs { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
+    .bar .fs button { padding: 2px 8px; }
+    #fs-val { min-width: 34px; text-align: center; color: var(--muted); font-size: 12px; }
     .bar button:hover { border-color: var(--accent); }
     #term { flex: 1; min-height: 0; padding: 4px 0 0 6px; }
   </style>
@@ -31,6 +34,9 @@
   <div class="bar">
     <strong id="who">shell</strong>
     <span class="muted mono" id="ctx"></span>
+    <span class="fs" id="termfs" title="Terminal text size (the main page's terminal follows)">
+      <button data-d="-1" aria-label="Smaller text">A−</button><span id="fs-val"></span><button data-d="1" aria-label="Larger text">A+</button>
+    </span>
     <button id="reload" title="Load the tutorial shell's current variables and directory again">↻ variables</button>
   </div>
   <div id="term"></div>
