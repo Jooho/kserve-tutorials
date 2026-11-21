@@ -56,21 +56,26 @@ def sandbox(tmp_path):
         [[ "$args" == "apply -f -" ]] && cat >/dev/null
         exit 0
         ''')
-    for tool in ("helm", "cloud-provider-kind"):
-        key = tool.upper().replace("-", "_")
-        _exe(repo / ".tools" / tool / ver(key) / tool, "exit 0\n")
+    _exe(repo / ".tools" / "helm" / ver("HELM") / "helm", "exit 0\n")
+    # cloud-provider-kind "runs" while state/cpk exists; every start is counted
+    _exe(repo / ".tools" / "cloud-provider-kind" / ver("CLOUD_PROVIDER_KIND") / "cloud-provider-kind",
+         f'echo started >> {state}/cpk_starts; touch {state}/cpk\n')
     fakebin = tmp_path / "bin"
     _exe(fakebin / "docker", "exit 0\n")
+    _exe(fakebin / "pgrep", f'[[ "$*" == *cloud-provider-kind* && -f {state}/cpk ]]\n')
+    _exe(fakebin / "pkill", f'[[ "$*" == *cloud-provider-kind* ]] && rm -f {state}/cpk; '
+                            f'echo killed >> {state}/cpk_kills\n')
     cache = tmp_path / "cache"
     src = cache / "kserve-v0.18.0"
     (src / ".git").mkdir(parents=True)
-    _exe(src / "hack" / "kserve-install.sh", f'echo "$*" >> {state}/installs\n')
+    _exe(src / "hack" / "kserve-install.sh",
+         f'echo "$*" >> {state}/installs; echo "${{PLATFORM:-}}" > {state}/platform\n')
     _exe(src / "hack" / "setup" / "dev" / "manage.kind-with-registry.sh",
          f'echo "$KIND_CLUSTER_NAME" > {state}/cluster; echo created >> {state}/creates\n')
 
     def run(env_vars: dict, ok=True):
-        env = dict(os.environ, PATH=f"{fakebin}:{os.environ['PATH']}", KSERVE_VERSION="v0.18.0",
-                   TUT_CACHE=str(cache), KIND_CLUSTER_NAME="kind", **env_vars)
+        env = {**os.environ, "PATH": f"{fakebin}:{os.environ['PATH']}", "KSERVE_VERSION": "v0.18.0",
+               "TUT_CACHE": str(cache), "KIND_CLUSTER_NAME": "kind", **env_vars}
         env.pop("TUT_ENV_RECREATE", None)
         r = subprocess.run(["bash", str(repo / ENV / "setup.sh")], env=env, capture_output=True, text=True)
         assert (r.returncode == 0) == ok, r.stdout + r.stderr
@@ -89,6 +94,33 @@ def test_new_cluster_with_options(sandbox):
     assert read("creates") == ["created"]
     assert read("installs") == ["--type kserve --kserve-version v0.18.0 --raw"]
     assert read("cm") == ["kind-kserve/v1|v0.18.0|kserve|standard|false"]
+
+
+def test_installer_is_told_the_platform_is_kind_whatever_the_cluster_name(sandbox):
+    # CI-010: KServe's installer only detects kind when the node name contains
+    # "kind"; with KIND_CLUSTER_NAME=tut it skipped cloud-provider-kind.
+    run, read, _ = sandbox
+    run({"TUT_ENV_TYPES": "llmisvc", "KIND_CLUSTER_NAME": "tut"})
+    assert read("platform") == ["kind"]
+
+
+def test_new_cluster_restarts_cloud_provider_kind(sandbox):
+    # CI-012: a cloud-provider-kind that outlived a deleted cluster did not serve
+    # a new cluster with the same name; a new cluster gets a fresh process.
+    run, read, state = sandbox
+    (state / "cpk").touch()  # one is already running
+    run({"TUT_ENV_TYPES": "llmisvc"})
+    assert read("cpk_kills") == ["killed"] and read("cpk_starts") == ["started"]
+
+
+def test_reuse_keeps_a_running_cloud_provider_kind_and_starts_a_missing_one(sandbox):
+    run, read, state = sandbox
+    run({"TUT_ENV_TYPES": "llmisvc"})
+    run({"TUT_ENV_TYPES": "llmisvc"})          # reuse, process still running
+    assert read("cpk_starts") == ["started"] and read("cpk_kills") == []
+    (state / "cpk").unlink()                    # e.g. after a reboot
+    run({"TUT_ENV_TYPES": "llmisvc"})
+    assert read("cpk_starts") == ["started", "started"] and read("cpk_kills") == []
 
 
 def test_same_request_reuses_without_installing(sandbox):

@@ -341,3 +341,42 @@ can be checked mechanically.
 - **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
   (README.md:722, step 22/25); reproduced and guarded by
   `test_runner_keeps_block_code_byte_for_byte`.
+
+### CI-010 The cluster name decided whether the Gateway got an address
+- **What happened:** with `KIND_CLUSTER_NAME=tut` (what `make doctor` suggests
+  when a foreign `kind` cluster exists), `llmisvc-request-flow` failed at
+  `kubectl wait --for=condition=Programmed gateway`: `AddressNotAssigned`, the
+  Envoy LoadBalancer Service had no IP and cloud-provider-kind was not running.
+  KServe's installer (`hack/setup/common.sh` `detect_platform`) treats a
+  cluster as kind only when the node hostname contains "kind"; `tut-control-plane`
+  does not, so it logged `Platform kubernetes does not require external LB
+  setup. Skipping.` CI uses the default name `kind`, so only local runs hit it.
+- **Rule:** an environment tells the upstream installer what it built instead
+  of letting it guess: `envs/kind-kserve/v1/setup.sh` exports `PLATFORM=kind`.
+  Test env scripts with a non-default cluster name.
+- **Evidence:** local `./tut run llmisvc-request-flow --twice` on cluster `tut`
+  (step 5/22, pass 1); passed on a cluster named `tut-kind`. Guarded by
+  `test_installer_is_told_the_platform_is_kind_whatever_the_cluster_name`.
+
+### CI-012 A cloud-provider-kind from the previous cluster did not serve the new one
+- **What happened:** `./tut run llmisvc-anatomy --teardown-env` followed by
+  `./tut run llmisvc-request-flow` failed at the Gateway `Programmed` check
+  (`AddressNotAssigned`) although the cluster was named `kind` (not CI-010).
+  Teardown deleted cluster `kind` and setup recreated it two seconds later. The
+  cloud-provider-kind process started for the old cluster was still running,
+  so KServe's installer logged `cloud-provider-kind is already running` and
+  went on; that process never served the new cluster with the same name.
+  Restarting it gave the Gateway an address within a second. CI never sees it:
+  every job starts on a fresh runner.
+- **Rule:** an environment owns the host processes its clusters need. The
+  `kind-kserve/v1` setup starts cloud-provider-kind itself (pinned binary, log
+  in `$TUT_CACHE/cloud-provider-kind.log`), restarts it whenever it creates a
+  cluster, starts it when a reused cluster has none (after a reboot), and only
+  reports ready once the Gateway is `Programmed`, so the failure shows up in
+  the setup step with the log instead of in a tutorial step.
+- **Evidence:** reproduced locally on 2026-11-20 (teardown, then setup 2 s
+  later: Gateway `Programmed=False` after 4 min; a fresh cluster long after
+  the previous one was deleted worked). With the fix the same sequence ended
+  with the Gateway at `172.18.0.5`, `Programmed=True`. Guarded by
+  `test_new_cluster_restarts_cloud_provider_kind` and
+  `test_reuse_keeps_a_running_cloud_provider_kind_and_starts_a_missing_one`.

@@ -156,6 +156,43 @@ command -v docker >/dev/null && docker info >/dev/null 2>&1 \
 # shellcheck source=/dev/null
 source "$HERE/tools.env"
 export PATH="$REPO/.tools/kind/$KIND:$REPO/.tools/kubectl/$KUBECTL:$REPO/.tools/helm/$HELM:$REPO/.tools/cloud-provider-kind/$CLOUD_PROVIDER_KIND:$PATH"
+# KServe's installer guesses the platform from the node hostname and only
+# treats it as kind when the name contains "kind". With another cluster name
+# (KIND_CLUSTER_NAME=tut -> node tut-control-plane) it skips cloud-provider-kind
+# and the Gateway never gets an address (CI-010). This env always builds kind.
+export PLATFORM=kind
+
+# cloud-provider-kind gives LoadBalancer Services (the Gateway) an address. It
+# is one host process for every kind cluster. KServe's installer only starts it
+# when none is running and throws its output away; a process that outlived a
+# deleted cluster did not serve a new cluster with the same name (CI-012), and
+# nothing started it again after a reboot. So this env owns it: the pinned
+# binary, a log file, a restart whenever this script creates a cluster, and a
+# check that the Gateway really got an address.
+CPK_LOG="$TUT_CACHE/cloud-provider-kind.log"
+lb_running() { pgrep -f '^([^ ]*/)?cloud-provider-kind( |$)' >/dev/null; }
+start_lb() {   # $1 = 1: restart a running one
+  if lb_running; then
+    [[ "$1" == 1 ]] || return 0
+    log "restarting cloud-provider-kind (new cluster)"
+    pkill -f '^([^ ]*/)?cloud-provider-kind( |$)' || true
+    for _ in $(seq 1 20); do lb_running || break; sleep 0.5; done
+  fi
+  mkdir -p "$TUT_CACHE"
+  log "starting cloud-provider-kind $CLOUD_PROVIDER_KIND (log: $CPK_LOG)"
+  nohup cloud-provider-kind >>"$CPK_LOG" 2>&1 </dev/null &
+  for _ in $(seq 1 20); do lb_running && return 0; sleep 0.5; done
+  log "cloud-provider-kind did not start; see $CPK_LOG"
+  return 1
+}
+lb_ready() {   # $1 = types on the cluster; only llmisvc installs a Gateway
+  has "$1" llmisvc || return 0
+  kubectl -n kserve wait --for=condition=Programmed gateway --all --timeout=180s && return 0
+  log "the Gateway got no address: cloud-provider-kind does not serve this cluster"
+  log "last lines of $CPK_LOG:"
+  tail -n 20 "$CPK_LOG" 2>/dev/null | sed 's/^/  /' || true
+  return 1
+}
 
 # 1. An existing cluster: reuse it, add what is missing, or stop.
 HAVE="" HAVE_MODE="" HAVE_KEDA="false" ADD="$WANT" CREATE=1
@@ -188,7 +225,9 @@ if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
     # KEDA is installed together with kserve: asking for it later reinstalls kserve with it.
     [[ "$KEDA" == true && "$HAVE_KEDA" != true ]] && ADD="$(printf '%s,kserve' "$ADD" | norm)"
     kubectl config use-context "kind-$KIND_CLUSTER_NAME" >/dev/null
+    start_lb 0
     if [[ -z "$ADD" ]]; then
+      lb_ready "$HAVE" || exit 1
       log "cluster '$KIND_CLUSTER_NAME' already provides ${HAVE} (KServe $KSERVE_VERSION) — reusing"
       exit 0
     fi
@@ -208,6 +247,7 @@ cd "$KSERVE_SRC"
 if [[ "$CREATE" == 1 ]]; then
   log "creating kind cluster '$KIND_CLUSTER_NAME' with local registry"
   KIND_CLUSTER_NAME="$KIND_CLUSTER_NAME" ./hack/setup/dev/manage.kind-with-registry.sh
+  start_lb 1
 fi
 args=(--type "$ADD" --kserve-version "$KSERVE_VERSION")
 if has "$ADD" kserve; then
@@ -265,6 +305,7 @@ fi
 has "$ALL" kserve  && kubectl wait --for=condition=Established crd/inferenceservices.serving.kserve.io --timeout=120s
 has "$ALL" llmisvc && kubectl wait --for=condition=Established crd/llminferenceservices.serving.kserve.io --timeout=120s
 kubectl -n kserve wait --for=condition=Available deployment --all --timeout=600s
+lb_ready "$ALL" || exit 1
 
 # 5. Record what this cluster provides (used by step 1 next time).
 kubectl -n kube-system create configmap tut-env \
