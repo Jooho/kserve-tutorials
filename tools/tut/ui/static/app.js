@@ -48,28 +48,14 @@ function applyProject(p) {
 }
 
 // ------------------------------------------------------------- terminal
-// Terminal colours follow the page theme. Both palettes keep every ANSI colour
-// readable on their background (xterm's defaults put yellow/white on white).
-const TERM_THEMES = {
-  dark: { background: "#1b2029", foreground: "#e6e9ef", cursor: "#e6e9ef", selectionBackground: "#3b4558",
-    black: "#3b4252", red: "#ff7b72", green: "#7ee787", yellow: "#f2cc60", blue: "#79c0ff", magenta: "#d2a8ff",
-    cyan: "#76e3ea", white: "#e6e9ef", brightBlack: "#8b93a5", brightRed: "#ffa198", brightGreen: "#aff5b4",
-    brightYellow: "#f8e3a1", brightBlue: "#a5d6ff", brightMagenta: "#e2c5ff", brightCyan: "#b3f0ff", brightWhite: "#ffffff" },
-  light: { background: "#ffffff", foreground: "#1f2328", cursor: "#1f2328", selectionBackground: "#c8d7fa",
-    black: "#1f2328", red: "#cf222e", green: "#116329", yellow: "#7d4e00", blue: "#0550ae", magenta: "#8250df",
-    cyan: "#1b7c83", white: "#6e7781", brightBlack: "#57606a", brightRed: "#a40e26", brightGreen: "#1a7f37",
-    brightYellow: "#633c01", brightBlue: "#0969da", brightMagenta: "#6639ba", brightCyan: "#3192aa", brightWhite: "#8c959f" },
-};
-const darkNow = () => document.documentElement.dataset.theme === "dark" ||
-  (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
 const term = new Terminal({
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 14,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: TUT_TERM.fontSize(),
   cursorBlink: true, scrollback: 5000, convertEol: false,
-  theme: TERM_THEMES[darkNow() ? "dark" : "light"],
+  theme: TUT_TERM.theme(),       // static/term-theme.js, shared with the ⧉ tab
 });
-const applyTermTheme = () => { term.options.theme = TERM_THEMES[darkNow() ? "dark" : "light"]; };
+const applyTermTheme = () => { term.options.theme = TUT_TERM.theme(); };
 addEventListener("tut-theme", applyTermTheme);
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTermTheme);
+TUT_TERM.media.addEventListener("change", applyTermTheme);
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open($("#term"));
@@ -737,12 +723,20 @@ $("#run-all").onclick = () => run(steps().map((b) => b.idx));
 $("#cleanup").onclick = () => run(S.doc.blocks.filter((b) => b.role === "cleanup").map((b) => b.idx), false);
 $("#stop").onclick = () => send({ type: "interrupt" });
 // 🗑 delete the Kind cluster (the env's teardown.sh), after asking: every tutorial on it loses its state.
-$("#teardown").onclick = () => {
+$("#teardown").onclick = async () => {
   const t = currentMeta();
   if (!t?.env) { alert("This tutorial has no environment: there is no cluster to delete."); return; }
-  if (!confirm(`Delete the Kind cluster of ${t.env}?\n\nIt runs envs/${t.env}/teardown.sh in this terminal. ` +
-               "Everything on the cluster is lost, for every tutorial using it. The next setup step " +
-               "builds a new cluster (several minutes).")) return;
+  // Say exactly which cluster goes, and warn when it was not built by these
+  // tutorials (no tut-env marker): it may be one the reader uses for something else.
+  const e = await fetch(`/api/tutorials/${S.current}/env`).then((r) => r.json()).catch(() => ({}));
+  const name = e.name || "kind";
+  if (e.kind && !e.cluster) { alert(`There is no Kind cluster named "${name}": nothing to delete.`); return; }
+  const what = !e.cluster ? `Kind cluster "${name}" (could not check it: kind is not on this machine's PATH)`
+    : e.built_as ? `Kind cluster "${name}", built by the tutorials as ${e.built_as}`
+    : `Kind cluster "${name}". WARNING: it was NOT built by these tutorials (no tut-env marker) — it may be a cluster you use for something else`;
+  if (!confirm(`Delete the ${what}?\n\nRuns envs/${t.env}/teardown.sh in this terminal. Everything on the ` +
+               "cluster is lost, for every tutorial using it. The next setup step builds a new one " +
+               "(several minutes).")) return;
   send({ type: "teardown" });
   term.focus();
 };
@@ -778,8 +772,10 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "output") term.write(m.data);
+    else if (m.type === "notice") alert(m.message);
     else if (m.type === "block" && m.idx === TEARDOWN_IDX) {
-      if (m.state === "passed" || m.state === "failed") { S.states = {}; renderDoc(); loadEnv(); }
+      if (m.state === "passed") { S.states = {}; renderDoc(); }   // the cluster is gone: no step holds
+      if (m.state !== "queued" && m.state !== "running") loadEnv();
     }
     else if (m.type === "block") setState(m.idx, m.state === "idle" ? null : m.state, m.ts);
     else if (m.type === "session") {

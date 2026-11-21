@@ -171,9 +171,10 @@ def test_shell_page_is_served_with_its_script():
     aio.run(main())
 
 
-def test_teardown_runs_the_envs_teardown_script_in_the_tutorial_shell(tmp_path):
-    """🗑 Teardown: the server runs envs/<env>/teardown.sh in the tutorial's shell
-    (queued like a step, index -1); it never becomes a step state of the README."""
+def test_teardown_runs_only_when_idle_and_resets_the_steps_after_it_passed(tmp_path):
+    """🗑 Teardown: refused while a step runs (it would be typed into that step);
+    when idle the server runs envs/<env>/teardown.sh in the tutorial shell as a
+    pseudo block -1, which is never a step state; the steps reset once it passed."""
     import json
     from aiohttp.test_utils import TestClient, TestServer
     from test_rules import make_env, make_tut
@@ -189,23 +190,57 @@ def test_teardown_runs_the_envs_teardown_script_in_the_tutorial_shell(tmp_path):
         ui = UI(tmp_path)
         async with TestClient(TestServer(ui.app())) as c:
             ws = await c.ws_connect(f"/ws/t?token={ui.token}")
-            await ws.send_str(json.dumps({"type": "start", "cols": 80, "rows": 24}))
-            events = []
             async def until(pred, timeout=20):
                 while True:
                     m = json.loads((await asyncio.wait_for(ws.receive(), timeout)).data)
-                    events.append(m)
                     if pred(m):
                         return m
+            block = lambda idx, *states: (lambda m: m.get("type") == "block" and m.get("idx") == idx
+                                          and m.get("state") in states)
+            await ws.send_str(json.dumps({"type": "start", "cols": 80, "rows": 24}))
             await until(lambda m: m.get("type") == "session" and m.get("state") == "started")
+            # a step that takes a while: teardown is refused, nothing is typed
+            sess = ui.sessions["t"]
+            sess.run_queue([{"idx": 0, "role": "run", "code": "sleep 2", "attrs": {}}])
+            await until(block(0, "running"))
             await ws.send_str(json.dumps({"type": "teardown"}))
-            done = await until(lambda m: m.get("type") == "block" and m.get("idx") == -1
-                               and m.get("state") in ("passed", "failed"))
+            notice = await until(lambda m: m.get("type") == "notice")
+            await until(block(0, "passed"))
+            refused_ran = marker.exists()
+            states_before = dict(ui.block_states.get("t", {}))
+            # idle now: it runs, and afterwards no step counts as passed
+            await ws.send_str(json.dumps({"type": "teardown"}))
+            done = await until(block(-1, "passed", "failed"))
+            await asyncio.sleep(0.1)
             await ws.close()
             for s in ui.sessions.values():
                 s.stop()
-            return done, ui.block_states.get("t", {})
+            return notice, refused_ran, states_before, done, ui.block_states.get("t", {})
 
-    done, states = asyncio.run(main())
+    notice, refused_ran, states_before, done, states_after = asyncio.run(main())
+    assert "still running" in notice["message"] and not refused_ran
+    assert states_before[0]["state"] == "passed"
     assert done["state"] == "passed" and marker.exists()
-    assert -1 not in states
+    assert states_after == {}                        # reset, and -1 never recorded
+
+
+def test_cancelled_queue_resets_the_steps_that_never_started(tmp_path):
+    """Starting another run (or ■ Stop) cancels the queue: steps still waiting go
+    back to idle instead of showing "queued" for ever."""
+    events = []
+
+    async def main():
+        s = ShellSession("t", tmp_path, "v0.18.0", lambda _: None, events.append)
+        s.start()
+        s.run_queue([{"idx": i, "role": "run", "code": "sleep 1" if i == 0 else "true"} for i in range(3)])
+        await asyncio.sleep(0.3)
+        s.run_queue([{"idx": 5, "role": "run", "code": "true"}])          # replaces the queue
+        await asyncio.sleep(2.5)
+        s.stop()
+
+    asyncio.run(main())
+    last = {}
+    for e in events:
+        if e.get("type") == "block":
+            last[e["idx"]] = e["state"]
+    assert last[1] == "idle" and last[2] == "idle" and last[5] == "passed"

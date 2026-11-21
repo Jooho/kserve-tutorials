@@ -148,6 +148,7 @@ class ShellSession:
         self.pending = ""
         self.waiters: dict[int, asyncio.Future] = {}
         self.queue_task: asyncio.Task | None = None
+        self.queued: list[int] = []          # blocks of the queue that have not started yet
         self.running: int | None = None
         self.stopped: set[int] = set()   # blocks the user interrupted
         self.prompt_ready: asyncio.Event | None = None
@@ -289,16 +290,25 @@ class ShellSession:
         self.write(f"\x15 __tut_run {idx}\n")
         return await fut
 
+    @property
+    def busy(self) -> bool:
+        """A block is running or a queue still has blocks to run."""
+        return self.running is not None or bool(self.queue_task and not self.queue_task.done())
+
     def run_queue(self, blocks: list[dict], stop_on_fail: bool = True):
         self.cancel_queue()
+        self.queued = [b["idx"] for b in blocks]
 
         async def go():
             for b in blocks:
                 self.on_event({"type": "block", "idx": b["idx"], "state": "queued"})
             for n, b in enumerate(blocks):
+                if b["idx"] in self.queued:
+                    self.queued.remove(b["idx"])
                 rc = await self.run_block(b["idx"], b["role"], b["code"], b.get("attrs", {}),
                                           b.get("label", ""))
                 if rc != 0 and stop_on_fail:
+                    self.queued = []
                     for rest in blocks[n + 1:]:
                         self.on_event({"type": "block", "idx": rest["idx"], "state": "idle"})
                     self.on_event({"type": "queue", "state": "stopped", "failed": b["idx"]})
@@ -311,6 +321,11 @@ class ShellSession:
         if self.queue_task and not self.queue_task.done():
             self.queue_task.cancel()
         self.queue_task = None
+        # blocks that were waiting their turn are no longer queued (else the page
+        # shows them as "queued" for ever)
+        for idx in self.queued:
+            self.on_event({"type": "block", "idx": idx, "state": "idle"})
+        self.queued = []
 
     def interrupt(self):
         """Ctrl-C: stop the queue and the running block. The block is reported as

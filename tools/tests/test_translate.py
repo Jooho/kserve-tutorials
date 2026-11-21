@@ -1,6 +1,7 @@
 """AI translation drafts: any CLI via TUT_TRANSLATOR, output checked before writing."""
 from __future__ import annotations
 
+import re
 import sys
 
 import pytest
@@ -96,7 +97,8 @@ def test_precommit_translate_drafts_every_missing_translation(tmp_path, monkeypa
 
     cli.main(["translation", "todo"])
     out = capsys.readouterr().out
-    assert "TRANSLATE=1" in out and "not translated" in out and " a" in out
+    assert "TRANSLATE=1" in out
+    assert re.search(r"^\s+ko\s+not translated\s+a$", out, re.M), out
 
     assert cli.main(["translation", "draft", "--all"]) == 0          # no language: every language
     t = next(x for x in load_tutorials(repo) if x.id == "a")

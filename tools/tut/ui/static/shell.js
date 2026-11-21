@@ -2,14 +2,24 @@
 "use strict";
 
 const tid = decodeURIComponent(location.pathname.split("/").pop());
-const fs = (() => { try { return +localStorage.getItem("tut.fs") || 14; } catch { return 14; } })();
+TUT_TERM.applyPageTheme();
 document.title = `shell · ${tid}`;
 document.getElementById("who").textContent = `shell · ${tid}`;
 
 const term = new Terminal({
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: Math.max(10, fs - 1),
-  cursorBlink: true, scrollback: 10000, theme: { background: "#0f1218", foreground: "#dfe3ea" },
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: TUT_TERM.fontSize(),
+  cursorBlink: true, scrollback: 10000, theme: TUT_TERM.theme(),
 });
+// Theme and terminal text size as in the main page; changes made there (another
+// tab, same browser) arrive as "storage" events.
+const restyle = () => {
+  TUT_TERM.applyPageTheme();
+  term.options.theme = TUT_TERM.theme();
+  term.options.fontSize = TUT_TERM.fontSize();
+  try { refit(); } catch {}
+};
+addEventListener("storage", (e) => { if (e.key === "tut.theme" || e.key === "tut.termfs") restyle(); });
+TUT_TERM.media.addEventListener("change", restyle);
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open(document.getElementById("term"));
