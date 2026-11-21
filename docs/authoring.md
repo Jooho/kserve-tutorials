@@ -341,3 +341,21 @@ can be checked mechanically.
 - **Evidence:** [PR #18 e2e](https://github.com/Jooho/kserve-tutorials/pull/18)
   (README.md:722, step 22/25); reproduced and guarded by
   `test_runner_keeps_block_code_byte_for_byte`.
+
+### CI-011 `kubectl logs -l ... --tail=N | grep` missed a line that was there
+- **What happened:** the first `--twice` run of `llmisvc-request-flow` passed
+  pass 1 and failed pass 2 at the verify that finds a request id in the EPP
+  scheduler log (`kubectl logs -l ... --tail=500 | grep "$REQUEST_ID"`). The
+  EPP image the env installs (`llm-d-router-endpoint-picker`, CI-004) also
+  prints its OpenTelemetry spans to the log, several hundred lines per
+  request, a few seconds later; by the time of the check the request was
+  about 1000 lines from the end. The first fix, `--since=5m` alone, failed at
+  once: with `-l`, `kubectl logs` keeps only the last 10 lines unless `--tail`
+  is given.
+- **Rule:** to find a recent event in a log, search a time window, not a line
+  count: `kubectl logs ... --since=5m --tail=-1 | grep ...`. Never rely on the
+  default tail of `kubectl logs -l`.
+- **Evidence:** local runs on 2026-11-20 (pass 2, step 12/22: the request id
+  was at line 1792 of 2793; `--since=5m` with `-l` returned 10 lines,
+  `--since=5m --tail=-1` returned 3259 lines with 12 matches); the fixed
+  tutorial then passed `--twice` from a fresh cluster in 572 s.

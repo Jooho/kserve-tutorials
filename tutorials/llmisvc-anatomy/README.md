@@ -54,9 +54,13 @@ kubectl get pods,svc,deploy,inferencepool,httproute -n "$NS" 2>/dev/null || true
 Apply a single YAML. The well-known config is injected automatically, so no
 separate `LLMInferenceServiceConfig` is needed.
 
+<!-- tut:define llmisvc-demo-model -->
+
 ```bash run
 kubectl apply -f manifests/llmisvc-cpu.yaml -n "$NS"
 ```
+
+<!-- /tut -->
 
 <details>
 <summary>manifests/llmisvc-cpu.yaml</summary>
