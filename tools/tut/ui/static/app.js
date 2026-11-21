@@ -23,6 +23,7 @@ function applyTheme(t) {
   else { delete document.documentElement.dataset.theme; t = "auto"; }
   store.set("tut.theme", t);
   document.querySelectorAll("#theme button").forEach((b) => b.classList.toggle("on", b.dataset.theme === t));
+  dispatchEvent(new Event("tut-theme"));
 }
 applyTheme(store.get("tut.theme", "auto"));
 $("#theme").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) applyTheme(b.dataset.theme); });
@@ -47,11 +48,28 @@ function applyProject(p) {
 }
 
 // ------------------------------------------------------------- terminal
+// Terminal colours follow the page theme. Both palettes keep every ANSI colour
+// readable on their background (xterm's defaults put yellow/white on white).
+const TERM_THEMES = {
+  dark: { background: "#1b2029", foreground: "#e6e9ef", cursor: "#e6e9ef", selectionBackground: "#3b4558",
+    black: "#3b4252", red: "#ff7b72", green: "#7ee787", yellow: "#f2cc60", blue: "#79c0ff", magenta: "#d2a8ff",
+    cyan: "#76e3ea", white: "#e6e9ef", brightBlack: "#8b93a5", brightRed: "#ffa198", brightGreen: "#aff5b4",
+    brightYellow: "#f8e3a1", brightBlue: "#a5d6ff", brightMagenta: "#e2c5ff", brightCyan: "#b3f0ff", brightWhite: "#ffffff" },
+  light: { background: "#ffffff", foreground: "#1f2328", cursor: "#1f2328", selectionBackground: "#c8d7fa",
+    black: "#1f2328", red: "#cf222e", green: "#116329", yellow: "#7d4e00", blue: "#0550ae", magenta: "#8250df",
+    cyan: "#1b7c83", white: "#6e7781", brightBlack: "#57606a", brightRed: "#a40e26", brightGreen: "#1a7f37",
+    brightYellow: "#633c01", brightBlue: "#0969da", brightMagenta: "#6639ba", brightCyan: "#3192aa", brightWhite: "#8c959f" },
+};
+const darkNow = () => document.documentElement.dataset.theme === "dark" ||
+  (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
 const term = new Terminal({
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 13,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 14,
   cursorBlink: true, scrollback: 5000, convertEol: false,
-  theme: { background: "#0f1218", foreground: "#dfe3ea" },
+  theme: TERM_THEMES[darkNow() ? "dark" : "light"],
 });
+const applyTermTheme = () => { term.options.theme = TERM_THEMES[darkNow() ? "dark" : "light"]; };
+addEventListener("tut-theme", applyTermTheme);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTermTheme);
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open($("#term"));
@@ -718,6 +736,16 @@ $("#continue").onclick = () => {
 $("#run-all").onclick = () => run(steps().map((b) => b.idx));
 $("#cleanup").onclick = () => run(S.doc.blocks.filter((b) => b.role === "cleanup").map((b) => b.idx), false);
 $("#stop").onclick = () => send({ type: "interrupt" });
+// 🗑 delete the Kind cluster (the env's teardown.sh), after asking: every tutorial on it loses its state.
+$("#teardown").onclick = () => {
+  const t = currentMeta();
+  if (!t?.env) { alert("This tutorial has no environment: there is no cluster to delete."); return; }
+  if (!confirm(`Delete the Kind cluster of ${t.env}?\n\nIt runs envs/${t.env}/teardown.sh in this terminal. ` +
+               "Everything on the cluster is lost, for every tutorial using it. The next setup step " +
+               "builds a new cluster (several minutes).")) return;
+  send({ type: "teardown" });
+  term.focus();
+};
 // ⧉ another terminal for this tutorial, alone in a new browser tab (static/shell.html)
 $("#term-new").onclick = () => { if (S.current) window.open(`/shell/${encodeURIComponent(S.current)}`, "_blank"); };
 $("#restart").onclick = () => { if (confirm("Start a new shell? Variables in the current shell are lost.")) startShell(); };
@@ -734,11 +762,12 @@ async function loadEnv() {
   if (!e.docker || !e.kubectl) msg = `Missing tools: ${["docker", "kubectl"].filter((x) => !e[x]).join(", ")}. Install them before running.`;
   else if (!e.cluster) msg = `No Kind cluster yet. The <b>setup</b> step creates <span class="mono">${esc(t.env)}</span> with ${P()} ${sessionVersionFor(t)} (takes several minutes).`;
   else if (e.built_as === want) { cls = "ok"; msg = `Kind cluster ready: <span class="mono">${esc(e.built_as)}</span>. The setup step will reuse it.`; }
-  else msg = `A Kind cluster exists but was built as <span class="mono">${esc(e.built_as || "unknown")}</span>, not <span class="mono">${esc(want)}</span>. Setup will stop; delete it with <span class="mono">envs/${esc(t.env)}/teardown.sh</span> or set TUT_ENV_RECREATE=1.`;
+  else msg = `A Kind cluster exists but was built as <span class="mono">${esc(e.built_as || "unknown")}</span>, not <span class="mono">${esc(want)}</span>. Setup will stop; delete it with 🗑 Teardown (<span class="mono">envs/${esc(t.env)}/teardown.sh</span>) or set TUT_ENV_RECREATE=1.`;
   bar.className = "envbar " + cls; bar.innerHTML = msg;
 }
 
 // ------------------------------------------------------------- websocket
+const TEARDOWN_IDX = -1;      // the server runs teardown.sh as a pseudo block with this index
 function connect() {
   if (S.ws) { S.ws.onclose = null; S.ws.close(); }
   term.reset();
@@ -749,6 +778,9 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "output") term.write(m.data);
+    else if (m.type === "block" && m.idx === TEARDOWN_IDX) {
+      if (m.state === "passed" || m.state === "failed") { S.states = {}; renderDoc(); loadEnv(); }
+    }
     else if (m.type === "block") setState(m.idx, m.state === "idle" ? null : m.state, m.ts);
     else if (m.type === "session") {
       if (m.state === "started") {
@@ -782,7 +814,7 @@ function startShell() {
 // ------------------------------------------------------------- layout & text size
 // Remembered per browser (localStorage); the page works without it.
 const VIEW = {
-  fs: +store.get("tut.fs", 14), pos: store.get("tut.termpos", "bottom"),
+  fs: +store.get("tut.fs", 14), tfs: +store.get("tut.termfs", 14), pos: store.get("tut.termpos", "bottom"),
   sidebar: store.get("tut.sidebar", "shown"),
   termH: store.get("tut.termH", ""), termW: store.get("tut.termW", ""),
 };
@@ -790,7 +822,8 @@ function applyView() {
   const main = $(".main");
   document.documentElement.style.setProperty("--fs", VIEW.fs + "px");
   $("#fs-val").textContent = VIEW.fs + "px";
-  term.options.fontSize = Math.max(10, VIEW.fs - 1);
+  term.options.fontSize = VIEW.tfs;
+  $("#termfs-val").textContent = VIEW.tfs + "px";
   document.body.classList.toggle("term-right", VIEW.pos === "right");
   document.body.classList.toggle("sidebar-hidden", VIEW.sidebar === "hidden");
   document.querySelectorAll("#termpos button").forEach((b) => b.classList.toggle("on", b.dataset.pos === VIEW.pos));
@@ -801,6 +834,10 @@ function applyView() {
 $("#fontsize").addEventListener("click", (e) => {
   const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
   VIEW.fs = Math.min(24, Math.max(11, VIEW.fs + d)); store.set("tut.fs", VIEW.fs); applyView();
+});
+$("#termfs").addEventListener("click", (e) => {
+  const d = +(e.target.closest("button")?.dataset.d || 0); if (!d) return;
+  VIEW.tfs = Math.min(28, Math.max(10, VIEW.tfs + d)); store.set("tut.termfs", VIEW.tfs); applyView();
 });
 $("#termpos").addEventListener("click", (e) => {
   const pos = e.target.closest("button")?.dataset.pos; if (!pos) return;

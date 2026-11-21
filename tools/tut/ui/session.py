@@ -43,7 +43,7 @@ def pick_bash() -> str:
     return "bash"
 
 
-MARKER_RE = re.compile(r"\x1b\]777;tut;(start|end|ready);(\d+)(?:;(\d+))?\x07")
+MARKER_RE = re.compile(r"\x1b\]777;tut;(start|end|ready);(-?\d+)(?:;(\d+))?\x07")   # -1 = teardown
 MARKER_PREFIX = "\x1b]777;"
 # Result lines are written by the server, which is the only party that knows
 # whether a block was stopped by the user (a command may exit 0 on Ctrl-C).

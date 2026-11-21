@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import re
+import shlex
 import time
 import secrets
 import shutil
@@ -51,7 +52,8 @@ class UI:
     def broadcast(self, tid: str, msg: dict):
         if msg.get("type") == "block":
             msg = {**msg, "ts": time.time()}
-            self.block_states.setdefault(tid, {})[msg["idx"]] = msg
+            if msg["idx"] >= 0:                      # -1 = teardown, not a step of the README
+                self.block_states.setdefault(tid, {})[msg["idx"]] = msg
         data = json.dumps(msg)
         for ws in list(self.clients.get(tid, ())):
             if not ws.closed:
@@ -415,6 +417,17 @@ class UI:
                     sess.run_queue(blocks, stop_on_fail=m.get("stop_on_fail", True))
                 elif kind == "interrupt":
                     sess.interrupt()
+                elif kind == "teardown":
+                    # 🗑 in the UI: the env's teardown.sh, in this shell, after the
+                    # current step (it is queued like a block, index -1). The
+                    # cluster is gone afterwards, so no step counts as passed.
+                    t = self.tutorial_or_404(tid)
+                    if t.env_ref:
+                        script = self.root / "envs" / t.env_ref / "teardown.sh"
+                        self.block_states[tid] = {}
+                        sess.run_queue([{"idx": -1, "role": "run", "code": shlex.quote(str(script)),
+                                         "attrs": {}, "label": f"teardown · envs/{t.env_ref}"}],
+                                       stop_on_fail=False)
         finally:
             self.clients.get(tid, set()).discard(ws)
         return ws

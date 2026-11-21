@@ -169,3 +169,43 @@ def test_shell_page_is_served_with_its_script():
             assert (await c.get("/shell/no-such-tutorial", headers=h)).status == 404
             assert (await c.get("/shell/llmisvc-anatomy")).status == 403          # token required
     aio.run(main())
+
+
+def test_teardown_runs_the_envs_teardown_script_in_the_tutorial_shell(tmp_path):
+    """🗑 Teardown: the server runs envs/<env>/teardown.sh in the tutorial's shell
+    (queued like a step, index -1); it never becomes a step state of the README."""
+    import json
+    from aiohttp.test_utils import TestClient, TestServer
+    from test_rules import make_env, make_tut
+    from tut.ui.server import UI
+
+    make_env(tmp_path)
+    marker = tmp_path / "torn-down"
+    td = tmp_path / "envs" / "kind-x" / "v1" / "teardown.sh"
+    td.write_text(f"#!/bin/sh\necho tearing down\ntouch {marker}\n")
+    make_tut(tmp_path, "t")
+
+    async def main():
+        ui = UI(tmp_path)
+        async with TestClient(TestServer(ui.app())) as c:
+            ws = await c.ws_connect(f"/ws/t?token={ui.token}")
+            await ws.send_str(json.dumps({"type": "start", "cols": 80, "rows": 24}))
+            events = []
+            async def until(pred, timeout=20):
+                while True:
+                    m = json.loads((await asyncio.wait_for(ws.receive(), timeout)).data)
+                    events.append(m)
+                    if pred(m):
+                        return m
+            await until(lambda m: m.get("type") == "session" and m.get("state") == "started")
+            await ws.send_str(json.dumps({"type": "teardown"}))
+            done = await until(lambda m: m.get("type") == "block" and m.get("idx") == -1
+                               and m.get("state") in ("passed", "failed"))
+            await ws.close()
+            for s in ui.sessions.values():
+                s.stop()
+            return done, ui.block_states.get("t", {})
+
+    done, states = asyncio.run(main())
+    assert done["state"] == "passed" and marker.exists()
+    assert -1 not in states

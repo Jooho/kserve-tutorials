@@ -12,7 +12,7 @@
   <header class="topbar">
     <button class="icon-btn" id="toggle-sidebar" title="Show / hide the tutorial list" aria-label="Toggle tutorial list">☰</button>
     <div class="brand">Tutorials <span class="muted">local runner</span></div>
-    <div class="seg" id="fontsize" title="Text size (document and terminal)">
+    <div class="seg" id="fontsize" title="Text size of the page (the terminal has its own, in its bar)">
       <button data-d="-1" aria-label="Smaller text">A−</button><span id="fs-val"></span><button data-d="1" aria-label="Larger text">A+</button>
     </div>
     <div class="seg" id="termpos" title="Terminal position">
@@ -62,6 +62,7 @@
               <button class="btn" id="run-all" title="Run every step again from the top, stop at the first failure">⏩<span class="lbl"> Run all</span></button>
               <button class="btn" id="stop" title="Ctrl-C">■<span class="lbl"> Stop</span></button>
               <button class="btn" id="cleanup" title="Run the cleanup blocks">🧹<span class="lbl"> Cleanup</span></button>
+              <button class="btn danger" id="teardown" title="Delete this tutorial's Kind cluster (the env's teardown.sh). The next setup step builds a new one.">🗑<span class="lbl"> Teardown</span></button>
               <button class="btn" id="restart" title="Start a fresh shell (resets variables)">↻<span class="lbl"> New shell</span></button>
               <button class="btn" id="edit" title="Edit this README next to its preview (Ctrl+S saves)">✎<span class="lbl"> Edit</span></button>
             </div>
@@ -92,6 +93,9 @@
       <section class="termpane">
         <div class="termbar">
           <span id="term-title">Terminal</span>
+          <div class="seg term-seg" id="termfs" title="Terminal text size">
+            <button data-d="-1" aria-label="Smaller terminal text">A−</button><span id="termfs-val"></span><button data-d="1" aria-label="Larger terminal text">A+</button>
+          </div>
           <button class="icon-btn" id="term-new" title="Open another terminal for this tutorial in a new browser tab — it has this shell's variables, and works while a step is running">⧉</button>
           <span class="muted" id="term-note">You can type here too (Tab completion; aliases <code>k</code>=kubectl, <code>kc &lt;ns&gt;</code>=switch namespace). Typed commands are not tracked as steps.</span>
         </div>
