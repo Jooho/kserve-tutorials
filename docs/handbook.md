@@ -205,6 +205,7 @@ The weekly run catches the rest.
 | The browser never mixes an old `app.js` with a new page | `Cache-Control: no-cache` (test_shared) |
 | Env marker format (`profile\|version\|types\|mode\|keda`) | test_env_kserve with fake kind/kubectl |
 | Translation keeps code, regions and links | translate check, D011 |
+| No script from a README runs in the UI (it holds the token and the shell) | `ui/sanitize.py` allowlist, CSP `script-src 'self'` (no inline script in the pages), `/files/` sandboxed — test_ui_safe_html |
 
 ## 9. How agents work here
 
