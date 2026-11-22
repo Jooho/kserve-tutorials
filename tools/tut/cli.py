@@ -494,6 +494,7 @@ CONFIG_KEYS = {"KIND_CLUSTER_NAME": "name of the kind cluster tutorials create/u
                "TUT_SKIP_TOOLS": "tools you provide yourself, e.g. \"helm\" (default: none)",
                "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)",
                "TUT_AI": "your AI CLI for `draft` and `translation draft`: claude | copilot | codex | cmd:<command>",
+               "TUT_UI_PORT": "port of ./tut ui (default: 8765, or the next free port)",
                "TUT_AI_REVIEW": "AI CLI that reviews an explainer (`explain review`); default: TUT_AI",
                "TUT_AI_REVIEW_ARGS": "extra flags for that CLI, e.g. \"--model opus\"",
                "TUT_TRANSLATOR": "older name of TUT_AI (still read)",
@@ -534,11 +535,21 @@ def cmd_doctor(a):
 
 
 def cmd_ui(a):
+    import os
     try:
-        from .ui.server import serve
+        from .ui.server import PortError, serve
     except ImportError as e:
         sys.exit(f"{e}. Install the UI dependencies: pip install -r tools/requirements.txt")
-    serve(port=a.port, open_browser=not a.no_browser)
+    port = a.port
+    if port is None and os.environ.get("TUT_UI_PORT"):
+        try:
+            port = int(os.environ["TUT_UI_PORT"])
+        except ValueError:
+            sys.exit(f"TUT_UI_PORT={os.environ['TUT_UI_PORT']!r} is not a port number")
+    try:
+        serve(port=port, open_browser=not a.no_browser)
+    except PortError as e:
+        sys.exit(str(e))
 
 
 def _project():
@@ -729,7 +740,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(fn=cmd_doctor)
 
     s = sub.add_parser("ui", help="local web UI: read and run tutorials in a real shell")
-    s.add_argument("--port", type=int, default=8080)
+    s.add_argument("--port", type=int, default=None,
+                   help="port to listen on (default: TUT_UI_PORT, else 8765 or the next free one)")
     s.add_argument("--no-browser", action="store_true", help="do not open a browser")
     s.set_defaults(fn=cmd_ui)
 
