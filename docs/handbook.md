@@ -36,6 +36,8 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | AI translation only on request (`make precommit TRANSLATE=1`, `./tut translation draft`), never in `./tut sync` | this file § 6 |
 | AI explainers (PoC): teaching pages next to a tutorial, written unattended from a live run, labelled, never executed, outside CI e2e; SVG not GIF | RFC section4.17, docs/explainer.md |
 | Markdown under `docs/` has one line per paragraph (editors and GitHub wrap it); tutorial READMEs keep their line breaks, because changing them changes the source hash (translations, explainers) and re-runs e2e | authoring.md, "Writing good steps" |
+| Work passes the `tech-lead` agent before it is put to the maintainer; it asks the maintainer only what it cannot settle and keeps their answers in a notebook | AGENTS.md "The tech lead comes before the maintainer", `.claude/agents/tech-lead.md`, `.claude/tech-lead/learned.md` |
+| Plans come from the `project-planner` agent as small proposals; the maintainer approves which become GitHub issues (label `plan`); the tech lead runs them one at a time. docs/backlog.md stays the record of problems | AGENTS.md "Plans become issues, issues become work", `.claude/agents/project-planner.md` |
 
 ## 2. Repository map
 
@@ -57,6 +59,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `.github/scripts/` | `diagnose.sh` (cluster dump on failure), `report.py` (weekly issues) | with care |
 | `.github/CODEOWNERS` | **generated** by `./tut sync` from `owners` | never by hand |
 | `docs/` | this handbook, authoring, migration, CI playbook, release, backlog, RFC, prompts (ready-made first messages for agents) | keep in step with the code |
+| `.claude/` | for AI agents: `agents/tech-lead.md` (the maintainer's stand-in), `agents/project-planner.md` (proposes small plans, files approved ones as issues), `tech-lead/learned.md` (the notebook of the maintainer's answers), `skills/` (Claude Code wrappers around `./tut`) | maintainer, the tech lead (its notebook) |
 | `build/` | generated: drafts, rejected translations, site source (git-ignored) | tools |
 | `.venv/`, `.tools/`, `.tut.env` | toolkit, pinned CLI tools, personal settings (git-ignored) | the user's machine |
 
@@ -196,7 +199,7 @@ The weekly run catches the rest.
 - **Small PRs, one feature each.** CI e2e runs only what the PR affects; mixing a runner change into a tutorial PR runs every tutorial.
 - **Before every commit:** `make precommit`. Before a PR: also `./tut run <id> --dry-run` for tutorials you touched, and the real run when you can (`./tut run <id> --twice`).
 - **Prove behaviour-preserving refactors:** save `./tut run --dry-run`, `./tut list`, `./tut site` output before, compare after.
-- **Never merge, push to `stable` or change repository settings** unless the maintainer asked for exactly that in the conversation.
+- **A PR may be opened without asking once the tech lead has passed work the maintainer ordered. Never merge, push to `stable` or change repository settings** unless the maintainer asked for exactly that in the conversation.
 - **Leave knowledge behind:**
   - a CI failure becomes a lesson in authoring.md § Rules learned from CI, and a lint rule when it can be checked;
   - a problem you cannot fix now goes into backlog.md with evidence;
