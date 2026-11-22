@@ -1,15 +1,8 @@
 # Prompts for AI agents
 
-Most work in this repository is done by an AI coding agent (Claude Code,
-Codex) in a clone of the repository. These prompts start the common tasks the
-same way every time: what to read, in which order, what to report after each
-step, when to stop and ask. Copy one, replace the `<...>` parts, and paste it
-as your first message.
+Most work in this repository is done by an AI coding agent (Claude Code, Codex) in a clone of the repository. These prompts start the common tasks the same way every time: what to read, in which order, what to report after each step, when to stop and ask. Copy one, replace the `<...>` parts, and paste it as your first message.
 
-Each prompt makes the agent read the repository's own documents (AGENTS.md,
-docs/handbook.md, ...), so a new session knows the rules even though it has
-no memory of earlier ones. Improve these prompts here when you find a better
-wording, so every session benefits.
+Each prompt makes the agent read the repository's own documents (AGENTS.md, docs/handbook.md, ...), so a new session knows the rules even though it has no memory of earlier ones. Improve these prompts here when you find a better wording, so every session benefits.
 
 ## Filling in the `<...>` parts
 
@@ -21,13 +14,9 @@ wording, so every session benefits.
 | `<github-handle>` | the owner's GitHub login | `catalog/maintainers.yaml` |
 | `<tutorial>` (CI failure) | the id of the failed tutorial | the job name of the failed run |
 
-Example: `./tut list` shows `llmisvc-request-flow`, so prompt 5 becomes
-"Make the AI explainer for tutorials/llmisvc-request-flow ...". Whether a
-tutorial already has an explainer: `./tut explain status <id>`.
+Example: `./tut list` shows `llmisvc-request-flow`, so prompt 5 becomes "Make the AI explainer for tutorials/llmisvc-request-flow ...". Whether a tutorial already has an explainer: `./tut explain status <id>`.
 
-In Claude Code you can also skip the exact id and say it in your own words
-("make the explainer for request-flow"); the agent looks it up with
-`./tut list`.
+In Claude Code you can also skip the exact id and say it in your own words ("make the explainer for request-flow"); the agent looks it up with `./tut list`.
 
 | Task | Prompt |
 |---|---|
@@ -38,14 +27,11 @@ In Claude Code you can also skip the exact id and say it in your own words
 | A CI run, weekly run or canary failed | [4. Fix a CI failure](#4-fix-a-ci-failure) |
 | Teaching page with diagrams for a tutorial (AI explainer) | [5. Make an explainer](#5-make-an-explainer) |
 
-Before the first session: `make setup`, `./tut config TUT_AI=claude` (or
-`codex`), and for migrations a clone of the legacy repository next to this
-one (`../kserve-tutorials-legacy`).
+Before the first session: `make setup`, `./tut config TUT_AI=claude` (or `codex`), and for migrations a clone of the legacy repository next to this one (`../kserve-tutorials-legacy`).
 
 ## 1. Build the context
 
-Changes nothing; the agent learns the repository and tells you what it
-understood.
+Changes nothing; the agent learns the repository and tells you what it understood.
 
 ```text
 This is your first session in this repository. Do not change any file today:
@@ -129,8 +115,7 @@ want to change a lint rule, or the same failure persists after two fixes.
 
 ## 3a. New tutorial from tested work
 
-The usual way to write a new tutorial: test it by hand first, then let the
-AI turn the folder into a tutorial.
+The usual way to write a new tutorial: test it by hand first, then let the AI turn the folder into a tutorial.
 
 ```text
 <folder> contains scripts, manifests and notes I tested by hand. Turn them

@@ -1,34 +1,23 @@
 # Migration guide: moving an existing tutorial into this repository
 
-One tutorial per pull request. `tutorials/llmisvc-anatomy` is the reference
-result: it was migrated from `llmisvc/01-anatomy` in the old repository
-([`Jooho/kserve-tutorials-legacy`](https://github.com/Jooho/kserve-tutorials-legacy)) with
-these exact steps, so compare against it when in doubt.
+One tutorial per pull request. `tutorials/llmisvc-anatomy` is the reference result: it was migrated from `llmisvc/01-anatomy` in the old repository ([`Jooho/kserve-tutorials-legacy`](https://github.com/Jooho/kserve-tutorials-legacy)) with these exact steps, so compare against it when in doubt.
 
 ## 0. Before you start
 
-- Read [docs/authoring.md](authoring.md) — the rules, including the ones
-  learned from CI.
+- Read [docs/authoring.md](authoring.md) — the rules, including the ones learned from CI.
 - Make sure `./tut lint` passes on `main`.
-- Pick the tutorial's id: lowercase, hyphenated, descriptive, without numbers
-  (`llmisvc-request-flow`, not `02-request-flow`). Order is expressed by
-  the collection's member list (`catalog/collections/`).
+- Pick the tutorial's id: lowercase, hyphenated, descriptive, without numbers (`llmisvc-request-flow`, not `02-request-flow`). Order is expressed by the collection's member list (`catalog/collections/`).
 
 ## The usual way: `./tut draft`, then steps 1–8 as the checklist
 
-Point `./tut draft` at the old tutorial's folder (in a clone of the legacy
-repository). Your AI CLI (`TUT_AI`) writes `tutorials/<id>/` in this format,
-using the rules below, the reference tutorial and the reusable parts:
+Point `./tut draft` at the old tutorial's folder (in a clone of the legacy repository). Your AI CLI (`TUT_AI`) writes `tutorials/<id>/` in this format, using the rules below, the reference tutorial and the reusable parts:
 
 ```bash skip
 ./tut draft ../kserve-tutorials-legacy/llmisvc/02-request-flow \
   --id llmisvc-request-flow --owner <github-handle> --collection llmisvc-deep-dive
 ```
 
-Then read `build/draft/<id>/report.md` (lint, files changed elsewhere, old
-commands missing from the new README) and `notes.md` (what the AI changed and
-why). Use the steps below to check and finish the result. Doing it by hand is
-the same steps, in order.
+Then read `build/draft/<id>/report.md` (lint, files changed elsewhere, old commands missing from the new README) and `notes.md` (what the AI changed and why). Use the steps below to check and finish the result. Doing it by hand is the same steps, in order.
 
 ## 1. Inventory the old tutorial
 
@@ -48,13 +37,8 @@ Write down, before changing anything:
 ## 2. Choose the environment profile
 
 - If an existing profile builds the cluster the tutorial needs, use it.
-- If the tutorial only needs a small add-on (Prometheus, a CRD, a Helm chart),
-  install it **inside the tutorial** and remove it in its cleanup.
-- Use `env: kind-kserve/v1` and pick the KServe parts in `env_options`
-  (`types: [kserve|localmodel|llmisvc]`, `mode: standard|serverless`, `keda`);
-  see `envs/kind-kserve/v1/README.md`. Only create a new profile
-  (`envs/<name>/v1/`) when the cluster itself must differ in a way an option
-  cannot express; keep `setup.sh` idempotent and pinned to `$KSERVE_VERSION`.
+- If the tutorial only needs a small add-on (Prometheus, a CRD, a Helm chart), install it **inside the tutorial** and remove it in its cleanup.
+- Use `env: kind-kserve/v1` and pick the KServe parts in `env_options` (`types: [kserve|localmodel|llmisvc]`, `mode: standard|serverless`, `keda`); see `envs/kind-kserve/v1/README.md`. Only create a new profile (`envs/<name>/v1/`) when the cluster itself must differ in a way an option cannot express; keep `setup.sh` idempotent and pinned to `$KSERVE_VERSION`.
 - Never edit a frozen profile; create the next version instead.
 
 ## 3. Create the directory
@@ -64,11 +48,7 @@ make new T=<id> TITLE="<English title>" OWNER=<github-handle>   # = ./tut new <i
 rm tutorials/<id>/manifests/example.yaml     # the template's example (./tut draft removes it for you)
 ```
 
-Fill in `tutorial.yaml` (it starts as `status: draft`, English only). Pick `tags` from
-`catalog/tags.yaml` (one `level` tag at least) and set `owners`. If the old
-tutorial was part of a series, add it to the matching
-`catalog/collections/<id>.yaml` in reading order (the planned members are
-listed there as comments).
+Fill in `tutorial.yaml` (it starts as `status: draft`, English only). Pick `tags` from `catalog/tags.yaml` (one `level` tag at least) and set `owners`. If the old tutorial was part of a series, add it to the matching `catalog/collections/<id>.yaml` in reading order (the planned members are listed there as comments).
 
 ## 4. Rewrite the README
 
@@ -93,14 +73,11 @@ Map the old patterns to the new ones:
 
 Every shell block gets a role: `run`, `verify`, `cleanup` or `skip`.
 
-A good `verify` checks what the reader is supposed to have learned, not only
-that a command ran: resource counts, container names, a field value, a request
-that returns a valid response.
+A good `verify` checks what the reader is supposed to have learned, not only that a command ran: resource counts, container names, a field value, a request that returns a valid response.
 
 ## 5. Move files
 
-- Manifests → `manifests/`, images → `images/`, helper code → a directory of
-  your choice inside the tutorial.
+- Manifests → `manifests/`, images → `images/`, helper code → a directory of your choice inside the tutorial.
 - Pin every container image (M001).
 - Then run:
 
@@ -122,21 +99,15 @@ On failure the runner prints the README line of the failing block.
 
 ## 7. Translation (if the old tutorial had one)
 
-1. `./tut translation draft <id> ko` (or `make precommit TRANSLATE=1`) — an AI draft with the same blocks and
-   `tut:` regions as `README.md` (without an AI CLI: copy `README.md` to
-   `README.ko.md`).
-2. Bring in the old KO wording where it is better (and translate code comments);
-   keep the shell blocks one to one with `README.md` (same order, roles, code).
+1. `./tut translation draft <id> ko` (or `make precommit TRANSLATE=1`) — an AI draft with the same blocks and `tut:` regions as `README.md` (without an AI CLI: copy `README.md` to `README.ko.md`).
+2. Bring in the old KO wording where it is better (and translate code comments); keep the shell blocks one to one with `README.md` (same order, roles, code).
 3. `./tut translation mark <id> ko` (also adds `ko` to `langs`)
 4. `./tut lint` (D011 checks the structure).
 
 ## 8. Open the pull request
 
 - One tutorial per PR. CI runs lint, then executes only this tutorial.
-- When CI is green, change `status: draft` → `stable` in the same PR or a
-  follow-up. Stable needs frozen parts: the env and every `uses` module must
-  have `frozen: true` [T007, L004] (backlog D2: freezing `kind-kserve/v1` and
-  `llmisvc/v1` is still open).
+- When CI is green, change `status: draft` → `stable` in the same PR or a follow-up. Stable needs frozen parts: the env and every `uses` module must have `frozen: true` [T007, L004] (backlog D2: freezing `kind-kserve/v1` and `llmisvc/v1` is still open).
 
 ## Checklist
 

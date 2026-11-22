@@ -1,10 +1,6 @@
 # Backlog: problems this repository exists to solve
 
-Everything here was hit for real while building the repository (mostly in
-the first end-to-end runs of PR #1). Each item says why it matters. Agents:
-read this before starting structural work, pick items from here, and update
-the status and links when you finish one. Do not delete items; mark them done
-with the PR that closed them.
+Everything here was hit for real while building the repository (mostly in the first end-to-end runs of PR #1). Each item says why it matters. Agents: read this before starting structural work, pick items from here, and update the status and links when you finish one. Do not delete items; mark them done with the PR that closed them.
 
 Status: ☐ open · ◐ in progress · ☑ done · ⏸ deferred (see the section's decision)
 
@@ -79,35 +75,16 @@ Status: ☐ open · ◐ in progress · ☑ done · ⏸ deferred (see the section
 
 ## E. One engine, many projects (KServe, Kuadrant, llm-d, vLLM, ...)
 
-**Decision (2026-11-20): KServe only for now.** E1 is done and stays (it
-costs nothing and keeps the engine free of the product name). Everything
-else here waits until a second project actually exists; building it earlier
-would add structure nobody uses.
+**Decision (2026-11-20): KServe only for now.** E1 is done and stays (it costs nothing and keeps the engine free of the product name). Everything else here waits until a second project actually exists; building it earlier would add structure nobody uses.
 
-Plan when it starts: engine (`tut`) / platform parts (shared kind, ingress,
-cert-manager, helpers) / one content repository per project with its
-`project.yaml`, dropped into `engine/projects/<id>`. Cross-project tutorials
-are out of scope.
+Plan when it starts: engine (`tut`) / platform parts (shared kind, ingress, cert-manager, helpers) / one content repository per project with its `project.yaml`, dropped into `engine/projects/<id>`. Cross-project tutorials are out of scope.
 
 Design notes from the discussion, so it does not start from zero:
 
-- The gap is reproducibility, not code layout. "Verified on KServe v0.18.0"
-  really means "v0.18.0 plus whatever its installer pulled that day";
-  nothing records cert-manager, Gateway API, Envoy, LWS, Kubernetes versions
-  (see E7, which applies to KServe today).
-- Model: **component** (`platform/components/<name>/`: `install.sh
-  --version X`, `check.sh`, tested versions) → **stack / BOM** per project
-  (product version → pinned component versions) → **tutorial** picks the
-  product version and rarely overrides one component → **resolver** in the
-  engine computes the full lock, records it in the report, and uses its hash
-  as the cluster marker (same → reuse, different → add or stop).
-- An upstream installer (KServe's `hack/`) can stay a component that the
-  stack delegates to, as long as the installed versions are read back and
-  locked.
-- Questions to decide first: who pins dependency versions (tutorial vs stack;
-  stack recommended); who maintains the compatibility table (read upstream's
-  vs our own); is bring-your-own-cluster near (then A1 contract + check
-  first); how much cluster reuse matters locally; how "verified" is shown.
+- The gap is reproducibility, not code layout. "Verified on KServe v0.18.0" really means "v0.18.0 plus whatever its installer pulled that day"; nothing records cert-manager, Gateway API, Envoy, LWS, Kubernetes versions (see E7, which applies to KServe today).
+- Model: **component** (`platform/components/<name>/`: `install.sh --version X`, `check.sh`, tested versions) → **stack / BOM** per project (product version → pinned component versions) → **tutorial** picks the product version and rarely overrides one component → **resolver** in the engine computes the full lock, records it in the report, and uses its hash as the cluster marker (same → reuse, different → add or stop).
+- An upstream installer (KServe's `hack/`) can stay a component that the stack delegates to, as long as the installed versions are read back and locked.
+- Questions to decide first: who pins dependency versions (tutorial vs stack; stack recommended); who maintains the compatibility table (read upstream's vs our own); is bring-your-own-cluster near (then A1 contract + check first); how much cluster reuse matters locally; how "verified" is shown.
 
 | # | Status | Item | Why / evidence |
 |---|---|---|---|

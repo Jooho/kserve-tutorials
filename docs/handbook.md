@@ -1,19 +1,12 @@
 # Handbook: how this repository works
 
-The map of the whole repository for the agents (Claude Code, Codex) that do
-most of the work here, and for people. [AGENTS.md](../AGENTS.md) has the hard
-rules and says what to read for each task; this handbook explains how the
-parts fit together, so you can change one without breaking another.
+The map of the whole repository for the agents (Claude Code, Codex) that do most of the work here, and for people. [AGENTS.md](../AGENTS.md) has the hard rules and says what to read for each task; this handbook explains how the parts fit together, so you can change one without breaking another.
 
-Read it fully before structural work (`tools/`, `schema/`, `envs/`, `lib/`,
-workflows). For a tutorial-only change, [authoring.md](authoring.md) is enough.
+Read it fully before structural work (`tools/`, `schema/`, `envs/`, `lib/`, workflows). For a tutorial-only change, [authoring.md](authoring.md) is enough.
 
 ## 1. What we are building
 
-Tutorials whose README **is the test**. Every command a reader runs is a
-role-tagged block; CI executes the README on a fresh Kind cluster, twice, for
-every KServe version the tutorial lists; a local UI runs the same blocks step
-by step. If a tutorial says it works, CI recently proved it.
+Tutorials whose README **is the test**. Every command a reader runs is a role-tagged block; CI executes the README on a fresh Kind cluster, twice, for every KServe version the tutorial lists; a local UI runs the same blocks step by step. If a tutorial says it works, CI recently proved it.
 
 ```text
 author (mostly an AI agent)                              reader
@@ -42,6 +35,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | **KServe only for now.** `project.yaml` keeps the engine free of the name; splitting engine and content, `platform/` components and other projects are deferred until a second project exists | backlog § E |
 | AI translation only on request (`make precommit TRANSLATE=1`, `./tut translation draft`), never in `./tut sync` | this file § 6 |
 | AI explainers (PoC): teaching pages next to a tutorial, written unattended from a live run, labelled, never executed, outside CI e2e; SVG not GIF | RFC section4.17, docs/explainer.md |
+| Markdown under `docs/` has one line per paragraph (editors and GitHub wrap it); tutorial READMEs keep their line breaks, because changing them changes the source hash (translations, explainers) and re-runs e2e | authoring.md, "Writing good steps" |
 
 ## 2. Repository map
 
@@ -93,34 +87,18 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 
 ## 4. How the pieces work
 
-**Sync (`./tut sync`).** Deterministic and offline: same input, same output.
-CI checks it with lint D002 (regions stale) and O001 (CODEOWNERS stale).
-Never add anything slow, networked or random to it.
+**Sync (`./tut sync`).** Deterministic and offline: same input, same output. CI checks it with lint D002 (regions stale) and O001 (CODEOWNERS stale). Never add anything slow, networked or random to it.
 
-**The setup step.** `tut:setup` is generated from `tutorial.yaml` and
-`project.yaml`. It exports `$KSERVE_VERSION` (default `versions.default`),
-`$NS`, `$REPO_ROOT` and `$TUT_LIB`, sources `.tut.env`, and puts the env's
-pinned tools on `PATH`. Then it calls `envs/<env>/setup.sh` with the
-tutorial's `env_options` as `TUT_ENV_TYPES/MODE/KEDA`, creates the namespace
-and `cd`s into the tutorial. A reader who pastes it by hand gets exactly what
-CI gets.
+**The setup step.** `tut:setup` is generated from `tutorial.yaml` and `project.yaml`. It exports `$KSERVE_VERSION` (default `versions.default`), `$NS`, `$REPO_ROOT` and `$TUT_LIB`, sources `.tut.env`, and puts the env's pinned tools on `PATH`. Then it calls `envs/<env>/setup.sh` with the tutorial's `env_options` as `TUT_ENV_TYPES/MODE/KEDA`, creates the namespace and `cd`s into the tutorial. A reader who pastes it by hand gets exactly what CI gets.
 
-**The env (`envs/kind-kserve/v1/setup.sh`).** It is idempotent and leaves a
-marker, ConfigMap `kube-system/tut-env`: profile, KServe version, types, mode
-and keda.
+**The env (`envs/kind-kserve/v1/setup.sh`).** It is idempotent and leaves a marker, ConfigMap `kube-system/tut-env`: profile, KServe version, types, mode and keda.
 - A matching cluster is reused.
 - When types are missing, only those are added.
 - If the mode differs, it stops (`TUT_ENV_RECREATE=1` replaces the cluster).
 
-**The runner (`./tut run`).** It joins `run`/`verify` blocks into one bash
-script, so variables and `cd` carry over. Block code is pasted **byte for
-byte** (CI-009). The script runs from a file (CI-008). `verify retry=N
-delay=S` runs in a retried subshell; `cleanup` runs from an EXIT trap.
-`--twice` runs every step again in the same shell before cleanup (D012).
+**The runner (`./tut run`).** It joins `run`/`verify` blocks into one bash script, so variables and `cd` carry over. Block code is pasted **byte for byte** (CI-009). The script runs from a file (CI-008). `verify retry=N delay=S` runs in a retried subshell; `cleanup` runs from an EXIT trap. `--twice` runs every step again in the same shell before cleanup (D012).
 
-**The UI (`./tut ui`).** It uses the same parser, the same block semantics and
-the same setup as the runner, so passing in the UI means passing in CI. The UI
-is a convenience; CI is the authority. What it does:
+**The UI (`./tut ui`).** It uses the same parser, the same block semantics and the same setup as the runner, so passing in the UI means passing in CI. The UI is a convenience; CI is the authority. What it does:
 - Live preview shows the README as sync will write it.
 - Lists this tutorial's lint findings.
 - ✎ Edit for README or tutorial.yaml.
@@ -130,10 +108,7 @@ is a convenience; CI is the authority. What it does:
 - The page theme is Auto / Light / Dark; both terminals (main and ⧉) follow it and share their own text size (`static/term-theme.js`).
 - Learning paths open with `?collection=`: covered `run` blocks are hidden, cleanup waits for the end, and the collection `vars` are exported.
 
-**Versions.** A tutorial lists `versions.default` (readers and PR CI) and
-`versions.tested` (weekly). An env declares `versions.min/max` it can
-install (T005). The canary runs stable tutorials on the newest upstream
-release (`project.yaml upstream`) and opens an issue when it fails.
+**Versions.** A tutorial lists `versions.default` (readers and PR CI) and `versions.tested` (weekly). An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on the newest upstream release (`project.yaml upstream`) and opens an issue when it fails.
 
 ## 5. Commands by task
 
@@ -156,8 +131,7 @@ release (`project.yaml upstream`) and opens an issue when it fails.
 
 ## 6. Configuration and variables
 
-Precedence everywhere: **shell > `.tut.env` > default**. Set with
-`./tut config KEY=VALUE` (no args: show). Keys:
+Precedence everywhere: **shell > `.tut.env` > default**. Set with `./tut config KEY=VALUE` (no args: show). Keys:
 
 | Key | Meaning |
 |---|---|
@@ -175,8 +149,7 @@ Set by the tooling, not by people:
 - **The env reads:** `TUT_ENV_TYPES/MODE/KEDA`, `TUT_CACHE`.
 - **The runner and UI use:** `TUT_ID`, `TUT_BLOCK`, `TUT_STATE_FILE`, `TUT_UI`, `TUT_UI_DIR`, `TUT_ENV_FROM`, `TUT_CONFIG_LOADED`.
 
-The AI CLI runs on the user's machine with the user's login. No API keys are
-in the repository or in CI.
+The AI CLI runs on the user's machine with the user's login. No API keys are in the repository or in CI.
 
 ## 7. CI
 
@@ -215,20 +188,13 @@ The weekly run catches the rest.
 
 ## 9. How agents work here
 
-- **One branch per change, from the latest `main`.** Never stack a branch
-  on another unmerged branch; a PR's base is always `main`.
-- **Small PRs, one feature each.** CI e2e runs only what the PR affects;
-  mixing a runner change into a tutorial PR runs every tutorial.
-- **Before every commit:** `make precommit`. Before a PR: also
-  `./tut run <id> --dry-run` for tutorials you touched, and the real run when
-  you can (`./tut run <id> --twice`).
-- **Prove behaviour-preserving refactors:** save `./tut run --dry-run`,
-  `./tut list`, `./tut site` output before, compare after.
-- **Never merge, push to `stable` or change repository settings** unless the
-  maintainer asked for exactly that in the conversation.
+- **One branch per change, from the latest `main`.** Never stack a branch on another unmerged branch; a PR's base is always `main`.
+- **Small PRs, one feature each.** CI e2e runs only what the PR affects; mixing a runner change into a tutorial PR runs every tutorial.
+- **Before every commit:** `make precommit`. Before a PR: also `./tut run <id> --dry-run` for tutorials you touched, and the real run when you can (`./tut run <id> --twice`).
+- **Prove behaviour-preserving refactors:** save `./tut run --dry-run`, `./tut list`, `./tut site` output before, compare after.
+- **Never merge, push to `stable` or change repository settings** unless the maintainer asked for exactly that in the conversation.
 - **Leave knowledge behind:**
   - a CI failure becomes a lesson in authoring.md § Rules learned from CI, and a lint rule when it can be checked;
   - a problem you cannot fix now goes into backlog.md with evidence;
   - a design decision goes into the RFC or the table in § 1.
-- **When docs and code disagree, stop and report it.** Then fix the one that
-  is wrong in the same PR.
+- **When docs and code disagree, stop and report it.** Then fix the one that is wrong in the same PR.
