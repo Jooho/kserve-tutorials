@@ -659,6 +659,8 @@ kind: InferenceGraph
 metadata:
   name: housing-price-graph
   namespace: kserve-graph-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
 spec:
   nodes:
     root:
@@ -698,7 +700,9 @@ spec:
 </details>
 
 The InferenceGraph controller runs the router as a Deployment named after the
-graph. The Ingress sends requests for `housing-price-graph.127.0.0.1.sslip.io`
+graph. The graph carries the same `RawDeployment` annotation as the
+InferenceServices; without it the graph would take the cluster's default mode,
+which on some clusters is Knative, and be rejected. The Ingress sends requests for `housing-price-graph.127.0.0.1.sslip.io`
 to its Service.
 
 ```bash verify
@@ -763,6 +767,8 @@ kind: InferenceGraph
 metadata:
   name: housing-price-graph
   namespace: kserve-graph-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
 spec:
   nodes:
     # Root node - sequence: ensemble → combiner

@@ -3,6 +3,8 @@ kind: InferenceGraph
 metadata:
   name: housing-price-graph
   namespace: kserve-graph-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
 spec:
   nodes:
     # Root node - sequence: ensemble → combiner
