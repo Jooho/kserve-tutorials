@@ -23,6 +23,7 @@ to break. Then the document for your task below.
 | Release, `stable` branch, Makefile or release workflow | [docs/release.md](docs/release.md) |
 | Plan or pick up structural work | [docs/handbook.md](docs/handbook.md), then [docs/backlog.md](docs/backlog.md) — known problems with evidence; update an item's status when you finish it |
 | Translate a tutorial | docs/authoring.md § Translations |
+| Make or update a tutorial's AI explainer (teaching page with diagrams) | [docs/explainer.md](docs/explainer.md) |
 | Anything else / you are unsure | [docs/handbook.md](docs/handbook.md) |
 
 If the document and the code disagree, stop and report it; do not guess.
@@ -55,6 +56,10 @@ eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation todo         # only what needs work (make precommit prints it)
 ./tut affected --base origin/main   # which tutorials CI will execute for this branch
 ./tut translation mark <id> ko # after reviewing: matches the current README.md
+./tut explain draft <id>      # AI explainer: TUT_AI walks the tutorial on a cluster, writes explainer/ (15-30 min)
+./tut explain start|next|probe|stop <id>   # the same walk by hand / by you as the agent (docs/explainer.md)
+./tut explain check <id>      # explainer checks (X001-X005); ./tut explain mark <id> after a person read it
+./tut explain review <id>     # another AI (TUT_AI_REVIEW, else TUT_AI) checks it against the walk's evidence
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
 
@@ -110,6 +115,24 @@ When you change a tutorial's README.md, bring its translations along in the same
 PR: translate the changed parts yourself or run `./tut translation draft`, review
 the result, and only then `./tut translation mark`. Never mark a translation you
 did not check against the English text.
+
+## Explainers: offer them, then do them unattended
+
+The maintainer and other users do not know explainers exist; you tell them.
+An explainer (`tutorials/<id>/explainer/`, docs/explainer.md) is a teaching
+page with diagrams and animated flows, written by an AI from a step-by-step run
+of the tutorial on a real cluster. It is labelled AI-written, never executed,
+and never triggers CI e2e.
+
+- After you migrate or create a tutorial, or when a tutorial has none or its
+  explainer is behind (`./tut explain status <id>`, lint X005), offer it in two
+  or three sentences: what it is, that it needs a cluster and 15-30 minutes,
+  and that it does not touch the README or CI.
+- When the user says yes ("go", "진행해줘"), do the whole thing without asking
+  again: `./tut explain start/next/probe/stop`, write the files, `./tut explain
+  check`, `./tut explain review` and fix what it finds. Then report what you verified, what differs from the README, and
+  what they should look at. Never run `./tut explain mark` yourself.
+- Explainer changes go in their own PR (no tutorial change in it).
 
 ## Leave the repository smarter than you found it
 

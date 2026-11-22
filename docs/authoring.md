@@ -220,6 +220,13 @@ not in the tutorial). Finish in `./tut ui` (✎ Edit), then
   Save & sync). The "no KO translation · ＋ create it" chip makes an AI draft
   with `TUT_AI` (claude | copilot | codex).
 
+### Explainer (optional, AI)
+
+A tutorial can have a teaching page next to it, `explainer/`, written by an AI
+from a live run (diagrams, animated flows, labelled AI-written, never executed,
+outside CI e2e). Do not write one by hand inside the README; see
+[explainer.md](explainer.md) and `./tut explain draft <id>`.
+
 ## 10. Before you open a PR
 
 ```bash skip
@@ -398,3 +405,17 @@ can be checked mechanically.
   with the Gateway at `172.18.0.5`, `Programmed=True`. Guarded by
   `test_new_cluster_restarts_cloud_provider_kind` and
   `test_reuse_keeps_a_running_cloud_provider_kind_and_starts_a_missing_one`.
+
+### CI-013 An exported TUT_AI made the translation tests call the real AI CLI
+- **What happened:** the translation tests set `TUT_TRANSLATOR` to a fake
+  command, but `TUT_AI` wins over it. With `TUT_AI` exported in the shell (as
+  docs/getting-started.md tells you to), `make precommit` ran the real CLI or
+  failed: with `TUT_AI=cmd:false`, 3 tests failed and one passed for the
+  wrong reason. CI never sees it: no `TUT_AI` there. Same family as CI-006.
+- **Rule:** tests run without the contributor's AI settings. `conftest.py`
+  removes `TUT_AI*`, `TUT_AI_REVIEW*` and `TUT_TRANSLATOR*` before every test;
+  a test that needs one sets it itself. `pytest.raises` wraps only the call
+  that should raise, so a failure before it cannot pass the test.
+- **Evidence:** found by a review of the test suite on 2026-11-21;
+  `TUT_AI=cmd:false pytest tools/tests/test_translate.py` failed 3 tests
+  before the fix and passes after it.

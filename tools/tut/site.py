@@ -51,6 +51,42 @@ def _copy_tree(src: Path, dst: Path):
             shutil.copy2(p, target)
 
 
+EXPLAINER_TEXT = {
+    "en": {"link": "**How it works, with diagrams** - [open the explainer](explainer/index.md) "
+                   "(written by an AI from a step-by-step run of this tutorial)",
+           "banner": "Written by an AI ({by}) from a step-by-step run of this tutorial on a real "
+                     "cluster. {reviewed}",
+           "yes": "Reviewed by a person.", "no": "Not reviewed by a person yet."},
+    "ko": {"link": "**그림으로 보는 동작 원리** - [설명 열기](explainer/index.md) "
+                   "(AI가 이 튜토리얼을 단계별로 실행하며 작성)",
+           "banner": "AI({by})가 이 튜토리얼을 실제 클러스터에서 단계별로 실행하며 확인한 내용으로 "
+                     "작성한 설명입니다. {reviewed}",
+           "yes": "사람이 검토했습니다.", "no": "아직 사람이 검토하지 않았습니다."},
+}
+
+
+def _explainer_links(t, dst: Path) -> None:
+    """An AI explainer (tutorials/<id>/explainer/) gets the AI banner on top (from
+    its marker, so the page cannot leave it out) and a link from the tutorial."""
+    from . import explain
+    if not t.explainer("en").exists():
+        return
+    for lang, page in (("en", "index.md"), ("ko", "index.ko.md")):
+        tut_page = dst / page
+        if tut_page.exists():
+            text = tut_page.read_text()
+            line = "\n> " + EXPLAINER_TEXT[lang]["link"] + "\n"
+            m = re.search(r"^# .*$", text, flags=re.M)
+            at = m.end() if m else 0
+            tut_page.write_text(text[:at] + "\n" + line + text[at:])
+        ex = dst / "explainer" / page
+        mk = explain.marker(t, lang) if t.explainer(lang).exists() else None
+        if ex.exists() and mk:
+            txt = EXPLAINER_TEXT[lang]
+            banner = txt["banner"].format(by=mk["by"], reviewed=txt["yes" if mk["reviewed"] else "no"])
+            ex.write_text(f"!!! note \"\"\n    {banner}\n\n" + ex.read_text())
+
+
 def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
     if out.exists():
         shutil.rmtree(out)
@@ -58,6 +94,7 @@ def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
     tutorials = [t for t in load_tutorials(root) if not t.errors]
     for t in tutorials:
         _copy_tree(t.path, out / "tutorials" / t.id)
+        _explainer_links(t, out / "tutorials" / t.id)
     for env in load_envs(root).values():
         _copy_tree(env.path, out / "envs" / env.ref)
     proj = project.load(root)

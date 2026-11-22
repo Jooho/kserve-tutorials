@@ -41,6 +41,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | Shared steps are copied into each README by sync (`tut:define` / `tut:use`); learning paths are collections | authoring.md § Shared steps |
 | **KServe only for now.** `project.yaml` keeps the engine free of the name; splitting engine and content, `platform/` components and other projects are deferred until a second project exists | backlog § E |
 | AI translation only on request (`make precommit TRANSLATE=1`, `./tut translation draft`), never in `./tut sync` | this file § 6 |
+| AI explainers (PoC): teaching pages next to a tutorial, written unattended from a live run, labelled, never executed, outside CI e2e; SVG not GIF | RFC section4.17, docs/explainer.md |
 
 ## 2. Repository map
 
@@ -80,6 +81,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `plan.py` | what CI runs: `affected` (changed paths → tutorials), scheduled and canary matrices | test_rules |
 | `catalog.py` | tags, groups, collections (resolved per version), CODEOWNERS text | test_catalog |
 | `translate.py` | AI translation: presets, prompt, mechanical check of the output, `draft_one` | test_translate |
+| `explain.py` | `./tut explain`: AI explainer: live walk (FIFO shell, read-only probes, evidence), checks X001-X005, mark, unattended draft | test_explain |
 | `draft.py` | `./tut draft`: copy input, build prompt and parts catalog, run the AI, prune, coverage, report | test_draft |
 | `scaffold.py` | `./tut new` from the template | test_scaffold |
 | `doctor.py` | `./tut doctor`: toolkit, host (Docker, CPU/memory), environment checks | test_doctor_tools |
@@ -146,6 +148,7 @@ release (`project.yaml upstream`) and opens an issue when it fails.
 | step through it | `./tut ui` |
 | translate | `./tut translation draft <id> ko`, review, `./tut translation mark <id> ko` |
 | translate everything missing | `make precommit TRANSLATE=1` |
+| explain a tutorial with diagrams (AI) | `./tut explain draft <id>` (walk, write, AI review, one fix round), read it, `./tut explain mark <id>` |
 | what CI will run for my branch | `./tut affected --base origin/main` |
 | before every commit | `make precommit` |
 | test the engine | `PYTHONPATH=tools python3 -m pytest -q tools/tests` |
@@ -163,6 +166,8 @@ Precedence everywhere: **shell > `.tut.env` > default**. Set with
 | `TUT_ENV_RECREATE` | `1` = replace a cluster built by something else (destructive) |
 | `TUT_AI` | your AI CLI for `draft` and translations: `claude`, `copilot`, `codex` or `cmd:<command>` |
 | `TUT_AI_ARGS` | extra flags for it, e.g. `--model sonnet` |
+| `TUT_AI_REVIEW` | AI CLI that reviews an explainer (`explain review`, end of `explain draft`); default: `TUT_AI` |
+| `TUT_AI_REVIEW_ARGS` | extra flags for it |
 | `TUT_TRANSLATOR`, `TUT_TRANSLATOR_ARGS` | older names of the two above, still read |
 
 Set by the tooling, not by people:
@@ -188,6 +193,7 @@ What runs in a PR is decided by `plan.affected`:
 - a change under `envs/<env>/` runs the tutorials using that env;
 - a change under `lib/<m>/` runs the tutorials that list it in `uses`;
 - any file in `EXECUTION_PATHS` (runner, parser, setup generator, `project.yaml`, tool installer, local config, `run-tutorials.yml`, diagnose) runs **every** tutorial;
+- a change under `tutorials/<id>/explainer/` runs none (an explainer is never executed);
 - docs and UI changes run none.
 
 The weekly run catches the rest.

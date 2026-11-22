@@ -55,26 +55,42 @@ class Agent:
     name: str
     argv: list[str]
     shell: bool = False
+    extra: list[str] = field(default_factory=list)   # the *_ARGS flags, kept for other command lines
 
     @property
     def available(self) -> bool:
         return self.shell or shutil.which(self.argv[0]) is not None
 
 
-def agent_from_env() -> Agent | None:
-    """TUT_AI (or the older TUT_TRANSLATOR) picks the CLI; TUT_AI_ARGS adds flags."""
+def agent_from_env(var: str = "TUT_AI") -> Agent | None:
+    """TUT_AI (or the older TUT_TRANSLATOR) picks the CLI; TUT_AI_ARGS adds flags.
+    var="TUT_AI_REVIEW" reads that variable and TUT_AI_REVIEW_ARGS instead."""
     import shlex
-    spec = (os.environ.get("TUT_AI") or os.environ.get("TUT_TRANSLATOR") or "").strip()
+    spec = os.environ.get(var) or ""
+    if var == "TUT_AI":
+        spec = spec or os.environ.get("TUT_TRANSLATOR") or ""
+    spec = spec.strip()
     if not spec:
         return None
     if spec.startswith("cmd:"):
         return Agent("cmd", [spec[4:].strip()], shell=True)
     if spec not in AGENTS:
-        raise DraftError(f"TUT_AI={spec!r}: use claude, copilot, codex or cmd:<command>")
-    extra = shlex.split(os.environ.get("TUT_AI_ARGS", os.environ.get("TUT_TRANSLATOR_ARGS", "")))
+        raise DraftError(f"{var}={spec!r}: use claude, copilot, codex or cmd:<command>")
+    extra = os.environ.get(f"{var}_ARGS", "")
+    if var == "TUT_AI":
+        extra = os.environ.get("TUT_AI_ARGS", os.environ.get("TUT_TRANSLATOR_ARGS", ""))
+    extra = shlex.split(extra)
     argv = list(AGENTS[spec])
     i = argv.index("{prompt}")
-    return Agent(spec, argv[:i] + extra + argv[i:])
+    return Agent(spec, argv[:i] + extra + argv[i:], extra=extra)
+
+
+def review_agent_from_env() -> tuple[Agent | None, str]:
+    """The AI that reviews another AI's work: TUT_AI_REVIEW, else TUT_AI.
+    A different model shares fewer blind spots; the same one still reviews in a
+    fresh context. Returns (agent, variable it came from)."""
+    a = agent_from_env("TUT_AI_REVIEW")
+    return (a, "TUT_AI_REVIEW") if a else (agent_from_env(), "TUT_AI")
 
 
 def slug(name: str) -> str:
