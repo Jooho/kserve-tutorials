@@ -59,7 +59,12 @@ def sandbox(tmp_path):
           printf '%s' "${{@: -1}}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["deploy"], end="")' > $S/deploy
           echo patched >> $S/deploy_patches; exit 0
         fi
-        [[ "$args" == *"rollout restart deployment/kserve-controller-manager"* ]] && {{ echo restarted >> $S/restarts; exit 0; }}
+        # the KServe controller exists only once kserve was installed (state/kserve_ctrl)
+        if [[ "$args" == *"deployment"*"kserve-controller-manager"* ]]; then
+          [ -f $S/kserve_ctrl ] || {{ echo 'Error from server (NotFound): deployments.apps "kserve-controller-manager" not found' >&2; exit 1; }}
+          [[ "$args" == *"rollout restart"* ]] && echo restarted >> $S/restarts
+          exit 0
+        fi
         [[ "$args" == "apply -f -" ]] && cat >/dev/null
         exit 0
         ''')
@@ -76,7 +81,8 @@ def sandbox(tmp_path):
     src = cache / "kserve-v0.18.0"
     (src / ".git").mkdir(parents=True)
     _exe(src / "hack" / "kserve-install.sh",
-         f'echo "$*" >> {state}/installs; echo "${{PLATFORM:-}}" > {state}/platform\n')
+         f'echo "$*" >> {state}/installs; echo "${{PLATFORM:-}}" > {state}/platform\n'
+         f'prev=; for a in "$@"; do [[ $prev == --type && ",$a," == *,kserve,* ]] && touch {state}/kserve_ctrl; prev=$a; done; exit 0\n')
     _exe(src / "hack" / "setup" / "dev" / "manage.kind-with-registry.sh",
          f'echo "$KIND_CLUSTER_NAME" > {state}/cluster; echo created >> {state}/creates\n')
 
@@ -253,11 +259,13 @@ def test_a_standard_default_is_left_alone(sandbox, current):
 
 
 def test_an_llmisvc_only_cluster_gets_standard_too(sandbox):
-    # no Knative in this profile: Knative only when KServe runs in serverless mode
+    # no Knative in this profile: Knative only when KServe runs in serverless mode.
+    # There is no KServe controller to restart (PR #38's first CI run failed on it).
     run, read, state = sandbox
     (state / "deploy").write_text('{"defaultDeploymentMode": "Knative"}')
     run({"TUT_ENV_TYPES": "llmisvc"})
     assert read("deploy") == ['{"defaultDeploymentMode": "Standard"}']
+    assert read("restarts") == []
 
 
 def test_serverless_keeps_knative(sandbox):

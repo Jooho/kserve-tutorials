@@ -98,8 +98,11 @@ ensure_default_mode() {   # <types> <kserve mode>
   new=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); d["defaultDeploymentMode"] = sys.argv[2]
 print(json.dumps({"data": {"deploy": json.dumps(d)}}))' "$cur" "$want")
   kubectl -n kserve patch configmap inferenceservice-config --type merge -p "$new"
-  kubectl -n kserve rollout restart deployment/kserve-controller-manager
-  kubectl -n kserve rollout status deployment/kserve-controller-manager --timeout=180s
+  # an llmisvc-only cluster has no KServe controller to restart
+  if kubectl -n kserve get deployment kserve-controller-manager >/dev/null 2>&1; then
+    kubectl -n kserve rollout restart deployment/kserve-controller-manager
+    kubectl -n kserve rollout status deployment/kserve-controller-manager --timeout=180s
+  fi
 }
 
 # 1. An existing cluster: reuse it, add what is missing, or stop.
