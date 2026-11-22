@@ -24,10 +24,10 @@ All three InferenceServices carry `serving.kserve.io/deploymentMode: RawDeployme
 
 - a Deployment `<name>-predictor` with one Pod,
 - a Service `<name>-predictor`, port 80 to the Pod's 8080,
-- an Ingress of class `nginx` with two hosts under `127.0.0.1.sslip.io`,
-- an HPA with min and max 1 replica.
+- an Ingress of class `nginx` with two hosts under `127.0.0.1.sslip.io`, both to the predictor Service: one for the InferenceService as a whole and one for its predictor component (KServe v0.18.0 source, `kube_ingress_reconciler.go`: one rule per entry point and per component),
+- an HPA with min and max 1 replica. KServe's default autoscaler class is `hpa` (source, `constants.DefaultAutoscalerClass`), so an InferenceService gets one unless an annotation says otherwise; with no replica settings in the manifest it stays at one Pod.
 
-**The runtime.** The cluster has several runtimes that can serve XGBoost: `kserve-mlserver` and `kserve-xgbserver` both list it, and LightGBM has `kserve-lgbserver` too. The manifests pick `runtime: kserve-mlserver` explicitly, so both models run in the same server, `seldonio/mlserver:1.5.0`, which speaks only the V2 inference protocol. In the XGBoost Pod the controller sets `MLSERVER_MODEL_NAME` to the InferenceService name and `MLSERVER_MODEL_IMPLEMENTATION` to `mlserver_xgboost.XGBoostModel` (the LightGBM Pod's environment was not probed).
+**The runtime.** The cluster has several runtimes that can serve XGBoost: `kserve-mlserver` and `kserve-xgbserver` both list it, and LightGBM has `kserve-lgbserver` too. The manifests pick `runtime: kserve-mlserver` explicitly, so both models run in the same server software, `seldonio/mlserver:1.5.0`, each in its own Pod; this runtime speaks only the V2 inference protocol. In the XGBoost Pod the controller sets `MLSERVER_MODEL_NAME` to the InferenceService name and `MLSERVER_MODEL_IMPLEMENTATION` to `mlserver_xgboost.XGBoostModel` (the LightGBM Pod's environment was not probed).
 
 **The model on a PVC.** `storageUri: pvc://model-pvc/xgboost-predictor` is not downloaded. The Pod has no init container; in the XGBoost Pod the PVC is mounted read-only at `/mnt/models` with `subPath: xgboost-predictor`, so it sees only its own directory (`model.json` and `model-settings.json`, copied there in step 13); the LightGBM Pod mounts the same claim at `/mnt/models`. The claim stayed `Pending` until the helper Pod used it (step 12), then `Bound`; it kept its data after the helper was deleted. Both predictors mount the same ReadWriteOnce claim, which works here because all Pods run on the one worker node.
 
@@ -85,7 +85,7 @@ The InferenceGraph's status shows a URL, `http://housing-price-graph-kserve-grap
 
 - KServe created no Ingress for the InferenceGraph; the URL in its status has no Ingress behind it. The tutorial's own Ingress, with a different host, is the way in.
 - The two models answer with different data types (`FP32` and `FP64`).
-- Each InferenceService also gets an HPA fixed at one replica and an Ingress with two hosts (`<name>-<ns>` and `<name>-predictor-<ns>`). Why KServe adds them in this configuration was not checked.
+- Each InferenceService also gets an HPA fixed at one replica and an Ingress with two hosts (`<name>-<ns>` and `<name>-predictor-<ns>`); the reasons, from the KServe source, are in "Three InferenceServices" above.
 
 ## Check yourself
 
