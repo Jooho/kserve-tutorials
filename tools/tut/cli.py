@@ -467,7 +467,27 @@ def _translation_draft_lang(a, lang: str, tid: str | None):
 
 def cmd_site(a):
     out = site.build_source(Path(a.out).resolve())
-    print(f"site source written to {out}")
+    print(f"site source written to {out}", flush=True)
+    if not a.serve:
+        return 0
+    # --serve: the whole way, like `make site`, then show it
+    import subprocess
+    rc = subprocess.run([sys.executable, "-m", "mkdocs", "build", "--strict"], cwd=REPO_ROOT).returncode
+    if rc:
+        return rc
+    import os
+    from .ui.server import PortError
+    port = a.port
+    if port is None and os.environ.get("TUT_SITE_PORT"):
+        try:
+            port = int(os.environ["TUT_SITE_PORT"])
+        except ValueError:
+            sys.exit(f"TUT_SITE_PORT={os.environ['TUT_SITE_PORT']!r} is not a port number")
+    try:
+        site.serve(REPO_ROOT / "build" / "site", port, open_browser=not a.no_browser)
+    except (PortError, FileNotFoundError) as e:
+        sys.exit(str(e))
+    return 0
 
 
 def cmd_release(a):
@@ -495,6 +515,7 @@ CONFIG_KEYS = {"KIND_CLUSTER_NAME": "name of the kind cluster tutorials create/u
                "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)",
                "TUT_AI": "your AI CLI for `draft` and `translation draft`: claude | copilot | codex | cmd:<command>",
                "TUT_UI_PORT": "port of ./tut ui (default: 8765, or the next free port)",
+               "TUT_SITE_PORT": "port of make site-run / ./tut site --serve (default: 8775, or the next free port)",
                "TUT_AI_REVIEW": "AI CLI that reviews an explainer (`explain review`); default: TUT_AI",
                "TUT_AI_REVIEW_ARGS": "extra flags for that CLI, e.g. \"--model opus\"",
                "TUT_TRANSLATOR": "older name of TUT_AI (still read)",
@@ -712,6 +733,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("site", help="assemble the MkDocs source tree")
     s.add_argument("--out", default=str(REPO_ROOT / "build" / "site-src"))
+    s.add_argument("--serve", action="store_true",
+                   help="also build the HTML (mkdocs) and serve build/site on this machine until Ctrl+C")
+    s.add_argument("--port", type=int, default=None,
+                   help="with --serve: port (default: TUT_SITE_PORT, else 8775 or the next free one)")
+    s.add_argument("--no-browser", action="store_true", help="with --serve: do not open a browser")
     s.set_defaults(fn=cmd_site)
 
     s = sub.add_parser("release", help="release helpers (see docs/release.md)")

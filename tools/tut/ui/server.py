@@ -592,13 +592,13 @@ def _free(port: int, host: str = "127.0.0.1") -> bool:
 
 
 def pick_port(requested: int | None = None, start: int = DEFAULT_PORT,
-              tries: int = PORT_TRIES) -> tuple[int, str | None]:
+              tries: int = PORT_TRIES, env: str | None = "TUT_UI_PORT") -> tuple[int, str | None]:
     """(port, note). A port you asked for is used or refused, never swapped; the
     default moves to the next free port and says so."""
     if requested:
         if not _free(requested):
-            raise PortError(f"port {requested} is in use; pick another with --port or "
-                            "TUT_UI_PORT, or leave both unset to get a free one")
+            raise PortError(f"port {requested} is in use; pick another with --port"
+                            + (f" or {env}" if env else "") + ", or leave it unset to get a free one")
         return requested, None
     for port in range(start, start + tries):
         if _free(port):

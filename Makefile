@@ -23,7 +23,7 @@ ifneq ($(CLUSTER),)
 export KIND_CLUSTER_NAME := $(CLUSTER)
 endif
 .DEFAULT_GOAL := help
-.PHONY: help setup config doctor tools new sync lint test site check precommit ui list run run-keep matrix release-plan release
+.PHONY: help setup config doctor tools new sync lint test site site-run check precommit ui list run run-keep matrix release-plan release
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -61,6 +61,9 @@ test: ## Tests for the rules, the runner and the UI session
 site: ## Build the static site into build/site
 	./tut site
 	$(PY) -m mkdocs build --strict
+
+site-run: ## Build the site and look at it in the browser (PORT=N; Ctrl+C to stop)
+	./tut site --serve $(if $(PORT),--port $(PORT))
 
 check: ## Everything CI checks without a cluster: lint, tests, site
 	@$(MAKE) --no-print-directory lint test site

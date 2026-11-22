@@ -53,3 +53,28 @@ def test_all_tries_busy_is_an_error():
     with _hold(start), _hold(start + 1):
         with pytest.raises(server.PortError):
             server.pick_port(start=start, tries=2)
+
+
+def test_site_server_serves_the_built_site_on_localhost_only(tmp_path):
+    """make site-run / ./tut site --serve: build/site over HTTP, this machine only."""
+    import threading
+    import urllib.request
+    from tut import site
+
+    (tmp_path / "index.html").write_text("<h1>tutorials</h1>")
+    port = _free_block(1)
+    httpd = site.make_server(tmp_path, port)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        assert httpd.server_address[0] == "127.0.0.1"
+        assert b"<h1>tutorials</h1>" in urllib.request.urlopen(f"http://127.0.0.1:{port}/").read()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_site_serve_needs_a_built_site(tmp_path):
+    from tut import site
+    with pytest.raises(FileNotFoundError):
+        site.serve(tmp_path, open_browser=False)
+    assert site.SITE_PORT not in (8000, 8080)
