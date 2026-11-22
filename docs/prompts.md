@@ -180,7 +180,9 @@ Make the AI explainer for tutorials/<id> (docs/explainer.md). Work unattended
 to the end: walk the tutorial on the cluster with ./tut explain start / next /
 probe / stop, verify every fact you state, write explainer/index.md (and
 index.ko.md if README.ko.md exists) with SVG diagrams and at least one animated
-flow, run ./tut explain check, then ./tut explain review (fix what it finds,
-no new walk, review once more), then report: what you verified, what differs
-from the README, and where I should look when I review. Do not mark it reviewed.
+flow, run ./tut explain check, then ./tut explain review (decide every finding:
+fix it or reject it with the reason in notes.md; no new walk; review once
+more), then report: what you verified, what differs from the README, which
+findings you rejected, and where I should look when I review. Do not mark it
+reviewed.
 ````

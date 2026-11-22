@@ -2,7 +2,8 @@
 
   TUT_AI=claude | copilot | codex | cmd:<command>      (TUT_TRANSLATOR: older name)
   TUT_AI_ARGS="--model sonnet"                         (TUT_TRANSLATOR_ARGS: older name)
-  TUT_AI_REVIEW / TUT_AI_REVIEW_ARGS                   the reviewer of an explainer
+  TUT_AI_REVIEW / TUT_AI_REVIEW_ARGS                   the reviewer(s) of an explainer;
+                                                       several: TUT_AI_REVIEW=claude,codex
 
 Callers (translate, draft, explain) keep their own command lines per tool: what
 the CLI may do differs per job. They share how the choice is read (backlog B19:
@@ -47,6 +48,25 @@ def read(var: str = "TUT_AI") -> Choice | None:
     if args is None and old:
         args = os.environ.get(f"{old}_ARGS")
     return Choice(spec, extra=shlex.split(args or ""))
+
+
+def read_many(var: str) -> list[Choice]:
+    """Several CLIs in one variable, comma-separated (TUT_AI_REVIEW=claude,codex):
+    each one does the job on its own. cmd:<command> is always a single choice
+    (a command may contain commas). The *_ARGS flags go to every one of them."""
+    spec = (os.environ.get(var) or "").strip()
+    if not spec:
+        return []
+    if spec.startswith("cmd:") or "," not in spec:
+        c = read(var)
+        return [c] if c else []
+    names = [n.strip() for n in spec.split(",") if n.strip()]
+    bad = [n for n in names if n not in TOOLS]
+    if bad:
+        raise AICliError(f"{var}={spec!r}: unknown {', '.join(bad)}; use {', '.join(TOOLS)} "
+                         "(comma-separated), or one cmd:<command>")
+    extra = shlex.split(os.environ.get(f"{var}_ARGS") or "")
+    return [Choice(n, extra=list(extra)) for n in names]
 
 
 def with_extra(template: list[str], extra: list[str]) -> list[str]:

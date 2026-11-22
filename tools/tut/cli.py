@@ -306,14 +306,15 @@ def cmd_explain(a):
             if a.print_prompt:
                 print(explain.build_review_prompt(t))
                 return 0
-            reviewer, var = draft.review_agent_from_env()
-            if reviewer is None:
+            reviewers, var = draft.review_agents_from_env()
+            if not reviewers:
                 sys.exit("No AI CLI configured: export TUT_AI_REVIEW=codex (or TUT_AI=claude; "
                          "claude, copilot, codex, cmd:<command>). Or give the output of "
                          f"./tut explain review {t.id} --print-prompt to an AI in a fresh context.")
-            if not reviewer.available:
-                sys.exit(f"{var}={reviewer.name}, but `{reviewer.argv[0]}` is not on PATH")
-            n = explain.review(t, reviewer)
+            for r in reviewers:
+                if not r.available:
+                    sys.exit(f"{var}: `{r.argv[0]}` is not on PATH")
+            n = explain.review_all(t, reviewers)
             print((explain.workdir(t) / "review.md").read_text())
             return 0 if n == 0 else 1
         elif a.ecmd == "draft":
@@ -322,13 +323,15 @@ def cmd_explain(a):
                 sys.exit("No AI CLI configured: export TUT_AI=claude (or copilot, codex, cmd:<command>)")
             if not agent.available:
                 sys.exit(f"TUT_AI={agent.name}, but `{agent.argv[0]}` is not on PATH")
-            reviewer = None
+            reviewers = []
             if not a.no_review:
-                reviewer, var = draft.review_agent_from_env()
-                if reviewer is not None and not reviewer.available:
-                    sys.exit(f"{var}={reviewer.name}, but `{reviewer.argv[0]}` is not on PATH")
-                print(f"review by {reviewer.name} ({var})" if reviewer else "no reviewer configured")
-            rc = explain.draft(t, agent, reviewer=reviewer)
+                reviewers, var = draft.review_agents_from_env()
+                for r in reviewers:
+                    if not r.available:
+                        sys.exit(f"{var}: `{r.argv[0]}` is not on PATH")
+                print(f"review by {', '.join(r.name for r in reviewers)} ({var})" if reviewers
+                      else "no reviewer configured")
+            rc = explain.draft(t, agent, reviewers=reviewers)
             fs = explain.check(t)
             for sev, code, path, msg in fs:
                 print(f"{sev.upper():7} {code} {path.relative_to(REPO_ROOT)}: {msg}")

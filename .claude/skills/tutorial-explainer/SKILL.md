@@ -18,15 +18,18 @@ the same thing.
 3. Write `tutorials/<id>/explainer/index.md` (+ `index.ko.md` if the tutorial
    has `README.ko.md`) and the SVGs, following the brief's shape and SVG rules.
 4. `./tut explain check <id>` until 0 errors.
-5. Review by another AI in a fresh context: `./tut explain review <id>`
-   (TUT_AI_REVIEW, else TUT_AI). If neither is set, give the output of
-   `./tut explain review <id> --print-prompt` to a fresh subagent and save its
-   answer as `build/explain/<id>/review.md`. Fix or remove what it found (no
-   new walk), note each change in notes.md, review once more. Then `make precommit`.
+5. Review by other AIs in a fresh context: `./tut explain review <id>`
+   (TUT_AI_REVIEW, one or several like `claude,codex`, else TUT_AI). If neither
+   is set, give the output of `./tut explain review <id> --print-prompt` to a
+   fresh subagent and save its answer as `build/explain/<id>/review.md`. Decide
+   every finding (no new walk): fix it, or reject it with the reason; one line
+   each in notes.md under "## Review round" (`A: ...` / `R: ...`). Review once
+   more. Then `make precommit`.
 6. Report to the user in their language: what you verified, what differs from
-   the README (from `build/explain/<id>/notes.md`), where to look when
-   reviewing, and that `./tut explain mark <id>` records their review. Never
-   mark it yourself.
+   the README (from `build/explain/<id>/notes.md`), which findings you
+   rejected, where to look when reviewing, and that `./tut explain mark <id>`
+   records their review. Do not mark it on your own judgment; run `mark` only
+   when the user says they read it.
 
 If the user does not know what an explainer is, say it in two sentences first:
 a teaching page with diagrams next to the tutorial, written by an AI from a
