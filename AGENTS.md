@@ -104,10 +104,70 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 4. **Open a PR, merge, push to `stable` or change repository settings only when
    the maintainer asked for it in the conversation.** Approval for one PR does
    not carry over to the next unless they said so.
+   Before you ask, go through the tech lead (next section).
 5. **When CI fails, find the root cause** (docs/ci-playbook.md). Never re-run
    hoping it passes more than once; never weaken a check.
 6. **Finish with the knowledge in the repository:** backlog item, lesson, or a
    line in docs/handbook.md § Decisions — not only in the chat.
+
+## The tech lead comes before the maintainer
+
+The `tech-lead` agent (`.claude/agents/tech-lead.md`) is the maintainer's
+stand-in: it looks at work the way they do, from the seat of the person who
+will use it. Its notebook, `.claude/tech-lead/learned.md`, holds what the
+maintainer has answered so far.
+
+- **Before you ask the maintainer to approve a plan, a commit, a PR or a
+  merge**, give it to the tech lead first. Claude Code: call the `tech-lead`
+  subagent. Other agents (Codex, Copilot) have no subagent: read both files and
+  do its review yourself as a separate pass before you report, and say in your
+  report that the review was your own, not an independent one.
+- Answering a question the maintainer asked, and small confirmations, need no
+  gate.
+- Fix what it sends back and ask it again. What reaches the maintainer is its
+  verdict and its questions, not your own summary.
+- **Carry its questions to the maintainer word for word.** Do not answer them
+  yourself and do not add your own.
+- **When the maintainer answers, or corrects or rejects something, call the
+  tech lead again with their words** so it writes them into its notebook. Other
+  agents: append the entry yourself, in the format under "Learning from the
+  answers" in tech-lead.md. Next time that kind of question is answered from
+  the notebook.
+- The notebook is committed. A change to it travels with the PR that is in
+  progress when the maintainer answered; it does not make that PR run more
+  tests.
+- Git and shared-state actions still need the maintainer's own word, whatever
+  the tech lead says.
+- A lesson that is a rule for everyone belongs in this file or in docs/, not
+  only in the notebook; the tech lead says so when it sees one.
+
+## Plans become issues, issues become work
+
+The `project-planner` agent (`.claude/agents/project-planner.md`) looks at the
+whole project, from the UI to what a public repository needs to be safe, and
+proposes a short list of small plans. Nothing it proposes is work until the
+maintainer says so.
+
+1. **Plan.** Call the planner. Its list goes to the tech lead first (too big?
+   already known? evidence?), then to the maintainer with the tech lead's
+   verdict.
+2. **Approve.** The maintainer says which proposals may become issues. Only
+   then is the planner called again to file them (`gh issue create`, label
+   `plan`), with the maintainer's approval quoted in the call. The first time,
+   the agent creates the label once: `gh label create plan`.
+3. **Work, one issue at a time.** Ask the tech lead to run an issue: it checks
+   that the issue is still true and writes the brief. Do the work on a new
+   branch from the latest `main`, one issue per PR ("Closes #<n>" in the PR
+   text).
+4. **Check.** The result goes back to the tech lead as any work does, then to
+   the maintainer for the PR and the merge.
+
+- docs/backlog.md stays the record of problems with their evidence; an issue is
+  the order to work on one of them. When an issue from the backlog is done,
+  update the backlog item as before.
+- Other agents (Codex, Copilot): read the planner's file and follow it
+  yourself; filing issues still needs the maintainer's approval in the
+  conversation.
 
 ## Translations
 
