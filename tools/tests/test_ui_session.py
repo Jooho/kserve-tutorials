@@ -232,10 +232,22 @@ def test_cancelled_queue_resets_the_steps_that_never_started(tmp_path):
     async def main():
         s = ShellSession("t", tmp_path, "v0.18.0", lambda _: None, events.append)
         s.start()
+        def state(idx):
+            return next((e["state"] for e in reversed(events)
+                         if e.get("type") == "block" and e["idx"] == idx), None)
+
+        async def until(pred, what, timeout=30):
+            # wait for the event, not for a guessed time (backlog B22: slow runners)
+            for _ in range(int(timeout / 0.05)):
+                if pred():
+                    return
+                await asyncio.sleep(0.05)
+            raise AssertionError(f"timed out waiting for {what}; events: {events[-6:]}")
+
         s.run_queue([{"idx": i, "role": "run", "code": "sleep 1" if i == 0 else "true"} for i in range(3)])
-        await asyncio.sleep(0.3)
+        await until(lambda: state(0) == "running", "step 0 to start")
         s.run_queue([{"idx": 5, "role": "run", "code": "true"}])          # replaces the queue
-        await asyncio.sleep(2.5)
+        await until(lambda: state(5) == "passed", "step 5 to pass")
         s.stop()
 
     asyncio.run(main())

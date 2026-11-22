@@ -133,13 +133,6 @@ def test_D004_broken_link(repo):
     assert "D004" in codes(repo)
 
 
-def test_D005_include_outside_tutorial(repo):
-    make_tut(repo, "other")
-    make_tut(repo, "t", GOOD_README.replace(
-        "<!-- tut:include manifests/cm.yaml -->", "<!-- tut:include ../other/manifests/cm.yaml -->"))
-    assert "D005" in codes(repo)
-
-
 def test_D006_run_before_setup(repo):
     make_tut(repo, "t", "```bash run\necho hi\n```\n\n" + GOOD_README)
     assert "D006" in codes(repo)
@@ -323,14 +316,18 @@ def test_L004_stable_needs_frozen_module(repo):
     assert "L004" in codes(repo)
 
 
-def test_D005_include_from_declared_module_is_allowed(repo):
+def test_D005_include_only_from_the_tutorial_or_a_declared_module(repo):
+    """Hard rule 1 (a tutorial is self-contained): an include may point into the
+    tutorial itself or into a module it declares, never into another tutorial."""
     make_module(repo)
     inc = GOOD_README + "\n<!-- tut:include ../../lib/helpers/v1/hello.sh -->\n<!-- /tut -->\n"
     make_tut(repo, "ok", inc, uses=["helpers/v1"])
-    make_tut(repo, "bad", inc)
+    make_tut(repo, "bad", inc)                                    # module not declared
+    make_tut(repo, "neighbour", GOOD_README.replace(              # another tutorial's file
+        "<!-- tut:include manifests/cm.yaml -->", "<!-- tut:include ../ok/manifests/cm.yaml -->"))
     generate.sync(repo)
     errs = [(f.code, f.path.parent.name) for f in lint.Linter(repo).run() if f.severity == "error"]
-    assert ("D005", "bad") in errs and ("D005", "ok") not in errs
+    assert ("D005", "bad") in errs and ("D005", "neighbour") in errs and ("D005", "ok") not in errs
 
 
 def test_affected_module_change_hits_only_its_users(repo):

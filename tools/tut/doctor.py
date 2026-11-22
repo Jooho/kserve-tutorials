@@ -17,7 +17,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .model import REPO_ROOT, load_tutorials
+from .model import REPO_ROOT, env_tools, load_tutorials
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 ICON = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
@@ -41,8 +41,6 @@ def cluster_name() -> tuple[str, str]:
     return name, ".tut.env" if "KIND_CLUSTER_NAME" in loaded else "shell"
 
 
-TOOL_KEYS = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
-             "CLOUD_PROVIDER_KIND": "cloud-provider-kind"}
 def python_packages(req: Path = REPO_ROOT / "tools" / "requirements.txt") -> tuple[list[str], list[str]]:
     """(missing, other version) for the pins in tools/requirements.txt, so a
     .venv made before a package was added or bumped is noticed."""
@@ -69,18 +67,6 @@ def _run(cmd: list[str], timeout: float = 15) -> tuple[int, str]:
         return p.returncode, (p.stdout + p.stderr).strip()
     except (OSError, subprocess.TimeoutExpired) as e:
         return 127, str(e)
-
-
-def env_tools(env_ref: str, root: Path = REPO_ROOT) -> dict[str, str]:
-    """{tool: version} from envs/<env>/tools.env."""
-    out = {}
-    f = root / "envs" / env_ref / "tools.env"
-    if f.exists():
-        for line in f.read_text().splitlines():
-            m = re.match(r"^\s*([A-Z_]+)\s*=\s*(\S+)", line)
-            if m and m.group(1) in TOOL_KEYS:
-                out[TOOL_KEYS[m.group(1)]] = m.group(2)
-    return out
 
 
 def requirements(root: Path, tutorial: str | None) -> tuple[int, float, str]:

@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import markdown, project, shared
-from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, load_envs, load_modules, load_tutorials,
+from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, env_tools, load_envs, load_modules, load_tutorials,
                     readme_name, version_key)
 
 EXT_LANG = {".yaml": "yaml", ".yml": "yaml", ".json": "json", ".py": "python",
@@ -56,19 +56,7 @@ def render_include(readme_dir: Path, args: list[str]) -> str:
 
 def env_tool_dirs(env_ref: str, root: Path = REPO_ROOT) -> list[str]:
     """`$REPO_ROOT/.tools/<tool>/<version>` for every tool in envs/<env>/tools.env."""
-    f = root / "envs" / env_ref / "tools.env"
-    if not f.exists():
-        return []
-    names = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
-             "CLOUD_PROVIDER_KIND": "cloud-provider-kind"}
-    out = []
-    for line in f.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if "=" in line:
-            k, v = (x.strip() for x in line.split("=", 1))
-            if k in names and v:
-                out.append(f"$REPO_ROOT/.tools/{names[k]}/{v}")
-    return out
+    return [f"$REPO_ROOT/.tools/{tool}/{version}" for tool, version in env_tools(env_ref, root).items()]
 
 
 def _root(t: Tutorial) -> Path:

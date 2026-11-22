@@ -65,24 +65,16 @@ class Agent:
 def agent_from_env(var: str = "TUT_AI") -> Agent | None:
     """TUT_AI (or the older TUT_TRANSLATOR) picks the CLI; TUT_AI_ARGS adds flags.
     var="TUT_AI_REVIEW" reads that variable and TUT_AI_REVIEW_ARGS instead."""
-    import shlex
-    spec = os.environ.get(var) or ""
-    if var == "TUT_AI":
-        spec = spec or os.environ.get("TUT_TRANSLATOR") or ""
-    spec = spec.strip()
-    if not spec:
+    from . import aicli
+    try:
+        c = aicli.read(var)
+    except aicli.AICliError as e:
+        raise DraftError(str(e)) from None
+    if c is None:
         return None
-    if spec.startswith("cmd:"):
-        return Agent("cmd", [spec[4:].strip()], shell=True)
-    if spec not in AGENTS:
-        raise DraftError(f"{var}={spec!r}: use claude, copilot, codex or cmd:<command>")
-    extra = os.environ.get(f"{var}_ARGS", "")
-    if var == "TUT_AI":
-        extra = os.environ.get("TUT_AI_ARGS", os.environ.get("TUT_TRANSLATOR_ARGS", ""))
-    extra = shlex.split(extra)
-    argv = list(AGENTS[spec])
-    i = argv.index("{prompt}")
-    return Agent(spec, argv[:i] + extra + argv[i:], extra=extra)
+    if c.shell:
+        return Agent("cmd", [c.command], shell=True)
+    return Agent(c.name, aicli.with_extra(AGENTS[c.name], c.extra), extra=c.extra)
 
 
 def review_agent_from_env() -> tuple[Agent | None, str]:
