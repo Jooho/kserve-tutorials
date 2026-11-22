@@ -17,6 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = REPO_ROOT / "schema"
 TEMPLATE_ID = "_template"
 LANGS = ("en", "ko")
+# AI-written explainer of a tutorial: read by people, never executed (tut.explain)
+EXPLAINER_DIR = "explainer"
 VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+$")
 
 
@@ -125,6 +127,9 @@ class Tutorial:
 
     def readme(self, lang: str = "en") -> Path:
         return self.path / readme_name(lang)
+
+    def explainer(self, lang: str = "en") -> Path:
+        return self.path / EXPLAINER_DIR / ("index.md" if lang == "en" else f"index.{lang}.md")
 
 
 def load_schema(name: str) -> dict:

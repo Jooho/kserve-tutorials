@@ -87,6 +87,7 @@ Found a broken step? [Open an issue](../../issues/new?template=tutorial-broken.y
 ## Contributing
 
 Most of the work here is done with an AI coding agent (Claude Code, Codex).
+New here? [docs/getting-started.md](docs/getting-started.md) shows the steps.
 Start your agent in a clone of this repository and paste a prompt from
 [docs/prompts.md](docs/prompts.md) as its first message:
 
@@ -96,6 +97,7 @@ Start your agent in a clone of this repository and paste a prompt from
 | move a tutorial from the legacy repository | [Migrate a tutorial](docs/prompts.md#2-migrate-a-tutorial) |
 | write a new tutorial | [from tested work](docs/prompts.md#3a-new-tutorial-from-tested-work) · [from scratch](docs/prompts.md#3b-new-tutorial-from-scratch) |
 | fix a failed CI run | [Fix a CI failure](docs/prompts.md#4-fix-a-ci-failure) |
+| add a teaching page with diagrams (AI explainer) | [Make an explainer](docs/prompts.md#5-make-an-explainer) |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). The design is described in
 [RFC 0001](docs/rfc/0001-repository-structure.md).

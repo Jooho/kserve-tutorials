@@ -254,6 +254,92 @@ def cmd_matrix(a):
     print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['version']}" for e in m))
 
 
+def cmd_explain(a):
+    """./tut explain: the AI explainer of a tutorial (tut/explain.py)."""
+    from . import draft, explain
+    t = _tutorial(a.id)
+    s = explain.Session(t)
+    try:
+        if a.ecmd == "start":
+            s.start(a.version)
+            st = s.load()
+            print(f"walk of {t.id} started: {st['total']} run/verify steps. Next: ./tut explain next {t.id}")
+        elif a.ecmd == "next":
+            step, rc, out = s.next()
+            st = s.load()
+            print(f"--- step {step.n}/{st['total']} - {step.role} - README.md:{step.line} - exit {rc}")
+            print(step.code)
+            print("--- output")
+            print(explain._shorten(out))
+            if rc and step.role == "verify":
+                print(f"!!! verify failed (exit {rc}); the README says this should pass")
+            print(f"--- next: ./tut explain next {t.id}" if st["cursor"] < st["total"]
+                  else f"--- all steps ran; probe more or ./tut explain stop {t.id}")
+        elif a.ecmd == "probe":
+            argv = a.cmd[1:] if a.cmd[:1] == ["--"] else a.cmd
+            rc, out = s.probe(argv)
+            print(explain._shorten(out))
+            return rc
+        elif a.ecmd == "status":
+            st = s.load()
+            if not st:
+                print(f"no walk of {t.id} yet: ./tut explain start {t.id}")
+            else:
+                print(f"{t.id}: step {st['cursor']}/{st['total']} done, shell "
+                      f"{'running' if s.alive else 'stopped'}, evidence: {s.evidence.relative_to(REPO_ROOT)}")
+            for lang in ("en", "ko"):
+                print(f"explainer {lang}: {explain.state(t, lang) or 'none'}")
+        elif a.ecmd == "stop":
+            print(explain._shorten(s.stop(run_cleanup=not a.keep)))
+            print(f"walk of {t.id} stopped; evidence: {s.evidence.relative_to(REPO_ROOT)}")
+        elif a.ecmd == "check":
+            fs = explain.check(t)
+            for sev, code, path, msg in fs:
+                print(f"{sev.upper():7} {code} {path.relative_to(REPO_ROOT)}: {msg}")
+            n = sum(f[0] == "error" for f in fs)
+            print(f"{n} error(s), {len(fs) - n} warning(s)")
+            return 1 if n else 0
+        elif a.ecmd == "mark":
+            p = explain.mark(t, a.lang)
+            print(f"marked {p.relative_to(REPO_ROOT)} as reviewed for the current README.md")
+        elif a.ecmd == "review":
+            if a.print_prompt:
+                print(explain.build_review_prompt(t))
+                return 0
+            reviewer, var = draft.review_agent_from_env()
+            if reviewer is None:
+                sys.exit("No AI CLI configured: export TUT_AI_REVIEW=codex (or TUT_AI=claude; "
+                         "claude, copilot, codex, cmd:<command>). Or give the output of "
+                         f"./tut explain review {t.id} --print-prompt to an AI in a fresh context.")
+            if not reviewer.available:
+                sys.exit(f"{var}={reviewer.name}, but `{reviewer.argv[0]}` is not on PATH")
+            n = explain.review(t, reviewer)
+            print((explain.workdir(t) / "review.md").read_text())
+            return 0 if n == 0 else 1
+        elif a.ecmd == "draft":
+            agent = draft.agent_from_env()
+            if agent is None:
+                sys.exit("No AI CLI configured: export TUT_AI=claude (or copilot, codex, cmd:<command>)")
+            if not agent.available:
+                sys.exit(f"TUT_AI={agent.name}, but `{agent.argv[0]}` is not on PATH")
+            reviewer = None
+            if not a.no_review:
+                reviewer, var = draft.review_agent_from_env()
+                if reviewer is not None and not reviewer.available:
+                    sys.exit(f"{var}={reviewer.name}, but `{reviewer.argv[0]}` is not on PATH")
+                print(f"review by {reviewer.name} ({var})" if reviewer else "no reviewer configured")
+            rc = explain.draft(t, agent, reviewer=reviewer)
+            fs = explain.check(t)
+            for sev, code, path, msg in fs:
+                print(f"{sev.upper():7} {code} {path.relative_to(REPO_ROOT)}: {msg}")
+            print(f"{'ok' if rc == 0 else 'FAILED'} agent exit {rc}; evidence and notes in "
+                  f"build/explain/{t.id}/; read tutorials/{t.id}/explainer/, then ./tut explain mark {t.id}")
+            return rc or (1 if any(f[0] == "error" for f in fs) else 0)
+    except (explain.ExplainError, draft.DraftError) as e:
+        sys.exit(str(e))
+    return 0
+
+
 def cmd_translation(a):
     langs = [l for l in LANG_NAME if l != "en"]
     if a.tcmd in (None, "status"):
@@ -408,6 +494,8 @@ CONFIG_KEYS = {"KIND_CLUSTER_NAME": "name of the kind cluster tutorials create/u
                "TUT_SKIP_TOOLS": "tools you provide yourself, e.g. \"helm\" (default: none)",
                "TUT_ENV_RECREATE": "1 = replace a cluster built by something else (destructive)",
                "TUT_AI": "your AI CLI for `draft` and `translation draft`: claude | copilot | codex | cmd:<command>",
+               "TUT_AI_REVIEW": "AI CLI that reviews an explainer (`explain review`); default: TUT_AI",
+               "TUT_AI_REVIEW_ARGS": "extra flags for that CLI, e.g. \"--model opus\"",
                "TUT_TRANSLATOR": "older name of TUT_AI (still read)",
                "TUT_TRANSLATOR_ARGS": "extra flags for that CLI, e.g. \"--model sonnet\""}
 
@@ -576,6 +664,40 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("id", help="tutorial id, e.g. llmisvc-anatomy")
     m.add_argument("lang", help="language code, e.g. ko")
     s.set_defaults(fn=cmd_translation)
+
+    s = sub.add_parser("explain", help="AI explainer of a tutorial: walk it on the cluster, write diagrams",
+                       description="An explainer is a teacher-style page next to a tutorial, written by "
+                                   "an AI from a live run (tutorials/<id>/explainer/). It is never "
+                                   "executed and does not affect CI e2e. See docs/explainer.md.")
+    esub = s.add_subparsers(dest="ecmd", required=True)
+    e = esub.add_parser("draft", help="unattended: your AI CLI (TUT_AI) walks the tutorial and writes the explainer")
+    e.add_argument("id")
+    e.add_argument("--no-review", action="store_true",
+                   help="skip the review by TUT_AI_REVIEW (else TUT_AI) and its fix round")
+    e = esub.add_parser("review", help="another AI (TUT_AI_REVIEW, else TUT_AI) checks the explainer "
+                                       "against the evidence of the walk")
+    e.add_argument("id")
+    e.add_argument("--print-prompt", action="store_true",
+                   help="only print the review prompt (to give it to an AI yourself)")
+    e = esub.add_parser("start", help="start a tutorial shell for a step-by-step walk")
+    e.add_argument("id")
+    e.add_argument("--version", help="product version (default: versions.default)")
+    e = esub.add_parser("next", help="run the next run/verify block and print its output")
+    e.add_argument("id")
+    e = esub.add_parser("probe", help="read-only look at the cluster in the tutorial shell: probe <id> -- kubectl get ...")
+    e.add_argument("id")
+    e.add_argument("cmd", nargs=argparse.REMAINDER)
+    e = esub.add_parser("status", help="where the walk is; explainer state")
+    e.add_argument("id")
+    e = esub.add_parser("stop", help="run the cleanup blocks and end the shell")
+    e.add_argument("id")
+    e.add_argument("--keep", action="store_true", help="skip the cleanup blocks")
+    e = esub.add_parser("check", help="check the explainer (marker, no executable blocks, links, safe SVG)")
+    e.add_argument("id")
+    e = esub.add_parser("mark", help="after reading it: record that a person reviewed the explainer")
+    e.add_argument("id")
+    e.add_argument("lang", nargs="?", default="en")
+    s.set_defaults(fn=cmd_explain)
 
     s = sub.add_parser("site", help="assemble the MkDocs source tree")
     s.add_argument("--out", default=str(REPO_ROOT / "build" / "site-src"))

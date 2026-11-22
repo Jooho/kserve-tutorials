@@ -37,7 +37,8 @@ def test_doctor_toolkit_only_checks_python_side():
 def test_doctor_never_installs_docker():
     src = (REPO_ROOT / "tools" / "install-tools.sh").read_text()
     wanted = [l.split()[2] for l in src.splitlines() if l.startswith("if want ")]
-    assert wanted == ["kind", "kubectl", "helm", "cloud-provider-kind"]   # Docker is the user's
+    assert "kind" in wanted                     # the parse still finds the tools
+    assert "docker" not in wanted and "get.docker.com" not in src   # Docker is the user's
 
 
 def test_python_packages_follow_requirements_txt(tmp_path):

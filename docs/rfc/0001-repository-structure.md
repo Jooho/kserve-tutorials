@@ -456,6 +456,30 @@ AI works on top of the rules, never instead of them:
   CI, invariants. Agents are expected to know the repository better than its
   maintainer, so knowledge must be written down there.
 
+### 4.17 AI explainers (PoC)
+
+A README has to stay a test: terse steps and checks. Teaching material (the big
+picture, how components talk, pictures and animated flows) lives next to it in
+`tutorials/<id>/explainer/` (`index.md`, `index.ko.md`, `*.svg`), written by an
+AI and reviewed by a person afterwards. Details: `docs/explainer.md`.
+
+- **Accuracy from a live run.** The AI walks the tutorial on a cluster one block
+  at a time (`./tut explain start | next | probe | stop`) and may look at the
+  cluster between steps with read-only probes (an allowlist of kubectl/helm
+  read verbs). Every output is recorded in `build/explain/<id>/evidence.md`.
+  It runs unattended (`./tut explain draft <id>` with TUT_AI); a person reviews
+  the result and runs `./tut explain mark`.
+- **Never executed, never in CI e2e.** `plan.affected` skips the explainer
+  directory; lint forbids run/verify/cleanup blocks in it (X002).
+- **Always labelled.** The first line is a marker (`by=`, `reviewed=`, README
+  hash); the UI and the site turn it into the "written by an AI" banner, so the
+  page cannot hide it (X001). A README change makes it "behind" (X005).
+- **Pictures are SVG**, not GIF: text (reviewable, small), sharp, light/dark
+  via `prefers-color-scheme`, animated with CSS/SMIL. Shown with `<img>`, served
+  sandboxed; lint X004 rejects scripts, handlers and external references.
+- **Made on request only.** `./tut sync` and CI never create or change an
+  explainer (sync stays deterministic and offline).
+
 ## 5. Alternatives considered
 
 | Alternative | Why not (for now) |

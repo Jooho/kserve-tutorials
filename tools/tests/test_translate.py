@@ -54,8 +54,9 @@ def test_changed_command_is_rejected(fake):
 
 
 def test_output_without_markers_is_an_error(fake):
+    out = translate.run(fake("nomarkers"), translate.build_prompt(GOOD_README, "ko"))
     with pytest.raises(translate.TranslationError):
-        translate.extract(translate.run(fake("nomarkers"), translate.build_prompt(GOOD_README, "ko")))
+        translate.extract(out)
 
 
 def test_comments_in_code_may_be_translated():

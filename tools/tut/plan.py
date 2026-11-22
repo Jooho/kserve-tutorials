@@ -5,6 +5,7 @@
 `./tut matrix --canary <ver>`   stable/deprecated tutorials against a new version of the product
 
 Blast radius rules (the reason envs are versioned):
+  tutorials/<id>/explainer/** -> nothing (an AI explainer is read, never executed)
   tutorials/<id>/**           -> <id>
   envs/<name>/<ver>/**        -> tutorials whose `env` is <name>/<ver>
   lib/<name>/<ver>/**         -> tutorials that list <name>/<ver> in `uses`
@@ -17,7 +18,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from .model import REPO_ROOT, Tutorial, load_tutorials
+from .model import EXPLAINER_DIR, REPO_ROOT, Tutorial, load_tutorials
 
 
 def changed_files(base: str, root: Path = REPO_ROOT) -> list[str]:
@@ -42,6 +43,8 @@ def affected(paths: list[str], tutorials: list[Tutorial]) -> list[Tutorial]:
         return list(tutorials)
     for p in paths:
         parts = Path(p).parts
+        if len(parts) >= 3 and parts[0] == "tutorials" and parts[2] == EXPLAINER_DIR:
+            continue
         if len(parts) >= 2 and parts[0] == "tutorials" and parts[1] in by_id:
             hit[parts[1]] = by_id[parts[1]]
         elif len(parts) >= 3 and parts[0] == "envs":

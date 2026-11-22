@@ -148,6 +148,48 @@ class UI:
         self.tutorial_or_404(request.match_info["tid"])
         return web.FileResponse(STATIC / "shell.html")
 
+    async def explainer_page(self, request):
+        """The AI explainer of a tutorial (tutorials/<id>/explainer/), in its own
+        browser tab. Rendered here, cleaned like a README, no script. The banner
+        comes from the marker, not from the page, so an explainer cannot hide
+        that an AI wrote it."""
+        from html import escape
+        from .. import explain
+        t = self.tutorial_or_404(request.match_info["tid"])
+        lang = request.query.get("lang", "en")
+        if lang not in LANGS or not t.explainer(lang).exists():
+            lang = "en"
+        p = t.explainer(lang)
+        if not p.exists():
+            raise web.HTTPNotFound(text=f"{t.id} has no explainer yet (./tut explain draft {t.id})")
+        mk, st = explain.marker(t, lang) or {}, explain.state(t, lang)
+        body = md.markdown(p.read_text(), extensions=["tables", "md_in_html", "sane_lists", "fenced_code"])
+        body = sanitize.clean(body)
+        base = f"/files/tutorials/{t.id}/explainer/"
+        body = re.sub(r'(src|href)="(?!https?:|#|/|mailto:)([^"]+)"',
+                      lambda m: f'{m.group(1)}="{base}{m.group(2)}"', body)
+        if lang == "ko":
+            banner = (f"AI({escape(mk.get('by', '?'))})가 이 튜토리얼을 실제 클러스터에서 단계별로 실행하며 "
+                      "확인한 내용으로 작성한 설명입니다. "
+                      + ("사람이 검토했습니다." if mk.get("reviewed") else "아직 사람이 검토하지 않았습니다.")
+                      + (" 튜토리얼이 이후에 바뀌었습니다." if st == "behind" else ""))
+        else:
+            banner = (f"Written by an AI ({escape(mk.get('by', '?'))}) from a step-by-step run of this "
+                      "tutorial on a real cluster. "
+                      + ("Reviewed by a person." if mk.get("reviewed") else "Not reviewed by a person yet.")
+                      + (" The tutorial changed since." if st == "behind" else ""))
+        html = f"""<!doctype html>
+<html lang="{lang}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(t.title(lang))} - explainer</title>
+<script src="/static/theme-boot.js"></script>
+<link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/explainer.css">
+</head><body class="explainer-page">
+<header class="ai-banner{' unreviewed' if not mk.get('reviewed') else ''}" role="note">{banner}</header>
+<main class="explainer-doc">{body}</main>
+</body></html>"""
+        return web.Response(text=html, content_type="text/html")
+
     async def ws_shell(self, request):
         """One extra shell per connection: it starts with the tutorial shell's
         variables and directory (env.sh), and ends when the tab is closed."""
@@ -267,6 +309,7 @@ class UI:
         return web.json_response({
             "id": tid, "lang": lang if t.readme(lang).exists() else "en",
             "translation": None if lang == "en" else tlint.translation_state(t, lang),
+            "explainer": {l: _explainer_state(t, l) for l in LANGS if t.explainer(l).exists()},
             "file": str(path.relative_to(self.root)), "html": html, "blocks": blocks,
             "states": self.block_states.get(tid, {}),
             "preview": {"stale": stale, "error": sync_error},
@@ -504,12 +547,18 @@ class UI:
             web.post("/api/tutorials/{tid}/translation", self.api_translate),
             web.get("/ws/{tid}", self.ws),
             web.get("/shell/{tid}", self.shell_page),
+            web.get("/explain/{tid}", self.explainer_page),
             web.get("/ws/shell/{tid}", self.ws_shell),
             web.get("/files/{path:.+}", self.files),
             web.static("/static", STATIC),
         ])
         app.on_shutdown.append(self.on_shutdown)
         return app
+
+
+def _explainer_state(t, lang: str) -> str | None:
+    from .. import explain
+    return explain.state(t, lang)
 
 
 async def _cmd(*args: str, timeout: float = 10) -> str:

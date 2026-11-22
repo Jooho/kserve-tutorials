@@ -1,0 +1,17 @@
+/* The AI explainer page (/explain/<id>): a readable column, pictures fit the
+   screen, and a banner that always says an AI wrote it. Colours from app.css. */
+body.explainer-page { height: auto; }
+.ai-banner { position: sticky; top: 0; z-index: 1; padding: 10px 16px; font-size: 14px;
+  background: var(--panel); border-bottom: 1px solid var(--border); color: var(--muted); }
+.ai-banner.unreviewed { color: var(--warn); }
+.explainer-doc { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; line-height: 1.65; }
+.explainer-doc h1 { font-size: 1.7em; line-height: 1.25; }
+.explainer-doc h2 { margin-top: 2em; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.explainer-doc img, .explainer-doc svg { max-width: 100%; height: auto; display: block; margin: 16px auto; }
+.explainer-doc pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+.explainer-doc :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.explainer-doc table { border-collapse: collapse; margin: 12px 0; display: block; overflow-x: auto; }
+.explainer-doc th, .explainer-doc td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.explainer-doc blockquote { margin: 12px 0; padding: 8px 14px; border-left: 3px solid var(--accent);
+  background: var(--panel); color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .explainer-doc img { animation: none; } }

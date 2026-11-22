@@ -227,6 +227,7 @@ details.pathbar .path-body { display: flex; flex-wrap: wrap; gap: 10px; align-it
 .problems li { margin: 2px 0; }
 .chip.bad { border-color: var(--bad); color: var(--bad); }
 .chip.pathchip { color: var(--path); border-color: var(--path); text-decoration: none; }
+.chip.explainchip { color: var(--accent); border-color: var(--accent); text-decoration: none; }
 /* ✎ Edit: README source next to its preview */
 .docbody.editing { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .editor { position: sticky; align-self: start; display: flex; flex-direction: column; gap: 6px;

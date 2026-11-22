@@ -30,6 +30,13 @@ Documents (README.md and translations)
   D014 shared steps (tut:define / tut:use, PoC): one definition per name, `use`
        an existing name, no markers inside a definition, do not use your own
 
+Explainers (tutorials/<id>/explainer/, AI-written, never executed; tut/explain.py)
+  X001 explainer/index.md missing, or its first line is not the AI marker
+  X002 no run / verify / cleanup blocks in an explainer
+  X003 broken relative link or image in an explainer
+  X004 unsafe SVG: <script>, on*= handlers, foreignObject, external href / url()
+  X005 AI explainer not reviewed yet, or README.md changed since (warning)
+
 Catalog (catalog/)
   G001 every tag must be listed in catalog/tags.yaml (suggests the closest one)
   G002 catalog/tags.yaml invalid (schema, unknown group)
@@ -195,6 +202,7 @@ class Linter:
             self.lint_meta(t, schema)
             self.lint_docs(t)
             self.lint_manifests(t)
+            self.lint_explainer(t)
         self.lint_catalog()
         self.lint_envs()
         self.lint_modules()
@@ -405,6 +413,11 @@ class Linter:
                      f"{seq_tr} vs {seq_en}")
 
     # ------------------------------------------------------------ manifests
+    def lint_explainer(self, t: Tutorial):
+        from . import explain
+        for sev, code, path, msg in explain.check(t):
+            (self.err if sev == "error" else self.warn)(code, path, msg)
+
     def lint_manifests(self, t: Tutorial):
         for f in sorted(t.path.rglob("*.y*ml")):
             if f.name == "tutorial.yaml" or f.suffix not in (".yaml", ".yml"):

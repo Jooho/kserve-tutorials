@@ -11,6 +11,24 @@ docs/handbook.md, ...), so a new session knows the rules even though it has
 no memory of earlier ones. Improve these prompts here when you find a better
 wording, so every session benefits.
 
+## Filling in the `<...>` parts
+
+| Placeholder | What to put there | How to find it |
+|---|---|---|
+| `<id>` of an existing tutorial | its folder name under `tutorials/` (= `id:` in its `tutorial.yaml`) | `./tut list` (first column), or `ls tutorials/` (not `_template`) |
+| `<id>` of a new tutorial | a new name: lowercase letters, digits and `-` | `./tut list` to make sure it is not taken |
+| `<collection>` | a file name in `catalog/collections/` without `.yaml`, or none | `./tut list --collection <name>` shows its members |
+| `<github-handle>` | the owner's GitHub login | `catalog/maintainers.yaml` |
+| `<tutorial>` (CI failure) | the id of the failed tutorial | the job name of the failed run |
+
+Example: `./tut list` shows `llmisvc-request-flow`, so prompt 5 becomes
+"Make the AI explainer for tutorials/llmisvc-request-flow ...". Whether a
+tutorial already has an explainer: `./tut explain status <id>`.
+
+In Claude Code you can also skip the exact id and say it in your own words
+("make the explainer for request-flow"); the agent looks it up with
+`./tut list`.
+
 | Task | Prompt |
 |---|---|
 | First session on a machine, or after a long break | [1. Build the context](#1-build-the-context) |
@@ -18,6 +36,7 @@ wording, so every session benefits.
 | A new tutorial from work you tested by hand | [3a. New tutorial from tested work](#3a-new-tutorial-from-tested-work) |
 | A new tutorial written from scratch | [3b. New tutorial from scratch](#3b-new-tutorial-from-scratch) |
 | A CI run, weekly run or canary failed | [4. Fix a CI failure](#4-fix-a-ci-failure) |
+| Teaching page with diagrams for a tutorial (AI explainer) | [5. Make an explainer](#5-make-an-explainer) |
 
 Before the first session: `make setup`, `./tut config TUT_AI=claude` (or
 `codex`), and for migrations a clone of the legacy repository next to this
@@ -168,3 +187,15 @@ plus a proposed lint rule (rule changes need my approval).
 Commit on the PR's branch, or on a new branch from origin/main if it is a
 failure on main; do not open a pull request until I ask.
 ```
+
+## 5. Make an explainer
+
+````text
+Make the AI explainer for tutorials/<id> (docs/explainer.md). Work unattended
+to the end: walk the tutorial on the cluster with ./tut explain start / next /
+probe / stop, verify every fact you state, write explainer/index.md (and
+index.ko.md if README.ko.md exists) with SVG diagrams and at least one animated
+flow, run ./tut explain check, then ./tut explain review (fix what it finds,
+no new walk, review once more), then report: what you verified, what differs
+from the README, and where I should look when I review. Do not mark it reviewed.
+````

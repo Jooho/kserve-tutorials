@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 450" role="img" aria-labelledby="t d">
+<title id="t">A new tutorial, step by step</title>
+<desc id="d">Six steps. 1 prepare once: make setup, make doctor, ./tut config TUT_AI=claude. 2 bring the material: scripts and manifests you tested, or a topic. 3 ask the agent with prompt 3a or 3b; the agent writes the README, runs it twice and commits. 4 try it yourself in ./tut ui. 5 optional explainer: say go. 6 ask for a pull request; CI runs the tutorial; you review and merge.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; fill: #2b3140; }
+  .you { font-size: 12px; font-weight: 700; fill: #1864ab; }
+  .ai { font-size: 12px; font-weight: 700; fill: #6741d9; }
+  .ci { font-size: 12px; font-weight: 700; fill: #2b8a3e; }
+  .box { fill: #f8f9fa; stroke: #868e96; stroke-width: 1.4; }
+  .opt { fill: #f8f9fa; stroke: #adb5bd; stroke-width: 1.3; stroke-dasharray: 5 4; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .ah { fill: #6b7385; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .you { fill: #74c0fc; } .ai { fill: #b197fc; } .ci { fill: #8ce99a; }
+    .box, .opt { fill: #1b2029; } .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+  }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+
+<text class="s" x="16" y="22">Who does what:</text>
+<text class="you" x="118" y="22">YOU</text>
+<text class="ai" x="160" y="22">AI agent</text>
+<text class="ci" x="230" y="22">CI</text>
+
+<!-- row 1 -->
+<rect class="box" x="16" y="36" width="268" height="170" rx="10"/>
+<text class="h" x="30" y="62">1  Prepare (once)</text>
+<text class="you" x="30" y="88">YOU</text>
+<text class="m" x="64" y="88">make setup</text>
+<text class="m" x="64" y="106">make doctor</text>
+<text class="m" x="64" y="124">./tut config TUT_AI=claude</text>
+<text class="s" x="30" y="156">Docker, git, curl, Python 3.11+.</text>
+<text class="s" x="30" y="174">Nothing else is installed.</text>
+
+<rect class="box" x="306" y="36" width="268" height="170" rx="10"/>
+<text class="h" x="320" y="62">2  Bring the material</text>
+<text class="you" x="320" y="88">YOU</text>
+<text class="s" x="354" y="88">a folder with the scripts and</text>
+<text class="s" x="354" y="106">manifests you tested by hand</text>
+<text class="s" x="354" y="130">or only a topic and the KServe</text>
+<text class="s" x="354" y="148">feature it should teach</text>
+<text class="s" x="320" y="182">Tested material gives a better draft.</text>
+
+<rect class="box" x="596" y="36" width="268" height="170" rx="10"/>
+<text class="h" x="610" y="62">3  Ask the agent</text>
+<text class="you" x="610" y="88">YOU</text>
+<text class="s" x="644" y="88">paste prompt 3a or 3b</text>
+<text class="s" x="644" y="106">(fill in id, owner)</text>
+<text class="ai" x="610" y="132">AI</text>
+<text class="s" x="644" y="132">branch, README with run and</text>
+<text class="s" x="644" y="150">verify blocks, ./tut run --twice,</text>
+<text class="s" x="644" y="168">Korean draft, commit</text>
+<text class="s" x="610" y="194">It stops and asks if it needs more.</text>
+
+<path class="arrow" d="M284 121 H304"/>
+<path class="arrow" d="M574 121 H594"/>
+<path class="arrow" d="M730 206 C 730 226, 150 222, 150 240"/>
+
+<!-- row 2 -->
+<rect class="box" x="16" y="242" width="268" height="170" rx="10"/>
+<text class="h" x="30" y="268">4  Try it yourself</text>
+<text class="you" x="30" y="294">YOU</text>
+<text class="m" x="64" y="294">./tut ui</text>
+<text class="s" x="64" y="312">run it step by step,</text>
+<text class="s" x="64" y="330">read the README,</text>
+<text class="s" x="64" y="348">ask the agent for changes</text>
+<text class="s" x="30" y="388">Every check turns green or red.</text>
+
+<rect class="opt" x="306" y="242" width="268" height="170" rx="10"/>
+<text class="h" x="320" y="268">5  Explainer (optional)</text>
+<text class="ai" x="320" y="294">AI</text>
+<text class="s" x="354" y="294">offers a teaching page</text>
+<text class="you" x="320" y="318">YOU</text>
+<text class="s" x="354" y="318">"go"</text>
+<text class="ai" x="320" y="342">AI</text>
+<text class="s" x="354" y="342">runs it on a cluster, writes</text>
+<text class="s" x="354" y="360">it, has it reviewed by an AI</text>
+<text class="s" x="320" y="388">Own PR. No effect on CI.</text>
+
+<rect class="box" x="596" y="242" width="268" height="170" rx="10"/>
+<text class="h" x="610" y="268">6  Pull request</text>
+<text class="you" x="610" y="294">YOU</text>
+<text class="s" x="644" y="294">"open a PR"</text>
+<text class="ci" x="610" y="318">CI</text>
+<text class="s" x="644" y="318">lint, tests, site, and the</text>
+<text class="s" x="644" y="336">tutorial end to end on Kind</text>
+<text class="you" x="610" y="360">YOU</text>
+<text class="s" x="644" y="360">review, merge</text>
+<text class="s" x="610" y="388">Fails? Prompt 4 finds the cause.</text>
+
+<path class="arrow" d="M284 327 H304"/>
+<path class="arrow" d="M574 327 H594"/>
+
+<text class="s" x="16" y="440">Moving a legacy tutorial instead? Steps 1, 3 (prompt 2) and 6 only.</text>
+</svg>
