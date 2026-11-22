@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 460" role="img" aria-labelledby="t d">
+<title id="t">The path of one completion request</title>
+<desc id="d">A request enters the Envoy Gateway, matches the HTTPRoute, whose backend is the InferencePool. Envoy asks the EPP scheduler over ExtProc gRPC which Pod to use, then forwards the request to the chosen vLLM Pod. Other paths go straight to the workload Service.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; fill: #2b3140; }
+  .n { font-size: 13px; font-weight: 700; fill: #ffffff; }
+  .gw { fill: #eef2ff; stroke: #3b5bdb; stroke-width: 1.5; }
+  .rt { fill: #f3f0ff; stroke: #7048e8; stroke-width: 1.5; }
+  .ep { fill: #e7f5ff; stroke: #1c7ed6; stroke-width: 1.5; }
+  .wl { fill: #ebfbee; stroke: #2f9e44; stroke-width: 1.5; }
+  .cl { fill: #f8f9fa; stroke: #868e96; stroke-width: 1.5; }
+  .side { fill: #f8f9fa; stroke: #adb5bd; stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .dash { stroke: #adb5bd; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; marker-end: url(#b); }
+  .ah { fill: #6b7385; } .bh { fill: #adb5bd; }
+  .badge { fill: #e03131; }
+  .dot { fill: #e03131; animation: travel 7s infinite; }
+  @keyframes travel {
+    0%   { transform: translate(90px, 90px); opacity: 0 }
+    4%   { opacity: 1 }
+    16%  { transform: translate(300px, 90px) }
+    30%  { transform: translate(510px, 90px) }
+    44%  { transform: translate(745px, 90px) }
+    58%  { transform: translate(745px, 300px) }
+    66%  { transform: translate(745px, 300px) }
+    82%  { transform: translate(510px, 300px) }
+    92%  { transform: translate(510px, 300px); opacity: 1 }
+    100% { transform: translate(510px, 300px); opacity: 0 }
+  }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; } .n { fill: #ffffff; }
+    .gw { fill: #1e2540; stroke: #748ffc; } .rt { fill: #241f3d; stroke: #9775fa; }
+    .ep { fill: #132a3d; stroke: #4dabf7; } .wl { fill: #16301d; stroke: #51cf66; }
+    .cl, .side { fill: #1b2029; } .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+  }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; transform: translate(745px, 300px); } }
+</style>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="bh" d="M0 0L10 5L0 10z"/></marker>
+</defs>
+
+<!-- top row -->
+<rect class="cl" x="16" y="46" width="148" height="88" rx="10"/>
+<text class="h" x="30" y="70">Client</text>
+<text class="m" x="30" y="90">POST</text>
+<text class="m" x="30" y="106">/&lt;ns&gt;/demo-model</text>
+<text class="m" x="30" y="122">/v1/completions</text>
+
+<rect class="gw" x="206" y="40" width="190" height="100" rx="10"/>
+<text class="h" x="220" y="66">Gateway (Envoy)</text>
+<text class="m" x="220" y="86">kserve/</text>
+<text class="m" x="220" y="102">kserve-ingress-gateway</text>
+<text class="s" x="220" y="124">node IP : NodePort (Kind)</text>
+
+<rect class="rt" x="418" y="40" width="200" height="100" rx="10"/>
+<text class="h" x="432" y="66">HTTPRoute</text>
+<text class="m" x="432" y="86">match .../v1/completions</text>
+<text class="m" x="432" y="102">rewrite -> /v1/completions</text>
+<text class="s" x="432" y="124">backend: InferencePool</text>
+
+<rect class="rt" x="640" y="40" width="224" height="100" rx="10"/>
+<text class="h" x="654" y="66">InferencePool</text>
+<text class="m" x="654" y="86">selector: workload Pods</text>
+<text class="m" x="654" y="102">targetPort 8000</text>
+<text class="s" x="654" y="124">endpointPicker: EPP :9002</text>
+
+<path class="arrow" d="M164 90 H204"/>
+<path class="arrow" d="M396 90 H416"/>
+<path class="arrow" d="M618 90 H638"/>
+<path class="arrow" d="M752 140 V238"/>
+<path class="arrow" d="M640 300 H624"/>
+
+<!-- bottom row -->
+<rect class="ep" x="640" y="240" width="224" height="120" rx="10"/>
+<text class="h" x="654" y="266">EPP scheduler</text>
+<text class="m" x="654" y="286">ExtProc gRPC :9002</text>
+<text class="m" x="654" y="304">queue-scorer x2</text>
+<text class="m" x="654" y="320">prefix-cache-scorer x3</text>
+<text class="m" x="654" y="336">max-score-picker -> Pod IP</text>
+
+<rect class="wl" x="418" y="240" width="200" height="120" rx="10"/>
+<text class="h" x="432" y="266">vLLM Pod</text>
+<text class="m" x="432" y="286">demo-model-kserve-...</text>
+<text class="m" x="432" y="304">vllm serve /mnt/models</text>
+<text class="m" x="432" y="320">:8000</text>
+<text class="s" x="432" y="344">answer goes back via Envoy</text>
+
+<rect class="side" x="206" y="240" width="190" height="120" rx="10"/>
+<text class="h" x="220" y="266">workload Service</text>
+<text class="m" x="220" y="286">...-workload-svc :8000</text>
+<text class="s" x="220" y="310">other paths under</text>
+<text class="s" x="220" y="326">/&lt;ns&gt;/demo-model go</text>
+<text class="s" x="220" y="342">here, without the EPP</text>
+<path class="dash" d="M470 140 C 430 190, 330 200, 310 238"/>
+<path class="dash" d="M396 300 H416"/>
+
+<!-- numbered steps -->
+<g><circle class="badge" cx="185" cy="72" r="10"/><text class="n" x="181" y="77">1</text></g>
+<g><circle class="badge" cx="407" cy="72" r="10"/><text class="n" x="403" y="77">2</text></g>
+<g><circle class="badge" cx="629" cy="72" r="10"/><text class="n" x="625" y="77">3</text></g>
+<g><circle class="badge" cx="772" cy="190" r="10"/><text class="n" x="768" y="195">4</text></g>
+<g><circle class="badge" cx="630" cy="322" r="10"/><text class="n" x="626" y="327">5</text></g>
+
+<circle class="dot" r="7" cx="0" cy="0" transform="translate(510 300)"/>
+
+<text class="s" x="16" y="400">1 Envoy receives it - 2 the HTTPRoute matches the path and strips the prefix - 3 its backend is the InferencePool</text>
+<text class="s" x="16" y="420">4 Envoy asks the EPP (ExtProc) which Pod; the scorers decide - 5 Envoy sends the request to that vLLM Pod</text>
+<text class="s" x="16" y="444">Dashed: the route also has a catch-all rule straight to the workload Service, which skips the EPP.</text>
+</svg>

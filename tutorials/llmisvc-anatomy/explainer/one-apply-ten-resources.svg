@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" role="img" aria-labelledby="t d">
+<title id="t">One apply, ten resources</title>
+<desc id="d">kubectl apply creates one LLMInferenceService; the KServe controller then creates ten objects in four groups, all owned by the LLMInferenceService.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #2b3140; }
+  .src { fill: #eef2ff; stroke: #3b5bdb; stroke-width: 1.5; }
+  .ctl { fill: #f3f0ff; stroke: #7048e8; stroke-width: 1.5; }
+  .grp { fill: none; stroke: #c3c9d4; stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .res { fill: #ffffff; stroke: #868e96; stroke-width: 1.2; }
+  .tls { stroke: #e67700; } .wl { stroke: #2f9e44; } .sch { stroke: #1c7ed6; } .net { stroke: #7048e8; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .ah { fill: #6b7385; }
+  .r { animation: appear 10s infinite backwards; }   /* visible if animation does not run */
+  .r1 { animation-delay: .6s } .r2 { animation-delay: 1.1s } .r3 { animation-delay: 1.6s } .r4 { animation-delay: 2.1s }
+  .r5 { animation-delay: 2.6s } .r6 { animation-delay: 3.1s } .r7 { animation-delay: 3.6s } .r8 { animation-delay: 4.1s }
+  .r9 { animation-delay: 4.6s } .r10 { animation-delay: 5.1s }
+  @keyframes appear { 0% { opacity: 0 } 4% { opacity: 1 } 80% { opacity: 1 } 90%, 100% { opacity: 0 } }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .src { fill: #1e2540; stroke: #748ffc; } .ctl { fill: #241f3d; stroke: #9775fa; }
+    .res { fill: #161a22; } .grp { stroke: #3a4150; } .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+  }
+  @media (prefers-reduced-motion: reduce) { .r { animation: none; opacity: 1; } }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+
+<rect class="src" x="16" y="40" width="200" height="74" rx="10"/>
+<text class="h" x="30" y="66">kubectl apply</text>
+<text class="m" x="30" y="88">manifests/llmisvc-cpu.yaml</text>
+<text class="s" x="30" y="105">one LLMInferenceService</text>
+
+<rect class="src" x="16" y="150" width="200" height="60" rx="10"/>
+<text class="h" x="30" y="175">LLMInferenceService</text>
+<text class="m" x="30" y="196">demo-model</text>
+
+<rect class="ctl" x="16" y="246" width="200" height="60" rx="10"/>
+<text class="h" x="30" y="271">KServe controller</text>
+<text class="s" x="30" y="292">+ well-known configs merged</text>
+
+<path class="arrow" d="M116 114 V148"/>
+<path class="arrow" d="M116 210 V244"/>
+<path class="arrow" d="M216 276 H252"/>
+
+<!-- groups -->
+<rect class="grp" x="256" y="18" width="296" height="122" rx="10"/>
+<text class="s" x="268" y="36">Workload (model serving)</text>
+<rect class="grp" x="568" y="18" width="296" height="122" rx="10"/>
+<text class="s" x="580" y="36">TLS</text>
+<rect class="grp" x="256" y="152" width="608" height="146" rx="10"/>
+<text class="s" x="268" y="170">Scheduler (picks the Pod for each request)</text>
+<rect class="grp" x="256" y="310" width="608" height="80" rx="10"/>
+<text class="s" x="268" y="328">Traffic wiring</text>
+
+<g class="r r1"><rect class="res wl" x="268" y="44" width="272" height="40" rx="7"/><text class="m" x="280" y="69">Deployment demo-model-kserve (vLLM)</text></g>
+<g class="r r2"><rect class="res wl" x="268" y="92" width="272" height="40" rx="7"/><text class="m" x="280" y="117">Service ...-workload-svc :8000</text></g>
+<g class="r r3"><rect class="res tls" x="580" y="68" width="272" height="40" rx="7"/><text class="m" x="592" y="93">Secret ...-self-signed-certs</text></g>
+<g class="r r4"><rect class="res sch" x="268" y="178" width="290" height="40" rx="7"/><text class="m" x="280" y="203">Deployment ...-router-scheduler</text></g>
+<g class="r r5"><rect class="res sch" x="566" y="178" width="286" height="40" rx="7"/><text class="m" x="578" y="203">Service demo-model-epp-service</text></g>
+<g class="r r6"><rect class="res sch" x="268" y="226" width="186" height="40" rx="7"/><text class="m" x="280" y="251">ServiceAccount</text></g>
+<g class="r r7"><rect class="res sch" x="462" y="226" width="186" height="40" rx="7"/><text class="m" x="474" y="251">Role</text></g>
+<g class="r r8"><rect class="res sch" x="656" y="226" width="196" height="40" rx="7"/><text class="m" x="668" y="251">RoleBinding</text></g>
+<g class="r r9"><rect class="res net" x="268" y="336" width="290" height="40" rx="7"/><text class="m" x="280" y="361">InferencePool ...-inference-pool</text></g>
+<g class="r r10"><rect class="res net" x="566" y="336" width="286" height="40" rx="7"/><text class="m" x="578" y="361">HTTPRoute ...-kserve-route</text></g>
+
+<text class="s" x="16" y="420">All 10 carry an ownerReference to LLMInferenceService/demo-model: delete it and Kubernetes deletes them.</text>
+</svg>
