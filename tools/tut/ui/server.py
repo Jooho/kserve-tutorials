@@ -571,7 +571,44 @@ async def _cmd(*args: str, timeout: float = 10) -> str:
         return ""
 
 
-def serve(port: int = 8080, open_browser: bool = True, root: Path = REPO_ROOT):
+# Not 8080: tutorials and kubectl port-forward examples use it all the time.
+DEFAULT_PORT = 8765
+PORT_TRIES = 20
+
+
+class PortError(Exception):
+    pass
+
+
+def _free(port: int, host: str = "127.0.0.1") -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+        except OSError:
+            return False
+    return True
+
+
+def pick_port(requested: int | None = None, start: int = DEFAULT_PORT,
+              tries: int = PORT_TRIES) -> tuple[int, str | None]:
+    """(port, note). A port you asked for is used or refused, never swapped; the
+    default moves to the next free port and says so."""
+    if requested:
+        if not _free(requested):
+            raise PortError(f"port {requested} is in use; pick another with --port or "
+                            "TUT_UI_PORT, or leave both unset to get a free one")
+        return requested, None
+    for port in range(start, start + tries):
+        if _free(port):
+            return port, (None if port == start else f"port {start} is in use, using {port}")
+    raise PortError(f"ports {start}-{start + tries - 1} are all in use; set one with --port")
+
+
+def serve(port: int | None = None, open_browser: bool = True, root: Path = REPO_ROOT):
+    port, note = pick_port(port)
+    if note:
+        print(note, flush=True)
     ui = UI(root)
     url = f"http://127.0.0.1:{port}/?token={ui.token}"
     print(f"{project.load(root).name} tutorials UI: {url}\n(commands run on this machine as you; Ctrl+C to stop)",

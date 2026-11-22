@@ -141,6 +141,7 @@ Precedence everywhere: **shell > `.tut.env` > default**. Set with `./tut config 
 | `TUT_AI` | your AI CLI for `draft` and translations: `claude`, `copilot`, `codex` or `cmd:<command>` |
 | `TUT_AI_ARGS` | extra flags for it, e.g. `--model sonnet` |
 | `TUT_AI_REVIEW` | AI CLI that reviews an explainer (`explain review`, end of `explain draft`); default: `TUT_AI` |
+| `TUT_UI_PORT` | port of `./tut ui`; default 8765, or the next free port when 8765 is taken (a port you set is never swapped) |
 | `TUT_AI_REVIEW_ARGS` | extra flags for it |
 | `TUT_TRANSLATOR`, `TUT_TRANSLATOR_ARGS` | older names of the two above, still read |
 
