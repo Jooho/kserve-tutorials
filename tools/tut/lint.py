@@ -27,6 +27,8 @@ Documents (README.md and translations)
        `helm install`, `>>`, `kubectl delete` without --ignore-not-found) unless
        the block is marked `once`; warning for drafts
   D013 the UI terminal's aliases (k, kc) must not appear in README blocks
+  D015 README images: <a href="X" target="_blank"><img src="X" width="720" alt="..."></a>
+       (fixed width, full size in a new tab), not ![..](X)
   D014 shared steps (tut:define / tut:use, PoC): one definition per name, `use`
        an existing name, no markers inside a definition, do not use your own
 
@@ -103,6 +105,8 @@ NOT_IDEMPOTENT = [
 ]
 UI_ALIAS_RE = re.compile(r"(?:^|[|;&(]\s*|\$\(\s*)(k|kc)\s")
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|(?:src|href)=\"([^\"]+)\"")
+MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)[^)]*\)")
+IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.I)
 
 
 @dataclass
@@ -357,6 +361,21 @@ class Linter:
                 p = (path.parent / target.split("#")[0]).resolve()
                 if not p.exists():
                     self.err("D004", path, f"broken link: {target}", n)
+        # D015 images: fixed width, open full size in a new tab
+        for n, line in _strip_code(text):
+            if n in region_lines:
+                continue
+            for m in MD_IMAGE_RE.finditer(line):
+                self.err("D015", path, f"image {m.group(1)}: write <a href=\"{m.group(1)}\" "
+                         f"target=\"_blank\"><img src=\"{m.group(1)}\" width=\"720\" alt=\"...\"></a> "
+                         "(fixed width, full size in a new tab)", n)
+            for m in IMG_TAG_RE.finditer(line):
+                tag = m.group(0)
+                missing = [w for w, ok in (('width="720"', 'width="720"' in tag), ("alt", " alt=" in tag),
+                                           ('a link with target="_blank"', 'target="_blank"' in line)) if not ok]
+                if missing:
+                    self.err("D015", path, f"<img> needs {', '.join(missing)} (fixed width, full size "
+                             "in a new tab)", n)
         # D005 include scope: own directory or a declared module
         allowed = [t.path.resolve()] + [self.modules[u].path.resolve()
                                         for u in t.uses if u in self.modules]

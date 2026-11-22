@@ -18,7 +18,7 @@ FAKE_AI = textwrap.dedent('''
     work = re.search(r"write (build/draft/[a-z0-9-]+)/notes.md", prompt).group(1)
     t = pathlib.Path("tutorials") / tid
     readme = (t / "README.md").read_text()
-    step = ("## Deploy\\n\\n![Architecture](images/arch.svg)\\n\\n```bash run\\nkubectl apply -f manifests/model.yaml -n \\"$NS\\"\\n```\\n\\n"
+    step = ("## Deploy\\n\\n<a href=\\"images/arch.svg\\" target=\\"_blank\\"><img src=\\"images/arch.svg\\" width=\\"720\\" alt=\\"Architecture\\"></a>\\n\\n```bash run\\nkubectl apply -f manifests/model.yaml -n \\"$NS\\"\\n```\\n\\n"
             "```bash verify retry=30 delay=10\\nkubectl wait -n \\"$NS\\" isvc/m --for=condition=Ready --timeout=10s\\n```\\n\\n")
     readme = re.sub(r"## Step 1:.*?(?=## |\\Z)", step, readme, count=1, flags=re.S)
     (t / "README.md").write_text(readme)

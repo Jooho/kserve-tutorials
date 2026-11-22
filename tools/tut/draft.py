@@ -217,7 +217,9 @@ def build_prompt(tid: str, inp: Path, work: Path, files: list[str], skipped: lis
     if assets:
         big += ("\nImages and binary files are ALREADY copied into tutorials/" + tid + "/ at the same "
                 "relative path (you cannot write binary files): " + ", ".join(assets) +
-                ". Link images with relative paths, e.g. ![Architecture](images/architecture.svg); "
+                ". Link images with relative paths and a fixed width that opens full size (D015): "
+                '<a href="images/architecture.svg" target="_blank"><img src="images/architecture.svg" '
+                'width="720" alt="what it shows"></a>; '
                 "refer to the other files by those paths. Copies nothing refers to are removed afterwards.")
     return f"""You turn a folder of TESTED work into a {proj.name} tutorial in this repository's format.
 Work in the repository at {root}.
