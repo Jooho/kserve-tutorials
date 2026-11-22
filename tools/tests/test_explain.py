@@ -264,3 +264,17 @@ def test_review_needs_the_evidence_of_a_walk(repo):
     write_explainer(d, t)
     with pytest.raises(explain.ExplainError):
         explain.review(t, Agent("cmd", ["true"], shell=True), root=repo, log=lambda *_: None)
+
+
+def test_pictures_open_at_full_size_on_the_page(repo):
+    """zoom.js: a click on a picture opens it in a dialog instead of replacing the
+    page (README pictures are links to themselves and lose target= when cleaned).
+    Both pages load the script, and it is ours (the CSP allows only 'self')."""
+    d, t = tut(repo)
+    write_explainer(d, t)
+    _, _, page = ui_fetch(repo, "/explain/t")
+    _, _, index = ui_fetch(repo, "/")
+    assert '<script src="/static/zoom.js"></script>' in page
+    assert '<script src="/static/zoom.js"></script>' in index
+    status, _, js = ui_fetch(repo, "/static/zoom.js")
+    assert status == 200 and "showModal" in js and "#doc img, .explainer-doc img" in js
