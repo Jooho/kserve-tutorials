@@ -53,6 +53,13 @@ def sandbox(tmp_path):
           exit 0
         fi
         [[ "$args" == *"get llminferenceserviceconfig"* ]] && exit 1
+        # inferenceservice-config .data.deploy lives in state/deploy (absent: not readable)
+        if [[ "$args" == *"get configmap inferenceservice-config"* ]]; then [ -f $S/deploy ] && cat $S/deploy || exit 1; exit 0; fi
+        if [[ "$args" == *"patch configmap inferenceservice-config"* ]]; then
+          printf '%s' "${{@: -1}}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["deploy"], end="")' > $S/deploy
+          echo patched >> $S/deploy_patches; exit 0
+        fi
+        [[ "$args" == *"rollout restart deployment/kserve-controller-manager"* ]] && {{ echo restarted >> $S/restarts; exit 0; }}
         [[ "$args" == "apply -f -" ]] && cat >/dev/null
         exit 0
         ''')
@@ -212,3 +219,49 @@ def test_lint_T008_env_options(tmp_path):
     assert any("'foo' is not one of" in e for e in errors({"types": ["kserve", "foo"]}))
     assert any("has no option 'gpu'" in e for e in errors({"gpu": True}))
     assert any("keda needs mode standard" in e for e in errors({"mode": "serverless", "keda": True}))
+
+
+# CI-014: KServe standard added to an llmisvc cluster kept the shared
+# inferenceservice-config at defaultDeploymentMode Knative, so an InferenceGraph
+# (no deploymentMode annotation) was rejected.
+def test_kserve_added_to_an_llmisvc_cluster_gets_the_standard_default(sandbox):
+    run, read, state = sandbox
+    run({"TUT_ENV_TYPES": "llmisvc"})
+    (state / "deploy").write_text('{"defaultDeploymentMode": "Knative"}')
+    run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "standard"})
+    assert read("deploy") == ['{"defaultDeploymentMode": "Standard"}']
+    assert read("deploy_patches") == ["patched"] and read("restarts") == ["restarted"]
+
+
+def test_reused_cluster_with_the_wrong_default_is_repaired_once(sandbox):
+    run, read, state = sandbox
+    run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "standard"})
+    (state / "deploy").write_text('{"defaultDeploymentMode": "Knative", "other": 1}')
+    run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "standard"})      # reuse path
+    run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "standard"})      # now nothing to do
+    import json
+    assert json.loads(read("deploy")[0]) == {"defaultDeploymentMode": "Standard", "other": 1}
+    assert read("deploy_patches") == ["patched"]
+
+
+@pytest.mark.parametrize("current", ["Standard", "RawDeployment"])
+def test_a_standard_default_is_left_alone(sandbox, current):
+    run, read, state = sandbox
+    (state / "deploy").write_text('{"defaultDeploymentMode": "%s"}' % current)
+    run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "standard"})
+    assert read("deploy_patches") == [] and read("restarts") == []
+
+
+def test_an_llmisvc_only_cluster_gets_standard_too(sandbox):
+    # no Knative in this profile: Knative only when KServe runs in serverless mode
+    run, read, state = sandbox
+    (state / "deploy").write_text('{"defaultDeploymentMode": "Knative"}')
+    run({"TUT_ENV_TYPES": "llmisvc"})
+    assert read("deploy") == ['{"defaultDeploymentMode": "Standard"}']
+
+
+def test_serverless_keeps_knative(sandbox):
+    run, read, state = sandbox
+    (state / "deploy").write_text('{"defaultDeploymentMode": "Knative"}')
+    run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "serverless"})
+    assert read("deploy_patches") == []
