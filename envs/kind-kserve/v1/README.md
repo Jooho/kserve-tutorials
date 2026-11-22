@@ -194,6 +194,32 @@ lb_ready() {   # $1 = types on the cluster; only llmisvc installs a Gateway
   return 1
 }
 
+# KServe's default deployment mode lives in the shared inferenceservice-config,
+# which the first KServe part installed on the cluster owns. An llmisvc install
+# sets it to Knative although this profile installs no Knative, and KServe
+# standard added later keeps it (createSharedResources=false), so objects
+# without a deploymentMode annotation, e.g. an InferenceGraph, were rejected:
+# "not possible to use Knative deployment mode" (CI-014). Standard unless the
+# cluster runs KServe in serverless mode.
+ensure_default_mode() {   # <types> <kserve mode>
+  local want ok cur
+  if has "$1" kserve && [[ "$2" == serverless ]]; then want=Knative ok=" Knative Serverless "
+  else want=Standard ok=" Standard RawDeployment "; fi
+  cur=$(kubectl -n kserve get configmap inferenceservice-config -o jsonpath='{.data.deploy}' 2>/dev/null || true)
+  [[ -n "$cur" ]] || return 0   # not readable: leave it to KServe
+  cur_mode=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1]).get("defaultDeploymentMode", ""))' "$cur")
+  [[ "$ok" == *" $cur_mode "* ]] && return 0
+  log "inferenceservice-config: defaultDeploymentMode '$cur_mode' -> $want ($2 mode)"
+  new=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); d["defaultDeploymentMode"] = sys.argv[2]
+print(json.dumps({"data": {"deploy": json.dumps(d)}}))' "$cur" "$want")
+  kubectl -n kserve patch configmap inferenceservice-config --type merge -p "$new"
+  # an llmisvc-only cluster has no KServe controller to restart
+  if kubectl -n kserve get deployment kserve-controller-manager >/dev/null 2>&1; then
+    kubectl -n kserve rollout restart deployment/kserve-controller-manager
+    kubectl -n kserve rollout status deployment/kserve-controller-manager --timeout=180s
+  fi
+}
+
 # 1. An existing cluster: reuse it, add what is missing, or stop.
 HAVE="" HAVE_MODE="" HAVE_KEDA="false" ADD="$WANT" CREATE=1
 if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
@@ -227,6 +253,7 @@ if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
     kubectl config use-context "kind-$KIND_CLUSTER_NAME" >/dev/null
     start_lb 0
     if [[ -z "$ADD" ]]; then
+      ensure_default_mode "$HAVE" "$HAVE_MODE"   # also repairs a cluster set up before CI-014
       lb_ready "$HAVE" || exit 1
       log "cluster '$KIND_CLUSTER_NAME' already provides ${HAVE} (KServe $KSERVE_VERSION) — reusing"
       exit 0
@@ -300,6 +327,8 @@ if has "$ALL" llmisvc && kubectl -n kserve get llminferenceserviceconfig kserve-
     | sed "s#ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1#${SCHEDULER_IMAGE}#g" \
     | kubectl replace -f -
 fi
+
+ensure_default_mode "$ALL" "${HAVE_MODE:-$MODE}"
 
 # 4. Readiness gate: the profile is only "done" when the controllers serve.
 has "$ALL" kserve  && kubectl wait --for=condition=Established crd/inferenceservices.serving.kserve.io --timeout=120s
