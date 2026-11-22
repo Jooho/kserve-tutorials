@@ -53,7 +53,7 @@ Straightforward: one prompt does it. Paste [prompt 2](prompts.md#2-migrate-a-tut
 
 ## Good to know
 
-- The agent never opens a PR, merges or pushes to `stable` unless you ask.
+- Work you ordered is opened as a PR once the tech lead agent has passed it; the agent tells you the link. It never merges or pushes to `stable` unless you ask. (The prompts in prompts.md say "do not open a pull request until I ask"; with those, it waits.)
 - One tutorial per branch and per PR.
 - A tutorial stays `draft` until CI has run it; `stable` comes later.
 - Where things are explained: [authoring.md](authoring.md) (how a tutorial is written), [handbook.md](handbook.md) (how the repository works, for structural work).

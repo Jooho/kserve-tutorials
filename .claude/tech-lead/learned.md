@@ -66,11 +66,12 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
 - They said: "Nothing with git without my permission." "Merge when CI passes" was given per PR, several times.
 - So: commit, push, PR, merge and branch deletion each need the maintainer's word for that case; an approval does not carry to the next PR.
 - Applies to: what the tech lead may wave through (never these) and what it must ask.
+- Narrowed on 2026-11-21 by "Up to the PR" (Q6 answered): for work the maintainer ordered and the tech lead passed, commit, push and opening the PR need no further word. Merge, deleting or force-pushing a branch, repository settings and cluster-wide state stay per action, as does everything nobody ordered.
 
 ### 2026-11-21 A planner proposes, issues need the maintainer, the tech lead runs them
 - Asked / situation: the tech-lead agent had just been built from the analysis of the whole project; nothing was asked.
 - They said: "On that basis, can you also make a project-planner agent? I want it to think of the plans this project needs in order to go well, from the UI to helping the project proceed safely as open source. I am not asking for anything too complex or too big. And in the end it creates issues, with my permission. Later the tech-lead checks them one by one and gives out the actual work. And the tech-lead checks and then proceeds."
-- So: plans come from a separate planner and cover the whole project (UI through open-source safety); the planner and its plans stay small and simple; an issue is created only with the maintainer's permission; the tech lead takes approved issues one at a time, checks each before work is handed out, and checks the result. Not settled by this: whether "checks and then proceeds" means the tech lead may go on to the next step (PR, next issue) without asking each time. Until they say, "Approvals are per action" (above) stands.
+- So: plans come from a separate planner and cover the whole project (UI through open-source safety); the planner and its plans stay small and simple; an issue is created only with the maintainer's permission; the tech lead takes approved issues one at a time, checks each before work is handed out, and checks the result. Not settled by this: whether "checks and then proceeds" means the tech lead may go on to the next step (PR, next issue) without asking each time. Until they say, "Approvals are per action" (above) stands. Settled on 2026-11-21 by "Up to the PR" (below).
 - Applies to: the project-planner agent, mode "Run an issue", any proposal of new process or agents (keep it small).
 
 ### 2026-11-21 Open: agents by framework
@@ -90,7 +91,7 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
   - Q5: the gate covers plans, commits, PRs and merges only; answers to questions and small confirmations go straight through.
 - Applies to: the PR that adds the agents; issue filing; what must be gated; what may be written in this notebook.
 
-### 2026-11-21 Still open: what "the tech lead checks and proceeds" allows (Q6)
+### 2026-11-21 Still open: what "the tech lead checks and proceeds" allows (Q6) - answered, superseded by 2026-11-21 "Up to the PR"
 - Asked / situation: Q6 offered options (a)/(b)/(c) without a recommendation.
 - They said: nothing that selects an option ("let's do it that way" has nothing to point at here).
 - So: not decided. The working agent keeps (a) as an assumption - PR and merge need the maintainer's word each time - and has told the maintainer so and asked them to say if they want (b) or (c). "Approvals are per action" stands. Do not record (a) as their decision, and do not ask again unless work is blocked on it.
@@ -101,3 +102,14 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
 - They said: one short sentence accepting everything.
 - So: the maintainer answers a list as a whole and takes what is recommended. Every question must carry a marked recommendation and the assumption used if they say nothing; a question without one comes back unanswered (Q6). Put the one question that really needs their own choice first and alone, and keep the list short: one "ok" covers only what a recommendation points at. After such an answer the agent states its reading per question before acting (as was done here; see "A question is a question").
 - Applies to: section "For the maintainer" of every report.
+
+### 2026-11-21 Up to the PR (Q6 answered)
+- Asked / situation: Q6, asked a second time because the first answer selected nothing: what does "the tech lead checks and proceeds" allow? (a) PR and merge each need the maintainer's word; (b) when the tech lead passes it, open the PR, only the merge needs their word; (c) approved issues are handled through to the merge.
+- They said: "Up to the PR, you may open it." (their whole answer, translated from Korean)
+- So: option (b). Once the tech lead has passed work the maintainer ordered, the agent commits, pushes and opens the PR without asking again and gives the maintainer the link with the verdict. "Up to" is the limit: the merge is theirs, each time. Their words name only the PR; the rest is the working agent's reading, told to them, and a later correction outranks it:
+  - "ordered" means an approved issue or an instruction of theirs in the conversation (the question was about issues; the instruction case is the reading);
+  - commit and push are included because a PR cannot be opened without them;
+  - deleting or force-pushing a branch, repository settings and cluster-wide state were not mentioned, so they stay per action;
+  - a plan, and anything nobody ordered, still goes to the maintainer before anything is done;
+  - an instruction that says otherwise for one piece of work ("do not open a pull request until I ask", as the prompts in docs/prompts.md do) wins for that work.
+- Applies to: mode "Gate" (what passing allows), mode "Run an issue", AGENTS.md "How to work" step 4. A rule for everyone, so it is written in AGENTS.md and docs/handbook.md section 9, not only here.

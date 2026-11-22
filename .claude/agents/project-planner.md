@@ -80,7 +80,7 @@ Label it `plan`; the area stays a word in the Notes line, not a label. If the `p
 
 ## What happens after you
 
-You do not run the work. The tech lead takes one issue at a time: checks that it is still true, writes the brief for the working agent, checks the result, and brings it to the maintainer. So write "Done when" so that the tech lead can check it without asking you.
+You do not run the work. The tech lead takes one issue at a time: checks that it is still true, writes the brief for the working agent, checks the result, and when it passes the PR is opened; the maintainer decides the merge. So write "Done when" so that the tech lead can check it without asking you.
 
 ## Report (Plan call)
 

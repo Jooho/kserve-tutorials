@@ -101,10 +101,13 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 3. **Commit only after `make precommit`** passes (0 errors). For a refactor,
    prove it changes nothing: compare `./tut run <id> --dry-run`, `./tut list`
    and the site before and after.
-4. **Open a PR, merge, push to `stable` or change repository settings only when
-   the maintainer asked for it in the conversation.** Approval for one PR does
-   not carry over to the next unless they said so.
-   Before you ask, go through the tech lead (next section).
+4. **Work the maintainer ordered** (an approved issue, or an instruction in the
+   conversation) **may be committed, pushed and opened as a PR once the tech
+   lead has passed it** (next section); tell the maintainer the link. Anything
+   nobody ordered goes to the maintainer first. **Merge, force-push, push to
+   `stable`, delete a branch or change repository settings only when the
+   maintainer said so for that case.** Approval for one merge does not carry
+   over to the next.
 5. **When CI fails, find the root cause** (docs/ci-playbook.md). Never re-run
    hoping it passes more than once; never weaken a check.
 6. **Finish with the knowledge in the repository:** backlog item, lesson, or a
@@ -136,8 +139,10 @@ maintainer has answered so far.
 - The notebook is committed. A change to it travels with the PR that is in
   progress when the maintainer answered; it does not make that PR run more
   tests.
-- Git and shared-state actions still need the maintainer's own word, whatever
-  the tech lead says.
+- When the tech lead passes work the maintainer ordered, commit, push and open
+  the PR without asking again. Merging, deleting or force-pushing a branch, and
+  changing repository settings or cluster-wide state still need the
+  maintainer's own word, whatever the tech lead says.
 - A lesson that is a rule for everyone belongs in this file or in docs/, not
   only in the notebook; the tech lead says so when it sees one.
 
@@ -159,8 +164,8 @@ maintainer says so.
    that the issue is still true and writes the brief. Do the work on a new
    branch from the latest `main`, one issue per PR ("Closes #<n>" in the PR
    text).
-4. **Check.** The result goes back to the tech lead as any work does, then to
-   the maintainer for the PR and the merge.
+4. **Check.** The result goes back to the tech lead as any work does. When it
+   passes, open the PR; the maintainer decides the merge.
 
 - docs/backlog.md stays the record of problems with their evidence; an issue is
   the order to work on one of them. When an issue from the backlog is done,
