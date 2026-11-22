@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" role="img" aria-labelledby="t d">
+<title id="t">One x-request-id, three places to find it</title>
+<desc id="d">The x-request-id appears in the answer body as cmpl-id, in the Envoy access log with upstream_host, duration and response_code, and in the EPP scheduler log as received, sent request body and sent response body lines, three sets for the traced request in this run. upstream_host leads to the vLLM Pod with kubectl get pods -o wide.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; fill: #2b3140; }
+  .gw { fill: #eef2ff; stroke: #3b5bdb; stroke-width: 1.5; }
+  .ep { fill: #e7f5ff; stroke: #1c7ed6; stroke-width: 1.5; }
+  .wl { fill: #ebfbee; stroke: #2f9e44; stroke-width: 1.5; }
+  .cl { fill: #f8f9fa; stroke: #868e96; stroke-width: 1.5; }
+  .tag { fill: #fff4e6; stroke: #e8590c; stroke-width: 1.4; }
+  .tagt { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; fill: #a33a00; }
+  .hi { fill: #a33a00; }
+  .link { stroke: #e8590c; stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .ah { fill: #6b7385; }
+  .pulse { animation: pulse 6s infinite backwards; }
+  .p2 { animation-delay: 2s; } .p3 { animation-delay: 4s; }
+  @keyframes pulse { 0%, 30% { stroke-width: 3 } 34%, 100% { stroke-width: 1.5 } }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .gw { fill: #1e2540; stroke: #748ffc; } .ep { fill: #132a3d; stroke: #4dabf7; }
+    .wl { fill: #16301d; stroke: #51cf66; } .cl { fill: #1b2029; }
+    .tag { fill: #3a2414; stroke: #ff922b; } .tagt, .hi { fill: #ffc078; } .link { stroke: #ff922b; }
+    .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+
+<rect class="tag" x="290" y="16" width="300" height="34" rx="17"/>
+<text class="tagt" x="306" y="38">x-request-id  e.g. fb75d8dc-...</text>
+
+<path class="link" d="M360 50 C 300 70, 160 70, 145 96"/>
+<path class="link" d="M440 50 V96"/>
+<path class="link" d="M520 50 C 580 70, 720 70, 735 96"/>
+
+<!-- answer -->
+<rect class="wl pulse" x="16" y="98" width="258" height="176" rx="10"/>
+<text class="h" x="30" y="122">The answer (curl)</text>
+<text class="m" x="30" y="146">"id": "cmpl-<tspan class="hi">fb75d8dc-...</tspan>"</text>
+<text class="s" x="30" y="174">The answer id is "cmpl-" plus</text>
+<text class="s" x="30" y="192">the x-request-id: strip "cmpl-"</text>
+<text class="s" x="30" y="210">and you have the key.</text>
+<text class="s" x="30" y="254">README step 4.1</text>
+
+<!-- envoy -->
+<rect class="gw pulse p2" x="298" y="98" width="284" height="176" rx="10"/>
+<text class="h" x="312" y="122">Envoy access log</text>
+<text class="m" x="312" y="142">-n envoy-gateway-system -c envoy</text>
+<text class="m" x="312" y="166">"x-request-id": "<tspan class="hi">fb75d8dc-...</tspan>"</text>
+<text class="m" x="312" y="184">"upstream_host": "10.244.1.16:8000"</text>
+<text class="m" x="312" y="202">"duration": 926</text>
+<text class="m" x="312" y="220">"response_code": 200</text>
+<text class="m" x="312" y="238">"route_name": ".../rule/0/..."</text>
+<text class="s" x="312" y="262">README step 4.2, written seconds later</text>
+
+<!-- epp -->
+<rect class="ep pulse p3" x="606" y="98" width="258" height="176" rx="10"/>
+<text class="h" x="620" y="122">EPP scheduler log</text>
+<text class="m" x="620" y="142">-c main (scheduler)</text>
+<text class="s" x="620" y="166">EPP received request</text>
+<text class="s" x="620" y="184">EPP sent request body</text>
+<text class="s" x="620" y="198">response(s) to proxy</text>
+<text class="s" x="620" y="216">EPP sent response body back</text>
+<text class="s" x="620" y="230">to proxy</text>
+<text class="s" x="620" y="254">3 sets in this run (step 4.3)</text>
+
+<!-- upstream_host to pod -->
+<path class="arrow" d="M440 274 V318"/>
+<rect class="cl" x="236" y="320" width="408" height="60" rx="10"/>
+<text class="m" x="250" y="344">kubectl get pods -n $NS -o wide | grep 10.244.1.16</text>
+<text class="s" x="250" y="366">-&gt; demo-model-kserve-... : the vLLM Pod (step 4.4)</text>
+
+<text class="s" x="16" y="406">Values are examples from one run; ids, IPs and durations change every time.</text>
+</svg>
