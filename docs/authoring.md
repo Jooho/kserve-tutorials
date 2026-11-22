@@ -55,6 +55,8 @@ Every shell block has exactly one role [D001]. The first runnable block is the g
 - **Cleanup** deletes what the tutorial created (its namespace at least), never the cluster: the cluster belongs to the environment [D007].
 - Keep `timeout_minutes` in `tutorial.yaml` realistic: setup + all waits.
 
+Images in a README: `<a href="images/x.svg" target="_blank"><img src="images/x.svg" width="720" alt="what it shows"></a>`, not `![..](images/x.svg)`. Every picture then has the same width on GitHub and in the UI, and a click opens it at full size [D015]. Say once, next to the first picture, that a click opens it full size.
+
 Line breaks: in `docs/` write one line per paragraph and do not wrap by hand; a phrase then stays on one line, so `grep` and exact-match edits find it, and nothing has to be re-wrapped after a change. In a tutorial README keep the existing line breaks: reflowing changes nothing a reader sees but changes the source hash, so translations and the explainer go behind and CI runs the tutorial again.
 
 ## 4. Shared parts

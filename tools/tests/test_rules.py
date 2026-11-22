@@ -548,3 +548,21 @@ def test_runner_keeps_block_code_byte_for_byte(tmp_path, monkeypatch):
     assert runner.run(t) == 0
     assert (tmp_path / "out").read_text() == "verify-heredoc\n"
     assert (tmp_path / "out.cleanup").read_text() == "ok"
+
+
+# ---------------------------------------------------------------- D015 images
+@pytest.mark.parametrize("line,ok", [
+    ('<a href="images/x.png" target="_blank"><img src="images/x.png" width="720" alt="x"></a>', True),
+    ("![x](images/x.png)", False),                                            # markdown image
+    ('<img src="images/x.png" width="720" alt="x">', False),                  # not in a new-tab link
+    ('<a href="images/x.png" target="_blank"><img src="images/x.png" alt="x"></a>', False),   # no width
+    ('<a href="images/x.png" target="_blank"><img src="images/x.png" width="720"></a>', False),  # no alt
+    ("```text\n![x](images/x.png)\n```", True),                               # code is not a picture
+])
+def test_D015_readme_images_have_a_fixed_width_and_open_full_size(tmp_path, line, ok):
+    make_env(tmp_path)
+    d = make_tut(tmp_path, "t")
+    (d / "images").mkdir()
+    (d / "images" / "x.png").write_bytes(b"\x89PNG")
+    (d / "README.md").write_text(GOOD_README + "\n" + line + "\n")
+    assert (("D015" in codes(tmp_path)) is not ok)

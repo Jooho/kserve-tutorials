@@ -17,7 +17,9 @@ returns their average as a single prediction.
 > **Key question:** how do you send one request to several models and get
 > back one combined answer, without writing a client-side fan-out?
 
-![InferenceGraph architecture](images/architecture.svg)
+<a href="images/architecture.svg" target="_blank"><img src="images/architecture.svg" width="720" alt="InferenceGraph architecture: one request, two models, one combined answer"></a>
+
+Click a picture to open it at full size.
 
 **What you need on your machine:** Docker (running), `curl` and Python 3 with
 the `venv` module. Step 0 creates the Kind cluster and installs KServe in
@@ -750,7 +752,7 @@ To merge the results on the server, wrap the ensemble in a `Sequence`:
    output** to it; without it the combiner would get the original request.
    `serviceUrl` points at the combiner's V2 endpoint directly.
 
-![Sequence + Combiner InferenceGraph](images/inferencegraph.svg)
+<a href="images/inferencegraph.svg" target="_blank"><img src="images/inferencegraph.svg" width="720" alt="Sequence + Combiner InferenceGraph"></a>
 
 ```bash run
 kubectl apply -f manifests/inferencegraph/housing-price-graph.yaml
