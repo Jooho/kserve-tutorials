@@ -135,3 +135,42 @@ def _link_dir_indexes(out: Path) -> None:
         new = _DIR_LINK.sub(fix, text)
         if new != text:
             md.write_text(new)
+
+
+# ------------------------------------------------------------ look at it locally
+SITE_PORT = 8775     # not 8000/8080: tutorials and other tools use those
+
+
+def make_server(directory: Path, port: int):
+    """An HTTP server for the built site on 127.0.0.1 (this machine only)."""
+    import functools
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    class Quiet(SimpleHTTPRequestHandler):
+        def log_message(self, *args):          # one line per request is noise here
+            pass
+
+    return ThreadingHTTPServer(("127.0.0.1", port), functools.partial(Quiet, directory=str(directory)))
+
+
+def serve(directory: Path, port: int | None = None, open_browser: bool = True) -> None:
+    """Serve build/site until Ctrl+C. A port you ask for is used or refused; the
+    default moves to the next free one (same rule as ./tut ui)."""
+    from .ui.server import pick_port
+    if not (directory / "index.html").exists():
+        raise FileNotFoundError(f"{directory} has no index.html: build the site first")
+    port, note = pick_port(port, start=SITE_PORT, env="TUT_SITE_PORT")
+    if note:
+        print(note, flush=True)
+    httpd = make_server(directory, port)
+    url = f"http://127.0.0.1:{port}/"
+    print(f"site: {url}  (Ctrl+C to stop)", flush=True)
+    if open_browser:
+        import webbrowser
+        webbrowser.open(url)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print()
+    finally:
+        httpd.server_close()

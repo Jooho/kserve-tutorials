@@ -124,6 +124,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | translate | `./tut translation draft <id> ko`, review, `./tut translation mark <id> ko` |
 | translate everything missing | `make precommit TRANSLATE=1` |
 | explain a tutorial with diagrams (AI) | `./tut explain draft <id>` (walk, write, AI review, one fix round), read it, `./tut explain mark <id>` |
+| look at the site as readers will see it | `make site-run` (= `./tut site --serve`): builds it and serves `build/site` on `127.0.0.1:8775` (next free port if taken; `PORT=N` or `TUT_SITE_PORT`) |
 | what CI will run for my branch | `./tut affected --base origin/main` |
 | before every commit | `make precommit` |
 | test the engine | `PYTHONPATH=tools python3 -m pytest -q tools/tests` |
@@ -142,6 +143,7 @@ Precedence everywhere: **shell > `.tut.env` > default**. Set with `./tut config 
 | `TUT_AI_ARGS` | extra flags for it, e.g. `--model sonnet` |
 | `TUT_AI_REVIEW` | AI CLI that reviews an explainer (`explain review`, end of `explain draft`); default: `TUT_AI` |
 | `TUT_UI_PORT` | port of `./tut ui`; default 8765, or the next free port when 8765 is taken (a port you set is never swapped) |
+| `TUT_SITE_PORT` | port of `make site-run` / `./tut site --serve`; default 8775, or the next free port (a port you set is never swapped) |
 | `TUT_AI_REVIEW_ARGS` | extra flags for it |
 | `TUT_TRANSLATOR`, `TUT_TRANSLATOR_ARGS` | older names of the two above, still read |
 
