@@ -15,15 +15,33 @@ Code: `tools/tut/explain.py`. Lint: X001-X005. CI blast radius: none (`plan.affe
 ## For people: how to get one
 
 ```bash skip
-export TUT_AI=claude                     # or codex, copilot (./tut config TUT_AI=claude)
-export TUT_AI_REVIEW=codex               # optional: another AI reviews it (default: TUT_AI)
-./tut explain draft <id>                 # 15-30 min, needs Docker: the AI walks the tutorial on a cluster,
-                                         # writes, gets reviewed, fixes once (build/explain/<id>/review.md)
-# read tutorials/<id>/explainer/ (./tut ui -> "How it works"), fix what is wrong
-./tut explain mark <id>                  # records that a person reviewed it
+./tut config TUT_AI=claude                # once: the AI that writes (or codex, copilot)
+./tut config TUT_AI_REVIEW=claude,codex   # once, optional: the AI(s) that review (default: TUT_AI)
+
+./tut explain draft <id>                  # 15-30 min, needs Docker; does all of this:
+                                          #   walk   run the tutorial step by step on a cluster, probe
+                                          #   write  explainer/index.md (+ index.ko.md), SVGs
+                                          #   check  lint X001-X005
+                                          #   review every reviewer checks it against the evidence, on its own
+                                          #   fix    the writer accepts or rejects each finding (no new walk)
+                                          #   review once more
 ```
 
-Or just ask your agent "make an explainer for <id>" (Claude Code: skill `tutorial-explainer`). Nothing else is needed from you while it runs.
+Then you read it, in this order:
+
+1. `build/explain/<id>/notes.md`: what was verified, what differs from the README, what could not be verified, and under "Review round" what the writer did with every finding (A: accepted and changed, R: rejected and why). Look at the rejected ones first.
+2. `build/explain/<id>/review.md`: what the reviewers still found in the last round.
+3. The page itself: `./tut ui` -> the tutorial -> "How it works". Fix what is wrong, or ask your agent to.
+
+```bash skip
+./tut explain review <id>                 # only if you changed the text, or want another model's opinion:
+TUT_AI_REVIEW=codex ./tut explain review <id>
+./tut explain check <id>                  # 0 errors
+./tut explain mark <id>                   # you read it: reviewed=yes, records the README hash
+./tut explain mark <id> ko                # each language separately
+```
+
+Or just ask your agent "make an explainer for <id>" (Claude Code: skill `tutorial-explainer`). It does the same steps; you only read and `mark` (or tell the agent you read it and let it run `mark`).
 
 ## For the AI: the brief
 
@@ -82,13 +100,17 @@ Languages: `index.md` in English. If the tutorial has `README.ko.md`, also `inde
 
 `./tut explain check <id>` must report 0 errors. Write `build/explain/<id>/notes.md`: what you verified, what differs from the README, what you could not verify. Do not run `./tut explain mark`.
 
-### 6. Review by another AI
+### 6. Review by other AIs
 
-The writer does not doubt its own conclusions. A second AI in a fresh context reads the explainer, the evidence and the README, and lists statements the evidence does not carry: unsupported, overgeneralized (true for this environment, written as always), missing reason, contradicted, translation or SVG mismatch. It only reads; its report is `build/explain/<id>/review.md`.
+The writer does not doubt its own conclusions. A reviewer in a fresh context reads the explainer, the evidence and the README, and lists statements the evidence does not carry: unsupported, overgeneralized (true for this environment, written as always), missing reason, contradicted, translation or SVG mismatch. It only reads.
 
 ```bash skip
-./tut explain review <id>                  # TUT_AI_REVIEW, else TUT_AI
+./tut explain review <id>                  # TUT_AI_REVIEW (one or several), else TUT_AI
 ./tut explain review <id> --print-prompt   # no CLI set: give this to a fresh subagent
 ```
 
-`draft` does this itself: review, one fix round by the writer (no new walk), review again. The person reading before `mark` starts from the last review. A different model shares fewer blind spots, but the fresh context matters most: in the anatomy pilot the same model (claude) as reviewer found 8 real issues, codex found 5 and missed the two a person had found.
+`TUT_AI_REVIEW=claude,codex` runs several reviewers at the same time; none sees the others. One reviewer writes `build/explain/<id>/review.md`; several write `review-<name>.md` each and `review.md` with all of them. A reviewer that fails is left out and reported.
+
+Then you, the writer, decide every finding. A reviewer can be wrong: accept a finding when the evidence does not carry the sentence (correct, narrow or remove it), reject it when the text is right as written (the evidence line, or general background). Do not hedge a correct sentence only because someone asked; the page must still teach. Write each decision in `notes.md` under "## Review round": `A: <finding> -> <what changed>` or `R: <finding> -> <why it stays>`. `draft` does review, this fix round and a second review itself.
+
+Why several: in the pilots claude and codex found different things (anatomy: 8 and 5 findings, 1 in common; inferencegraph-ensemble: 9 and 5, 2 in common), and in a second round one of them caught a mistake made while fixing the first. Why the decisions are written down: applying every finding blindly makes the text timid, and the person who reads it last needs to see what was turned down.

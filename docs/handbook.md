@@ -142,10 +142,10 @@ Precedence everywhere: **shell > `.tut.env` > default**. Set with `./tut config 
 | `TUT_ENV_RECREATE` | `1` = replace a cluster built by something else (destructive) |
 | `TUT_AI` | your AI CLI for `draft` and translations: `claude`, `copilot`, `codex` or `cmd:<command>` |
 | `TUT_AI_ARGS` | extra flags for it, e.g. `--model sonnet` |
-| `TUT_AI_REVIEW` | AI CLI that reviews an explainer (`explain review`, end of `explain draft`); default: `TUT_AI` |
+| `TUT_AI_REVIEW` | AI CLI that reviews an explainer (`explain review`, end of `explain draft`); several, comma-separated, review independently (`claude,codex`); default: `TUT_AI` |
 | `TUT_UI_PORT` | port of `./tut ui`; default 8765, or the next free port when 8765 is taken (a port you set is never swapped) |
 | `TUT_SITE_PORT` | port of `make site-run` / `./tut site --serve`; default 8775, or the next free port (a port you set is never swapped) |
-| `TUT_AI_REVIEW_ARGS` | extra flags for it |
+| `TUT_AI_REVIEW_ARGS` | extra flags, given to every reviewer |
 | `TUT_TRANSLATOR`, `TUT_TRANSLATOR_ARGS` | older names of the two above, still read |
 
 Set by the tooling, not by people:

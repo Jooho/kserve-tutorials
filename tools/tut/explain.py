@@ -471,10 +471,12 @@ def _run_agent(agent, template: list[str] | None, prompt: str, root: Path, logf,
 
 
 def draft(t: Tutorial, agent, root: Path = REPO_ROOT, timeout: int = 7200, log=print,
-          reviewer=None) -> int:
+          reviewer=None, reviewers=None) -> int:
     """Run the AI CLI (TUT_AI) with build_prompt; it drives start/next/probe/stop
-    itself. Afterwards: the shell is always stopped. With a reviewer (TUT_AI_REVIEW,
-    else TUT_AI): review, one fix round by the writer if needed, review again."""
+    itself. Afterwards: the shell is always stopped. With reviewers (TUT_AI_REVIEW,
+    one or several, else TUT_AI): each reviews on its own, the writer decides every
+    finding in one fix round, then they review again."""
+    reviewers = list(reviewers or ([reviewer] if reviewer else []))
     d = workdir(t, root)
     d.mkdir(parents=True, exist_ok=True)
     prompt = build_prompt(t, root)
@@ -489,16 +491,16 @@ def draft(t: Tutorial, agent, root: Path = REPO_ROOT, timeout: int = 7200, log=p
         if s.alive:
             log("the agent left the tutorial shell running: cleaning up")
             s.stop()
-    if rc or reviewer is None or not t.explainer("en").exists():
+    if rc or not reviewers or not t.explainer("en").exists():
         return rc
-    n = review(t, reviewer, root, log=log)
+    n = review_all(t, reviewers, root, log=log)
     if n:
-        log(f"-> {agent.name} fixes the {n} finding(s) (no cluster) ...")
+        log(f"-> {agent.name} decides the {n} finding(s): fix or reject, with the reason (no cluster) ...")
         with open(d / "agent.log", "a") as logf:
             rc, _ = _run_agent(agent, AGENT_TOOLS.get(agent.name), build_fix_prompt(t, root),
                                root, logf, timeout)
         (d / "review.md").rename(d / "review-1.md")
-        n = review(t, reviewer, root, log=log)
+        n = review_all(t, reviewers, root, log=log)
     return rc
 
 
@@ -557,35 +559,88 @@ Output, and nothing else:
 
 def build_fix_prompt(t: Tutorial, root: Path = REPO_ROOT) -> str:
     w = workdir(t, root).relative_to(root)
-    return f"""A reviewer checked the explainer of `{t.id}` against the evidence of the
-run. Its findings are in {w}/review.md. The cluster walk is over; do not start
-it again.
+    return f"""One or more reviewers checked the explainer of `{t.id}` against the
+evidence of the run, each on its own. Their findings are in {w}/review.md (two
+reviewers may report the same thing in different words). The cluster walk is
+over; do not start it again.
 
-For each finding: correct the statement if {w}/evidence.md supports a correct
-one, narrow it ("in this run", "with this configuration"), add the missing
-reason only if the evidence or a labelled source gives it, or remove it. Apply
-the same change to every language and SVG. Add a line per finding to
-{w}/notes.md: what you changed. Then ./tut explain check {t.id} must report 0
-errors. Do not mark the explainer reviewed.
+Decide every finding; a reviewer can be wrong.
+- Accept it when {w}/evidence.md does not carry the statement: correct it if
+  the evidence supports a correct one, narrow it ("in this run", "with this
+  configuration"), add the missing reason only if the evidence or a labelled
+  source gives it, or remove it. Apply the same change to every language and
+  SVG.
+- Reject it when the text is right as written: the evidence shows it (name the
+  line), or it is general background or follows from a definition. Do not hedge
+  a correct sentence only because someone asked; the page must still teach.
+
+Write the decisions in {w}/notes.md under a heading "## Review round", one line
+per finding: "A: <finding> -> <what you changed>" or "R: <finding> -> <why it
+stays>". The person who reads the explainer afterwards starts from that list.
+Then ./tut explain check {t.id} must report 0 errors. Do not mark the explainer
+reviewed.
 """
 
 
-def review(t: Tutorial, agent, root: Path = REPO_ROOT, timeout: int = 1800, log=print) -> int | None:
+def review(t: Tutorial, agent, root: Path = REPO_ROOT, timeout: int = 1800, log=print,
+           name: str = "review") -> int | None:
     """Let a reviewer AI compare the explainer with evidence.md. Writes
-    build/explain/<id>/review.md; returns the number of findings (None: unknown)."""
+    build/explain/<id>/<name>.md; returns the number of findings (None: unknown)."""
     d = workdir(t, root)
     if not t.explainer("en").exists():
         raise ExplainError(f"{t.id} has no explainer to review")
     if not (d / "evidence.md").exists():
         raise ExplainError(f"no evidence for {t.id}: walk it first (./tut explain start {t.id})")
     log(f"-> {agent.name} reviews the explainer of {t.id} against the evidence ...")
-    with open(d / "review.log", "w") as logf:
+    with open(d / f"{name}.log", "w") as logf:
         rc, out = _run_agent(agent, REVIEW_TOOLS.get(agent.name), build_review_prompt(t, root),
                              root, logf, timeout, capture=True)
     m = FINDINGS_RE.findall(out)
     n = int(m[-1]) if m else None
-    (d / "review.md").write_text(f"# Review of the {t.id} explainer by {agent.name}\n\n{out.strip()}\n")
+    (d / f"{name}.md").write_text(f"# Review of the {t.id} explainer by {agent.name}\n\n{out.strip()}\n")
     if rc:
-        raise ExplainError(f"reviewer {agent.name} failed (exit {rc}); see {d / 'review.log'}")
-    log(f"   {'?' if n is None else n} finding(s): {(d / 'review.md').relative_to(root)}")
+        raise ExplainError(f"reviewer {agent.name} failed (exit {rc}); see {d / (name + '.log')}")
+    log(f"   {agent.name}: {'?' if n is None else n} finding(s): {(d / (name + '.md')).relative_to(root)}")
     return n
+
+
+def review_all(t: Tutorial, agents: list, root: Path = REPO_ROOT, timeout: int = 1800,
+               log=print) -> int | None:
+    """Every reviewer checks the explainer on its own, at the same time, without
+    seeing the others. One reviewer: review.md as before. Several: one
+    review-<name>.md each and review.md with all of them. Returns the findings in
+    total (None: no reviewer gave a count). A reviewer that fails is reported and
+    left out; if all fail, that is an error."""
+    if len(agents) == 1:
+        return review(t, agents[0], root, timeout, log)
+    from concurrent.futures import ThreadPoolExecutor
+    d = workdir(t, root)
+    labels, seen = [], {}
+    for a in agents:                       # claude, claude-2 when the same tool is listed twice
+        seen[a.name] = seen.get(a.name, 0) + 1
+        labels.append(a.name if seen[a.name] == 1 else f"{a.name}-{seen[a.name]}")
+
+    def one(pair):
+        label, a = pair
+        try:
+            return label, review(t, a, root, timeout, log, name=f"review-{label}"), None
+        except ExplainError as e:
+            return label, None, str(e)
+
+    with ThreadPoolExecutor(max_workers=len(agents)) as pool:
+        results = list(pool.map(one, zip(labels, agents)))
+    failed = [(label, err) for label, _, err in results if err]
+    for label, err in failed:
+        log(f"   {label}: {err}")
+    if len(failed) == len(agents):
+        raise ExplainError("every reviewer failed: " + "; ".join(err for _, err in failed))
+    parts = [f"# Reviews of the {t.id} explainer: {', '.join(labels)} (each on its own)\n"]
+    for label, n, err in results:
+        f = d / f"review-{label}.md"
+        body = f.read_text().split("\n", 2)[-1].strip() if f.exists() else ""
+        parts.append(f"## {label}\n\n{body or ('(failed: ' + str(err) + ')')}\n")
+    (d / "review.md").write_text("\n".join(parts))
+    counts = [n for _, n, err in results if n is not None and not err]
+    total = sum(counts) if counts else None
+    log(f"   {'?' if total is None else total} finding(s) in total: {(d / 'review.md').relative_to(root)}")
+    return total

@@ -77,12 +77,28 @@ def agent_from_env(var: str = "TUT_AI") -> Agent | None:
     return Agent(c.name, aicli.with_extra(AGENTS[c.name], c.extra), extra=c.extra)
 
 
+def review_agents_from_env() -> tuple[list[Agent], str]:
+    """The AIs that review another AI's work: TUT_AI_REVIEW (one, or several
+    comma-separated: each reviews on its own), else TUT_AI. Different models
+    share fewer blind spots; the same one still reviews in a fresh context.
+    Returns (agents, variable they came from)."""
+    from . import aicli
+    try:
+        choices = aicli.read_many("TUT_AI_REVIEW")
+    except aicli.AICliError as e:
+        raise DraftError(str(e)) from None
+    if choices:
+        return [Agent("cmd", [c.command], shell=True) if c.shell
+                else Agent(c.name, aicli.with_extra(AGENTS[c.name], c.extra), extra=c.extra)
+                for c in choices], "TUT_AI_REVIEW"
+    a = agent_from_env()
+    return ([a] if a else []), "TUT_AI"
+
+
 def review_agent_from_env() -> tuple[Agent | None, str]:
-    """The AI that reviews another AI's work: TUT_AI_REVIEW, else TUT_AI.
-    A different model shares fewer blind spots; the same one still reviews in a
-    fresh context. Returns (agent, variable it came from)."""
-    a = agent_from_env("TUT_AI_REVIEW")
-    return (a, "TUT_AI_REVIEW") if a else (agent_from_env(), "TUT_AI")
+    """The first reviewer only (see review_agents_from_env)."""
+    agents, var = review_agents_from_env()
+    return (agents[0] if agents else None), var
 
 
 def slug(name: str) -> str:

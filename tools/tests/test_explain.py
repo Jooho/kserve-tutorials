@@ -278,3 +278,76 @@ def test_pictures_open_at_full_size_on_the_page(repo):
     assert '<script src="/static/zoom.js"></script>' in index
     status, _, js = ui_fetch(repo, "/static/zoom.js")
     assert status == 200 and "showModal" in js and "#doc img, .explainer-doc img" in js
+
+
+# ------------------------------------------------- several reviewers, each on its own
+def test_tut_ai_review_takes_several_tools(monkeypatch):
+    from tut import draft
+    monkeypatch.setenv("TUT_AI", "claude")
+    monkeypatch.setenv("TUT_AI_REVIEW", "claude, codex")
+    monkeypatch.setenv("TUT_AI_REVIEW_ARGS", "--verbose")
+    agents, var = draft.review_agents_from_env()
+    assert ([a.name for a in agents], var) == (["claude", "codex"], "TUT_AI_REVIEW")
+    assert all(a.extra == ["--verbose"] for a in agents)          # the flags go to every reviewer
+    monkeypatch.setenv("TUT_AI_REVIEW", "claude,gemini")
+    with pytest.raises(draft.DraftError, match="gemini"):
+        draft.review_agents_from_env()
+    monkeypatch.setenv("TUT_AI_REVIEW", "cmd:my-reviewer --a,b")  # a command may contain commas
+    agents, _ = draft.review_agents_from_env()
+    assert [(a.name, a.argv) for a in agents] == [("cmd", ["my-reviewer --a,b"])]
+    monkeypatch.delenv("TUT_AI_REVIEW")
+    agents, var = draft.review_agents_from_env()                   # falls back to the writer's CLI
+    assert ([a.name for a in agents], var) == (["claude"], "TUT_AI")
+
+
+def _reviewed_repo(repo):
+    d, t = tut(repo)
+    write_explainer(d, t)
+    w = explain.workdir(t, repo)
+    w.mkdir(parents=True)
+    (w / "evidence.md").write_text("# evidence\n")
+    return t, w
+
+
+def _fake_reviewer(report: str):
+    from tut.draft import Agent
+    return Agent("cmd", [f"cat >/dev/null; printf '%s\\n' '{report}'"], shell=True)
+
+
+def test_several_reviewers_each_write_a_report_and_one_combined(repo):
+    t, w = _reviewed_repo(repo)
+    a = _fake_reviewer('- [unsupported] index.md: "x" -- not seen; evidence: none\nFINDINGS: 1')
+    b = _fake_reviewer('- [contradicted] index.md: "y" -- says 3, is 4; evidence: 12\n'
+                       '- [mismatch] flow.svg: "z" -- differs; evidence: none\nFINDINGS: 2')
+    assert explain.review_all(t, [a, b], root=repo, log=lambda *_: None) == 3
+    assert "[unsupported]" in (w / "review-cmd.md").read_text()
+    assert "[mismatch]" in (w / "review-cmd-2.md").read_text()      # same tool twice: -2
+    combined = (w / "review.md").read_text()
+    assert "## cmd\n" in combined and "## cmd-2\n" in combined
+    assert "[unsupported]" in combined and "[contradicted]" in combined
+
+
+def test_a_failing_reviewer_is_left_out_but_all_failing_is_an_error(repo):
+    from tut.draft import Agent
+    t, w = _reviewed_repo(repo)
+    good = _fake_reviewer("FINDINGS: 0")
+    broken = Agent("cmd", ["cat >/dev/null; exit 3"], shell=True)
+    logged = []
+    assert explain.review_all(t, [good, broken], root=repo, log=logged.append) == 0
+    assert any("failed (exit 3)" in line for line in logged)
+    assert "(failed:" in (w / "review.md").read_text()
+    with pytest.raises(explain.ExplainError, match="every reviewer failed"):
+        explain.review_all(t, [broken, broken], root=repo, log=lambda *_: None)
+
+
+def test_one_reviewer_keeps_the_single_report(repo):
+    t, w = _reviewed_repo(repo)
+    assert explain.review_all(t, [_fake_reviewer("FINDINGS: 0")], root=repo, log=lambda *_: None) == 0
+    assert (w / "review.md").exists() and not list(w.glob("review-*.md"))
+
+
+def test_the_writer_must_decide_every_finding(repo):
+    t, _ = _reviewed_repo(repo)
+    p = explain.build_fix_prompt(t, repo)
+    assert "A reviewer can be wrong" in p.replace("a reviewer can be wrong", "A reviewer can be wrong")
+    assert '"A: <finding>' in p and '"R: <finding>' in p and "## Review round" in p

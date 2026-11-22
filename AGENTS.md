@@ -59,7 +59,7 @@ eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut explain draft <id>      # AI explainer: TUT_AI walks the tutorial on a cluster, writes explainer/ (15-30 min)
 ./tut explain start|next|probe|stop <id>   # the same walk by hand / by you as the agent (docs/explainer.md)
 ./tut explain check <id>      # explainer checks (X001-X005); ./tut explain mark <id> after a person read it
-./tut explain review <id>     # another AI (TUT_AI_REVIEW, else TUT_AI) checks it against the walk's evidence
+./tut explain review <id>     # other AIs (TUT_AI_REVIEW=claude,codex; else TUT_AI) check it against the walk's evidence, each on its own
 PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 ```
 
@@ -130,8 +130,12 @@ and never triggers CI e2e.
   and that it does not touch the README or CI.
 - When the user says yes ("go", "진행해줘"), do the whole thing without asking
   again: `./tut explain start/next/probe/stop`, write the files, `./tut explain
-  check`, `./tut explain review` and fix what it finds. Then report what you verified, what differs from the README, and
-  what they should look at. Never run `./tut explain mark` yourself.
+  check`, `./tut explain review`, then decide every finding (fix it, or reject
+  it with the reason, in notes.md). Then report what you verified, what differs
+  from the README, and what they should look at.
+- `./tut explain mark` records that a person read the explainer. Never run it
+  on your own judgment. Run it only when the maintainer says they read it
+  ("I read it, mark it"), for the languages they name.
 - Explainer changes go in their own PR (no tutorial change in it).
 
 ## Leave the repository smarter than you found it
