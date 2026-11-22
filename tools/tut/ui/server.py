@@ -187,6 +187,7 @@ class UI:
 </head><body class="explainer-page">
 <header class="ai-banner{' unreviewed' if not mk.get('reviewed') else ''}" role="note">{banner}</header>
 <main class="explainer-doc">{body}</main>
+<script src="/static/zoom.js"></script>
 </body></html>"""
         return web.Response(text=html, content_type="text/html")
 
