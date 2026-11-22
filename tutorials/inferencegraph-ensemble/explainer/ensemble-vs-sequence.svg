@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" role="img" aria-labelledby="t d">
+<title id="t">The two graphs of the tutorial and what they return</title>
+<desc id="d">Step 7, Ensemble only: the root node calls both predictors with the same input and returns both answers keyed "0" and "1". Step 8, Sequence plus combiner: the root runs the ensemble node first, then sends its whole response to the combiner with data: $response, and returns the combiner's single averaged value.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; fill: #2b3140; }
+  .rt { fill: #f3f0ff; stroke: #7048e8; stroke-width: 1.5; }
+  .md { fill: #ebfbee; stroke: #2f9e44; stroke-width: 1.5; }
+  .cb { fill: #fff4e6; stroke: #e8590c; stroke-width: 1.5; }
+  .out { fill: #f8f9fa; stroke: #868e96; stroke-width: 1.3; }
+  .panel { fill: none; stroke: #adb5bd; stroke-width: 1.2; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .ah { fill: #6b7385; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .rt { fill: #241f3d; stroke: #9775fa; } .md { fill: #16301d; stroke: #51cf66; }
+    .cb { fill: #3a2414; stroke: #ff922b; } .out { fill: #1b2029; } .panel { stroke: #5c6370; }
+    .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+  }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+
+<!-- left: ensemble only -->
+<rect class="panel" x="16" y="16" width="414" height="348" rx="12"/>
+<text class="h" x="30" y="42">Step 7: Ensemble only</text>
+<text class="m" x="30" y="60">ensemble-only.yaml</text>
+
+<rect class="rt" x="30" y="76" width="140" height="50" rx="10"/>
+<text class="h" x="42" y="98">root</text>
+<text class="m" x="42" y="116">Ensemble</text>
+
+<rect class="md" x="230" y="70" width="186" height="34" rx="8"/>
+<text class="m" x="242" y="92">xgboost-predictor</text>
+<rect class="md" x="230" y="112" width="186" height="34" rx="8"/>
+<text class="m" x="242" y="134">lightgbm-predictor</text>
+<path class="arrow" d="M170 94 C 200 90, 205 87, 228 87"/>
+<path class="arrow" d="M170 110 C 200 116, 205 128, 228 129"/>
+<text class="s" x="230" y="166">same input, in parallel</text>
+
+<rect class="out" x="30" y="190" width="386" height="120" rx="10"/>
+<text class="s" x="42" y="212">response: one entry per step</text>
+<text class="m" x="42" y="234">{"0": {"model_name": "xgboost-predictor",</text>
+<text class="m" x="42" y="250">       "outputs": [{"data": [2.7366], FP32}]},</text>
+<text class="m" x="42" y="270"> "1": {"model_name": "lightgbm-predictor",</text>
+<text class="m" x="42" y="286">       "outputs": [{"data": [4.1576], FP64}]}}</text>
+<text class="s" x="30" y="340">The client gets both and decides what to do.</text>
+
+<!-- right: sequence + combiner -->
+<rect class="panel" x="450" y="16" width="414" height="348" rx="12"/>
+<text class="h" x="464" y="42">Step 8: Sequence + combiner</text>
+<text class="m" x="464" y="60">housing-price-graph.yaml</text>
+
+<rect class="rt" x="464" y="76" width="120" height="50" rx="10"/>
+<text class="h" x="476" y="98">root</text>
+<text class="m" x="476" y="116">Sequence</text>
+
+<rect class="rt" x="620" y="70" width="230" height="56" rx="10"/>
+<text class="m" x="632" y="92">1 nodeName: ensemble-node</text>
+<text class="s" x="632" y="112">the same Ensemble as step 7</text>
+
+<rect class="cb" x="620" y="146" width="230" height="74" rx="10"/>
+<text class="m" x="632" y="168">2 serviceUrl: combiner</text>
+<text class="m" x="632" y="186">  data: $response</text>
+<text class="s" x="632" y="206">gets step 1's whole output</text>
+<path class="arrow" d="M584 98 H618"/>
+<path class="arrow" d="M735 126 V144"/>
+<path class="arrow" d="M584 112 C 600 150, 600 180, 618 182"/>
+
+<rect class="out" x="464" y="240" width="386" height="70" rx="10"/>
+<text class="s" x="476" y="262">response: the combiner's answer only</text>
+<text class="m" x="476" y="284">{"model_name": "ensemble-combiner",</text>
+<text class="m" x="476" y="300"> "outputs": [{"data": [3.4471], FP64}]}</text>
+<text class="s" x="464" y="340">Without data: $response the combiner would get</text>
+<text class="s" x="464" y="356">the original request instead (README step 8).</text>
+</svg>

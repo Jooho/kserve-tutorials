@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" role="img" aria-labelledby="t d">
+<title id="t">What KServe creates for an InferenceService and for the InferenceGraph</title>
+<desc id="d">In this run each of the three InferenceServices became a Deployment, a Service on port 80 to 8080, an Ingress with two hosts and an HPA fixed at one replica. The XGBoost Pod runs MLServer with the model mounted read-only from the PVC at /mnt/models, using the model's sub-directory, without an init container. The InferenceGraph becomes a router Deployment and Service; the controller turns each serviceName into a full V2 URL in the router's --graph-json argument. No Ingress is created for the graph; the tutorial adds its own.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; fill: #2b3140; }
+  .src { fill: #f8f9fa; stroke: #868e96; stroke-width: 1.5; }
+  .md { fill: #ebfbee; stroke: #2f9e44; stroke-width: 1.5; }
+  .rt { fill: #f3f0ff; stroke: #7048e8; stroke-width: 1.5; }
+  .pvc { fill: #fff9db; stroke: #e67700; stroke-width: 1.4; }
+  .miss { fill: none; stroke: #c92a2a; stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .ah { fill: #6b7385; }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .src { fill: #1b2029; } .md { fill: #16301d; stroke: #51cf66; } .rt { fill: #241f3d; stroke: #9775fa; }
+    .pvc { fill: #2e2a12; stroke: #fcc419; } .miss { stroke: #ff8787; }
+    .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+  }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+
+<!-- InferenceService side -->
+<rect class="src" x="16" y="16" width="408" height="74" rx="10"/>
+<text class="h" x="30" y="40">InferenceService xgboost-predictor</text>
+<text class="m" x="30" y="60">deploymentMode: RawDeployment</text>
+<text class="m" x="30" y="76">runtime: kserve-mlserver, pvc://model-pvc/xgboost-..</text>
+<path class="arrow" d="M220 90 V108"/>
+
+<rect class="md" x="16" y="110" width="408" height="92" rx="10"/>
+<text class="m" x="30" y="132">Deployment  xgboost-predictor-predictor</text>
+<text class="m" x="30" y="150">Service     ...-predictor   80 -&gt; 8080</text>
+<text class="m" x="30" y="168">Ingress     nginx, two *.127.0.0.1.sslip.io hosts</text>
+<text class="m" x="30" y="186">HPA         min 1, max 1</text>
+
+<rect class="md" x="16" y="218" width="408" height="128" rx="10"/>
+<text class="h" x="30" y="242">Pod: one container, no init container</text>
+<text class="m" x="30" y="264">kserve-container  seldonio/mlserver:1.5.0</text>
+<text class="m" x="30" y="282">MLSERVER_MODEL_NAME=xgboost-predictor</text>
+<text class="m" x="30" y="300">MLSERVER_MODEL_IMPLEMENTATION=</text>
+<text class="m" x="30" y="316">  mlserver_xgboost.XGBoostModel</text>
+<text class="m" x="30" y="336">/mnt/models  (read-only)</text>
+
+<rect class="pvc" x="16" y="362" width="408" height="62" rx="10"/>
+<text class="h" x="30" y="386">PVC model-pvc</text>
+<text class="m" x="30" y="406">subPath xgboost-predictor -&gt; /mnt/models</text>
+<path class="arrow" d="M300 362 V350"/>
+
+<!-- InferenceGraph side -->
+<rect class="src" x="456" y="16" width="408" height="74" rx="10"/>
+<text class="h" x="470" y="40">InferenceGraph housing-price-graph</text>
+<text class="m" x="470" y="60">deploymentMode: RawDeployment</text>
+<text class="m" x="470" y="76">steps: serviceName: xgboost-predictor, ...</text>
+<path class="arrow" d="M660 90 V108"/>
+
+<rect class="rt" x="456" y="110" width="408" height="56" rx="10"/>
+<text class="m" x="470" y="132">Deployment  housing-price-graph</text>
+<text class="m" x="470" y="150">Service     housing-price-graph  80 -&gt; 8080</text>
+
+<rect class="rt" x="456" y="182" width="408" height="128" rx="10"/>
+<text class="h" x="470" y="206">Router Pod: kserve/router:v0.18.0</text>
+<text class="m" x="470" y="228">--graph-json, with every serviceName</text>
+<text class="m" x="470" y="244">resolved by the controller to</text>
+<text class="m" x="470" y="264">http://xgboost-predictor-predictor.</text>
+<text class="m" x="470" y="280">  kserve-graph-demo.svc.cluster.local</text>
+<text class="m" x="470" y="296">  /v2/models/xgboost-predictor/infer</text>
+
+<rect class="miss" x="456" y="326" width="408" height="98" rx="10"/>
+<text class="h" x="470" y="350">No Ingress for the graph</text>
+<text class="s" x="470" y="372">status.url says housing-price-graph-kserve-graph-</text>
+<text class="s" x="470" y="390">demo.127.0.0.1.sslip.io; no Ingress has that host. The</text>
+<text class="s" x="470" y="408">tutorial adds Ingress housing-price-graph-ingress.</text>
+</svg>
