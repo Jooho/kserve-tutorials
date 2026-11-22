@@ -74,6 +74,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `runner.py` | `./tut run`: README → one bash script (file, not `bash -c`), cleanup trap, `--twice`, JSON report | test_rules |
 | `plan.py` | what CI runs: `affected` (changed paths → tutorials), scheduled and canary matrices | test_rules |
 | `catalog.py` | tags, groups, collections (resolved per version), CODEOWNERS text | test_catalog |
+| `aicli.py` | the one reader of `TUT_AI`, `TUT_AI_REVIEW` and their `_ARGS` (older `TUT_TRANSLATOR*` too); translate, draft and explain keep their own command lines | test_translate, test_draft, test_explain |
 | `translate.py` | AI translation: presets, prompt, mechanical check of the output, `draft_one` | test_translate |
 | `explain.py` | `./tut explain`: AI explainer: live walk (FIFO shell, read-only probes, evidence), checks X001-X005, mark, unattended draft | test_explain |
 | `draft.py` | `./tut draft`: copy input, build prompt and parts catalog, run the AI, prune, coverage, report | test_draft |

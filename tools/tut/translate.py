@@ -21,14 +21,13 @@ from __future__ import annotations
 
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import markdown, project
+from . import aicli, markdown, project
 
 BEGIN, END = "<<<TUT-TRANSLATION-BEGIN>>>", "<<<TUT-TRANSLATION-END>>>"
 LANG_NAMES = {"ko": "Korean (한국어)"}
@@ -58,17 +57,15 @@ class Translator:
 
 
 def configured() -> Translator | None:
-    spec = (os.environ.get("TUT_AI") or os.environ.get("TUT_TRANSLATOR") or "").strip()
-    if not spec:
+    try:
+        c = aicli.read("TUT_AI")
+    except aicli.AICliError as e:
+        raise TranslationError(str(e)) from None
+    if c is None:
         return None
-    extra = shlex.split(os.environ.get("TUT_AI_ARGS", os.environ.get("TUT_TRANSLATOR_ARGS", "")))
-    if spec.startswith("cmd:"):
-        return Translator("cmd", [spec[4:].strip()], shell=True)
-    if spec not in PRESETS:
-        raise TranslationError(f"TUT_AI={spec!r}: use claude, copilot, codex or cmd:<command>")
-    argv = list(PRESETS[spec])
-    i = argv.index("{prompt}")
-    return Translator(spec, argv[:i] + extra + argv[i:])
+    if c.shell:
+        return Translator("cmd", [c.command], shell=True)
+    return Translator(c.name, aicli.with_extra(PRESETS[c.name], c.extra))
 
 
 def build_prompt(source: str, lang: str, proj: "project.Project | None" = None) -> str:

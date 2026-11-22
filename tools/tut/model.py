@@ -201,3 +201,25 @@ def env_settings(t: "Tutorial", env: "EnvProfile | None") -> list[tuple[str, str
             v = "true" if v else "false"
         out.append((f"TUT_ENV_{name.upper()}", str(v)))
     return out
+
+
+# CLI tools an environment pins in envs/<env>/tools.env (KEY=version  # comment).
+TOOL_KEYS = {"KIND": "kind", "KUBECTL": "kubectl", "HELM": "helm",
+             "CLOUD_PROVIDER_KIND": "cloud-provider-kind"}
+
+
+def env_tools(env_ref: str, root: Path = REPO_ROOT) -> dict[str, str]:
+    """{tool: version} from envs/<env>/tools.env, in file order; empty entries skipped.
+    The one reader of that file (doctor, the generated setup step, the UI)."""
+    out: dict[str, str] = {}
+    f = root / "envs" / env_ref / "tools.env"
+    if not f.exists():
+        return out
+    for line in f.read_text().splitlines():
+        line = line.split("#", 1)[0]
+        if "=" not in line:
+            continue
+        k, v = (x.strip() for x in line.split("=", 1))
+        if k in TOOL_KEYS and v:
+            out[TOOL_KEYS[k]] = v.split()[0]
+    return out
