@@ -220,8 +220,21 @@ print(json.dumps({"data": {"deploy": json.dumps(d)}}))' "$cur" "$want")
   fi
 }
 
+# KServe's installer keeps ClusterServingRuntimes (type kserve) and
+# LLMInferenceServiceConfigs (type llmisvc) in one Helm release,
+# kserve-runtime-configs, and upgrades it with only the types of the current
+# call: adding kserve to an llmisvc cluster deleted every
+# LLMInferenceServiceConfig, and the other way round (CI-015).
+configs_present() {   # <type>
+  case "$1" in
+    llmisvc) kubectl -n kserve get llminferenceserviceconfig kserve-config-llm-scheduler >/dev/null 2>&1 ;;
+    kserve)  kubectl get clusterservingruntimes -o name 2>/dev/null | grep . >/dev/null ;;   # not -q (CI-007)
+    *)       return 0 ;;
+  esac
+}
+
 # 1. An existing cluster: reuse it, add what is missing, or stop.
-HAVE="" HAVE_MODE="" HAVE_KEDA="false" ADD="$WANT" CREATE=1
+HAVE="" HAVE_MODE="" HAVE_KEDA="false" ADD="$WANT" CREATE=1 REPAIR=0
 if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
   # `|| true`: jsonpath prints no trailing newline, so read returns 1 at EOF (set -e).
   IFS='|' read -r m_profile m_version m_types m_mode m_keda < <(
@@ -252,13 +265,19 @@ if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
     [[ "$KEDA" == true && "$HAVE_KEDA" != true ]] && ADD="$(printf '%s,kserve' "$ADD" | norm)"
     kubectl config use-context "kind-$KIND_CLUSTER_NAME" >/dev/null
     start_lb 0
+    # A cluster set up before CI-015 may have lost a part's configs: reinstall it.
+    if [[ -z "$ADD" ]]; then
+      for t in ${HAVE//,/ }; do
+        configs_present "$t" || { log "cluster has $t but not its configs (CI-015); reinstalling $t"; ADD="$(printf '%s,%s' "$ADD" "$t" | norm)"; REPAIR=1; }
+      done
+    fi
     if [[ -z "$ADD" ]]; then
       ensure_default_mode "$HAVE" "$HAVE_MODE"   # also repairs a cluster set up before CI-014
       lb_ready "$HAVE" || exit 1
       log "cluster '$KIND_CLUSTER_NAME' already provides ${HAVE} (KServe $KSERVE_VERSION) — reusing"
       exit 0
     fi
-    log "cluster '$KIND_CLUSTER_NAME' has ${HAVE:-nothing}; adding $ADD"
+    log "cluster '$KIND_CLUSTER_NAME' has ${HAVE:-nothing}; $([[ "$REPAIR" == 1 ]] && echo reinstalling || echo adding) $ADD"
   fi
 fi
 
@@ -281,7 +300,11 @@ if has "$ADD" kserve; then
   [[ "$MODE" == standard ]] && args+=(--raw) || args+=(--serverless)
   [[ "$KEDA" == true ]] && args+=(--keda)
 fi
-log "installing KServe $KSERVE_VERSION: ${args[*]}"
+ALL="$(printf '%s,%s' "$HAVE" "$ADD" | norm)"
+# The shared configs release keeps the parts of every type on the cluster (CI-015).
+export INSTALL_RUNTIMES="$(has "$ALL" kserve && echo true || echo false)"
+export INSTALL_LLMISVC_CONFIGS="$(has "$ALL" llmisvc && echo true || echo false)"
+log "installing KServe $KSERVE_VERSION: ${args[*]} (runtimes $INSTALL_RUNTIMES, llmisvc configs $INSTALL_LLMISVC_CONFIGS)"
 # Retry the KServe installer (up to 3 attempts) because two failures were seen
 # on fresh CI runners:
 #  - it applies the LLMInferenceServiceConfigs right after the controller
@@ -301,7 +324,8 @@ webhook_ready() {
   return 1
 }
 for attempt in 1 2 3; do
-  if [[ $attempt -eq 1 ]]; then
+  # a repair reinstalls a part the installer thinks is there: upgrade, do not skip
+  if [[ $attempt -eq 1 && "$REPAIR" == 0 ]]; then
     ./hack/kserve-install.sh "${args[@]}" && break
   else
     FORCE_UPGRADE=true ./hack/kserve-install.sh "${args[@]}" && break
@@ -311,8 +335,6 @@ for attempt in 1 2 3; do
   webhook_ready || log "webhook endpoint still not ready, retrying anyway"
   sleep 10
 done
-
-ALL="$(printf '%s,%s' "$HAVE" "$ADD" | norm)"
 
 # Known upstream issue (KServe v0.18.0 - v0.19.0): the well-known scheduler
 # config points to ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1, which is no
