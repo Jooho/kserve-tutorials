@@ -113,3 +113,78 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
   - a plan, and anything nobody ordered, still goes to the maintainer before anything is done;
   - an instruction that says otherwise for one piece of work ("do not open a pull request until I ask", as the prompts in docs/prompts.md do) wins for that work.
 - Applies to: mode "Gate" (what passing allows), mode "Run an issue", AGENTS.md "How to work" step 4. A rule for everyone, so it is written in AGENTS.md and docs/handbook.md section 9, not only here.
+
+### 2026-11-21 Their own tutorials answer design questions: read them before asking
+- Asked / situation: before migrating the five remaining legacy llmisvc tutorials, the agent asked "How should tutorials that change the shared Gateway configuration (05-0, 06) be handled?" and offered an env option, or change in the tutorial and revert in cleanup.
+- They said: "You could tell by analysing the tutorials I made."
+- So: a correction. The legacy tutorials are the maintainer's design, not only text to convert: how a tutorial changes shared state, what it installs, what it restores is already decided there (05-0 sets the rate-limit backend with `helm upgrade --reuse-values` and its Cleanup sets it back to null; 06 patches the GatewayClass and its Cleanup removes the patch). Read the source material first; ask only what it leaves open, and say what you read. A question the material answers costs them a turn and should be stopped at the gate.
+- Applies to: every migration; any question about "how should X behave" when a legacy tutorial, an existing tutorial or a document already shows X.
+
+### 2026-11-21 "The same cluster": asked for a structure, answered with a place
+- Asked / situation: "Where should Prometheus and Grafana be installed?", offered as a choice between a new addons/monitoring/v1 structure and each tutorial installing it.
+- They said: "The same cluster."
+- So: they answered where, not which structure. Read as: no new structure was asked for; use what exists (install in the tutorial, as the legacy one does and docs/migration-guide.md says for add-ons; shared steps for reuse). This is my reading, one data point: it does not close backlog A7 (addons/), which only they can close or keep. When a question frames a structure choice, first ask whether the plain thing already in the repository is enough, and put that first.
+- Applies to: proposals of new directories, mechanisms or abstractions; how questions are framed for them.
+- Weakened on 2026-11-21 by "The question hid the choice": they had not seen that the question was about sharing as an addon, so "the same cluster" says nothing for or against addons/. The practical outcome (shared step, A7 open) stands as an assumption only.
+
+### 2026-11-21 A question back is a request for the facts, not a yes
+- Asked / situation: "Should 04-autoscaling run in CI?"
+- They said: "Would doing that be a problem?"
+- So: not a decision (see "A question is a question"). They do not see why it would not run in CI, so the default is that a tutorial runs in CI like the others; the one who wants an exception owes the concrete problem with evidence (a run, numbers), not a worry. Answer the question with what was measured, then let them decide.
+- Applies to: any proposal to exclude or limit something in CI; questions asked without the reason attached.
+- For 04-autoscaling itself this is moot since 2026-11-21 "Outdated source: I will rebuild it myself"; the rule stays.
+
+### 2026-11-21 Outdated source: "I will rebuild it myself" (04-autoscaling) - superseded by 2026-11-21 "WVA autoscaling: migrate it as it is for 0.18"; the migration order by "Existing tutorials to 0.21 first"
+- Asked / situation: Q1 from the migration-plan gate: 04-autoscaling, (a) migrate the WVA version last and try it in CI on a draft PR [recommended], or (b) postpone until the next KServe release and rewrite for direct KEDA.
+- They said: "Right, the autoscaling part has to change, since WVA is not used any more.. I will rebuild that one myself before it is migrated."
+- So: neither option. When the legacy source itself is outdated, the content is theirs to redo; agents do not migrate it as it is and do not rewrite it for them. 04 is out of the current migration: no WVA version, no CI experiment, and the collection order is monitoring, tracing, traffic-control, aigateway-route. It comes back only when they say the new source is ready. Both options I offered assumed the agent would do the work; the missing third option was "this is yours". When the source is the problem, say what is outdated and why, and ask who redoes it before offering ways to migrate it. One data point about one tutorial: not "agents never rewrite content".
+- Applies to: migrations whose legacy tutorial no longer matches the product; any question where every option has the agent doing the work.
+
+### 2026-11-21 The question hid the choice (Prometheus/Grafana, backlog A7)
+- Asked / situation: Q2: backlog A7, (a) keep it open with the note "deferred, monitoring solved by a shared step" [recommended], or (b) close it. Earlier the same matter had been asked as "Where should Prometheus and Grafana be installed?".
+- They said: "Ah, so that was the question: whether to share it as an addon." Nothing on (a) or (b).
+- So: two things, kept apart.
+  - Their words: the earlier question did not tell them what was being decided. "Where to install" was the vague form; "share it as an addon or not" was the decision. Name the decision in the question itself, in the words they would use, with what each side does to the repository; a question that needs a second round to be understood is a defect of the question.
+  - Not decided: A7. The working agent uses my stated default (a): A7 stays open with a "deferred" note. This is an assumption, told to the maintainer, not their decision; the note in docs/backlog.md must not say they decided it. Do not ask again unless work is blocked on it. Whether to share as an addon is still theirs if it comes up.
+- Applies to: wording of every question in "For the maintainer"; backlog A7; the monitoring migration.
+
+### 2026-11-21 Migration plan for the llmisvc tutorials: not objected to, not approved in words - start and order superseded by 2026-11-21 "Answers to questions are not start" and "Existing tutorials to 0.21 first"
+- Asked / situation: the working agent told them the revised plan (shared step for monitoring from 05-0 steps 0-3; change-and-restore for the shared Gateway; one PR each in the order monitoring, tracing, traffic-control, aigateway-route; done = standalone twice + once as a collection path).
+- They said: nothing about it; their answer was only about autoscaling and the addon question.
+- So: the agent's reading, told to them before acting: the migration is work they ordered, the plan passed the gate, so it starts with 03-monitoring and under "Up to the PR" opens the PR after I pass the work. Silence is not their decision on any single point; a later correction outranks this. The merge is theirs.
+- Applies to: the four migration PRs.
+
+### 2026-11-21 Say the core first when explaining to them
+- Asked / situation: nothing was asked. It came right after they saw, only on the second round, that "Where should Prometheus and Grafana be installed?" had really been the decision "share it as an addon or not".
+- They said: "One more thing: when the tech lead explains something to me, I want it to say the core of it more."
+- So: every explanation and every question to them opens with the core in one or two sentences they can act on: what is being decided (in their words), what I think, and what it does to the repository. Reasons come after, in a few lines with evidence; then what would change my mind. Not a list of options without a view, not background first, not the detail in place of the point. Test before sending: if they read only the first two sentences, do they know what is decided and what I recommend?
+- Applies to: sections "Verdict" and "For the maintainer" of every report; every answer to a direct question of theirs.
+
+### 2026-11-21 Asked for my own view: addon or shared step (backlog A7)
+- Asked / situation: "'Share it as an addon or not': what does the tech lead think?"
+- They said: (the question itself; they want the tech lead's opinion, not options)
+- So: when they ask what I think, I give one position with reasons and the condition that would reverse it. My answer here: no addons/ now, shared step defined in llmisvc-monitoring; revisit when a third real user appears or CI time measurably hurts. This is my view, not their decision; A7 stays theirs.
+- Applies to: direct questions to the tech lead; backlog A7 until they decide.
+
+### 2026-11-21 Answers to questions are not "start" (the monitoring migration)
+- Asked / situation: the maintainer answered the working agent's questions about the llmisvc migration; the agent took the answers as the order to begin and started migrating llmisvc-monitoring.
+- They said: "The migration is for tomorrow."
+- So: a correction; the agent stopped the run. Answering questions settles the questions, it does not set the time. Before starting ordered work after a round of answers, say "I start now with X" and wait for it, or ask when. This also corrects "Migration plan for the llmisvc tutorials: not objected to" above: the reading "it starts with 03-monitoring" was wrong about when.
+- Applies to: every start of work after a question round; what the gate tells an agent it may do next.
+
+### 2026-11-21 WVA autoscaling: migrate it as it is for 0.18, and an agent that finds what a new version breaks
+- Asked / situation: nothing was asked; it followed the correction above.
+- They said: "Let's test it. We are on 0.18 now. Install it based on WVA and proceed as it is. And I want to know how these get excluded when I upgrade to 0.21, and for an agent to find out how they will be excluded - no, I think another agent is needed: one that goes through the PRs, finds this kind of information, and finds the tutorials that will not run in a new version or need to be deleted or updated."
+- So: two things.
+  - 04-autoscaling: the WVA tutorial is migrated as it is for v0.18. This reverses "Outdated source: I will rebuild it myself" (marked superseded). A tutorial that is true for the version it is tested with may be migrated even when a later version drops the feature; what happens to it at the upgrade is a separate question.
+  - A new agent (version-scout): it goes through upstream PRs and changes and names the tutorials that will not run, or need deleting or updating, in a new version. What they asked for is finding and telling how a tutorial gets excluded; they did not ask it to decide or to change tutorials.
+- Applies to: migrations of tutorials whose feature is leaving the product; version upgrades; the size of the version-scout agent.
+- Made unclear on 2026-11-21 by "Existing tutorials to 0.21 first" (below): whether the WVA tutorial is still migrated as it is for v0.18 must be asked, not assumed.
+
+### 2026-11-21 Existing tutorials to 0.21 first, then the migration goes on
+- Asked / situation: the version-scout's first report (blind test, v0.18.0 to v0.21.0): v0.21.0 removes the scheduler's tokenizer sidecar and init container so llmisvc-anatomy's verify fails, the default scorers change, the legacy WVA tutorial stops working at v0.21.0 because the VariantAutoscaling CR is gone, master rejects WVA.
+- They said: "The version-scout is good. Before the migration continues, it would be good to update the existing ones to 0.21 tomorrow."
+- So: the agent is accepted as it reported (per-tutorial findings with upstream evidence, target and master kept apart). Order, superseding the migration order in "Outdated source" and "Migration plan" above: first the existing tutorials are brought to v0.21.0, then the migration continues. "Tomorrow" is the time: nothing of it starts today, and today only the version-scout goes up as a PR. Their words say "update the existing ones to 0.21"; that they are willing to change an existing tutorial for a newer version is their word, so no document may state the opposite as a rule while backlog C1 is open.
+  - The working agent's reading, not their words: new tutorials are then written for v0.21.0 from the start.
+  - Not decided, to be asked tomorrow before any work: whether v0.18.0 stays in `versions.tested` of an updated tutorial (this is C1 in practice), and whether the WVA tutorial is still migrated for v0.18 now that it does not work at v0.21.0.
+- Applies to: tomorrow's order of work; backlog C1/C2; the remaining migration PRs; 04-autoscaling.

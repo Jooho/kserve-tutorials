@@ -17,6 +17,7 @@ to break. Then the document for your task below.
 | Write or edit a tutorial | [docs/authoring.md](docs/authoring.md) |
 | Migrate a tutorial from `Jooho/kserve-tutorials-legacy` | [docs/migration-guide.md](docs/migration-guide.md), then docs/authoring.md |
 | A CI run, scheduled run or canary failed | [docs/ci-playbook.md](docs/ci-playbook.md) |
+| Move tutorials to a new KServe version, or ask what a version will break | section "A new product version" below (`version-scout` agent), then [docs/ci-playbook.md](docs/ci-playbook.md) |
 | Groups, tags, collections, owners (`catalog/`) | docs/authoring.md § Groups, tags and collections |
 | Change `envs/`, `lib/` (shared parts) | docs/authoring.md § Shared parts, then RFC §4.6 |
 | Change `tools/`, `schema/`, rules or workflows | [docs/rfc/0001-repository-structure.md](docs/rfc/0001-repository-structure.md) |
@@ -173,6 +174,29 @@ maintainer says so.
 - Other agents (Codex, Copilot): read the planner's file and follow it
   yourself; filing issues still needs the maintainer's approval in the
   conversation.
+
+## A new product version: ask the version scout first
+
+The `version-scout` agent (`.claude/agents/version-scout.md`) finds out from
+the upstream changes themselves which tutorials a new product version will
+break, change or make obsolete, before anything is run.
+
+- Call it with a target (`v0.21.0`, or `master` for what is coming) before you
+  add a version to `versions.tested`, when a new upstream release appears, and
+  when a canary fails. Other agents: read its file and do the comparison
+  yourself.
+- It gives a verdict per tutorial (breaks, changes, obsolete, fine, unknown)
+  with evidence on both sides: the tutorial's file and line, and the upstream
+  source at both versions or the PR. It keeps apart what happens at the target
+  and what `master` announces for later.
+- It edits nothing and decides nothing. Its proposals are plans: they go to the
+  tech lead and then to the maintainer like any plan. A run (`./tut run <id>
+  --version <target>`) confirms a finding.
+- How one tutorial carries content that differs per version is still open
+  (docs/backlog.md C1). Neither the scout nor you settle it: when a finding
+  means a tutorial cannot be true for the old and the new version at once, put
+  the choice to the maintainer for that tutorial (docs/ci-playbook.md section 5
+  lists the options).
 
 ## Translations
 
