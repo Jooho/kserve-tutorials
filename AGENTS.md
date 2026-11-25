@@ -102,13 +102,14 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 3. **Commit only after `make precommit`** passes (0 errors). For a refactor,
    prove it changes nothing: compare `./tut run <id> --dry-run`, `./tut list`
    and the site before and after.
-4. **Work the maintainer ordered** (an approved issue, or an instruction in the
-   conversation) **may be committed, pushed and opened as a PR once the tech
-   lead has passed it** (next section); tell the maintainer the link. Anything
-   nobody ordered goes to the maintainer first. **Merge, force-push, push to
-   `stable`, delete a branch or change repository settings only when the
-   maintainer said so for that case.** Approval for one merge does not carry
-   over to the next.
+4. **Every git or GitHub write needs the maintainer's permission, every time.**
+   Branch, worktree, add, commit, push, PR, merge, re-run, issue, branch
+   delete, repository settings: first say what you want to do and why, the
+   exact commands, and what it changes (local only, remote, irreversible); then
+   ask and wait. A tech-lead pass is not permission. The permission covers the
+   steps you named, nothing after them. Never chain a push after a commit in one
+   command: a failed commit must stop everything after it. Read-only git
+   (status, log, diff, show) needs no permission.
 5. **When CI fails, find the root cause** (docs/ci-playbook.md). Never re-run
    hoping it passes more than once; never weaken a check.
 6. **Finish with the knowledge in the repository:** backlog item, lesson, or a
@@ -126,7 +127,8 @@ maintainer has answered so far.
   subagent. Other agents (Codex, Copilot) have no subagent: read both files and
   do its review yourself as a separate pass before you report, and say in your
   report that the review was your own, not an independent one.
-- Answering a question the maintainer asked, and small confirmations, need no
+- Answering a question the maintainer asked, carrying out what the maintainer
+  directly ordered (merge #N, re-run a job), and small confirmations need no
   gate.
 - Fix what it sends back and ask it again. What reaches the maintainer is its
   verdict and its questions, not your own summary.
@@ -140,10 +142,9 @@ maintainer has answered so far.
 - The notebook is committed. A change to it travels with the PR that is in
   progress when the maintainer answered; it does not make that PR run more
   tests.
-- When the tech lead passes work the maintainer ordered, commit, push and open
-  the PR without asking again. Merging, deleting or force-pushing a branch, and
-  changing repository settings or cluster-wide state still need the
-  maintainer's own word, whatever the tech lead says.
+- A tech-lead pass is never permission for git or GitHub: every such step still
+  needs the maintainer's own word (How to work, step 4), and so does changing
+  cluster-wide state.
 - A lesson that is a rule for everyone belongs in this file or in docs/, not
   only in the notebook; the tech lead says so when it sees one.
 
@@ -166,7 +167,8 @@ maintainer says so.
    branch from the latest `main`, one issue per PR ("Closes #<n>" in the PR
    text).
 4. **Check.** The result goes back to the tech lead as any work does. When it
-   passes, open the PR; the maintainer decides the merge.
+   passes, ask the maintainer before you commit, push and open the PR (How to
+   work, step 4); the maintainer decides the merge.
 
 - docs/backlog.md stays the record of problems with their evidence; an issue is
   the order to work on one of them. When an issue from the backlog is done,

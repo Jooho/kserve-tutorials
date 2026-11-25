@@ -52,7 +52,9 @@ def sandbox(tmp_path):
           printf '%s|%s|%s|%s|%s' "${{v[profile]}}" "${{v[kserve_version]}}" "${{v[types]}}" "${{v[mode]}}" "${{v[keda]}}" > $S/cm
           exit 0
         fi
-        [[ "$args" == *"get llminferenceserviceconfig"* ]] && exit 1
+        # the shared configs release: state/llmisvc_configs, state/runtimes (see the installer)
+        if [[ "$args" == *"get llminferenceserviceconfig"* ]]; then [ -f $S/llmisvc_configs ]; exit; fi
+        if [[ "$args" == *"get clusterservingruntimes"* ]]; then [ -f $S/runtimes ] && echo clusterservingruntime/kserve-sklearnserver; exit 0; fi
         # inferenceservice-config .data.deploy lives in state/deploy (absent: not readable)
         if [[ "$args" == *"get configmap inferenceservice-config"* ]]; then [ -f $S/deploy ] && cat $S/deploy || exit 1; exit 0; fi
         if [[ "$args" == *"patch configmap inferenceservice-config"* ]]; then
@@ -80,9 +82,24 @@ def sandbox(tmp_path):
     cache = tmp_path / "cache"
     src = cache / "kserve-v0.18.0"
     (src / ".git").mkdir(parents=True)
-    _exe(src / "hack" / "kserve-install.sh",
-         f'echo "$*" >> {state}/installs; echo "${{PLATFORM:-}}" > {state}/platform\n'
-         f'prev=; for a in "$@"; do [[ $prev == --type && ",$a," == *,kserve,* ]] && touch {state}/kserve_ctrl; prev=$a; done; exit 0\n')
+    # Like the real one, it upgrades the one kserve-runtime-configs release with
+    # INSTALL_RUNTIMES / INSTALL_LLMISVC_CONFIGS, defaulting to the types of this call.
+    _exe(src / "hack" / "kserve-install.sh", f'''
+        S={state}
+        echo "$*" >> $S/installs; echo "${{PLATFORM:-}}" > $S/platform; echo "${{FORCE_UPGRADE:-}}" >> $S/force
+        prev=; k=false; l=false
+        for a in "$@"; do
+          [[ $prev == --type && ",$a," == *,kserve,* ]] && {{ k=true; touch $S/kserve_ctrl; }}
+          [[ $prev == --type && ",$a," == *,llmisvc,* ]] && l=true
+          prev=$a
+        done
+        r="${{INSTALL_RUNTIMES:-$k}}"; c="${{INSTALL_LLMISVC_CONFIGS:-$l}}"
+        if [[ $r == true || $c == true ]]; then
+          [[ $r == true ]] && touch $S/runtimes || rm -f $S/runtimes
+          [[ $c == true ]] && touch $S/llmisvc_configs || rm -f $S/llmisvc_configs
+        fi
+        exit 0
+        ''')
     _exe(src / "hack" / "setup" / "dev" / "manage.kind-with-registry.sh",
          f'echo "$KIND_CLUSTER_NAME" > {state}/cluster; echo created >> {state}/creates\n')
 
@@ -174,6 +191,7 @@ def test_cluster_from_the_replaced_profile_counts_as_llmisvc(sandbox):
     run, read, state = sandbox
     (state / "cluster").write_text("kind")
     (state / "cm").write_text("kind-llmisvc/v1|v0.18.0|||")
+    (state / "llmisvc_configs").touch()                  # a working llmisvc cluster has them
     assert "reusing" in run({"TUT_ENV_TYPES": "llmisvc"}).stdout
     run({"TUT_ENV_TYPES": "kserve"})
     assert read("installs") == ["--type kserve --kserve-version v0.18.0 --raw"] and read("creates") == []
@@ -273,3 +291,25 @@ def test_serverless_keeps_knative(sandbox):
     (state / "deploy").write_text('{"defaultDeploymentMode": "Knative"}')
     run({"TUT_ENV_TYPES": "kserve", "TUT_ENV_MODE": "serverless"})
     assert read("deploy_patches") == []
+
+
+# CI-015: the installer keeps ClusterServingRuntimes and LLMInferenceServiceConfigs
+# in one Helm release and upgraded it with only the types of the current call.
+@pytest.mark.parametrize("first,then", [("llmisvc", "kserve"), ("kserve", "llmisvc")])
+def test_adding_a_type_keeps_the_configs_of_the_other(sandbox, first, then):
+    run, read, state = sandbox
+    run({"TUT_ENV_TYPES": first})
+    run({"TUT_ENV_TYPES": then})
+    assert (state / "llmisvc_configs").exists() and (state / "runtimes").exists()
+
+
+def test_a_cluster_that_lost_its_llmisvc_configs_is_repaired_once(sandbox):
+    run, read, state = sandbox
+    run({"TUT_ENV_TYPES": "kserve,llmisvc"})
+    (state / "llmisvc_configs").unlink()                 # what the old setup left behind
+    r = run({"TUT_ENV_TYPES": "llmisvc"})                # reuse path
+    assert "reinstalling llmisvc" in r.stdout
+    assert (state / "llmisvc_configs").exists() and (state / "runtimes").exists()
+    assert read("force")[-1] == "true"                   # the installer would skip "already installed"
+    run({"TUT_ENV_TYPES": "llmisvc"})                    # now nothing to do
+    assert len(read("installs")) == 2

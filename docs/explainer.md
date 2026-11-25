@@ -70,6 +70,8 @@ You write `tutorials/<id>/explainer/` alone, start to end. Nobody answers questi
 - General background (what a Gateway is, what KV cache means) may come from your knowledge; keep it short and do not attach numbers or names to it you did not observe.
 - A part that looks out of place (an init container on a Pod that serves no model, an idle sidecar) needs its reason, not only its name: a reader stops there. If the cluster does not show the reason, look it up in the product's source for that version and say in the text that it comes from the source.
 - Values that change per run (IPs, generated suffixes, timings) are examples: write "e.g." or use the stable part of the name.
+- Name the component that really does the work, as the cluster shows it. LLMInferenceService is reconciled by `llmisvc-controller-manager`; `kserve-controller-manager` handles the predictive InferenceService. Do not write "the KServe controller" for either.
+- A flow picture must not show something passing through a component it only consults. The EPP is asked by Envoy over ExtProc; the request goes from Envoy to the Pod, not through the EPP.
 
 ### 3. Shape of `explainer/index.md`
 

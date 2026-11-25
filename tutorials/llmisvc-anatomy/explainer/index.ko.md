@@ -24,13 +24,15 @@
 
 ### 객체 하나에서 열 개로
 
-![kubectl apply가 LLMInferenceService를 만들고, KServe 컨트롤러가 네 그룹으로 객체 열 개를 만드는 과정](one-apply-ten-resources.svg)
+![kubectl apply가 LLMInferenceService를 만들고, llmisvc 컨트롤러가 네 그룹으로 객체 열 개를 만드는 과정](one-apply-ten-resources.svg)
 
 apply 전에는 네임스페이스가 비어 있습니다(step 2). `kubectl apply`(step 3) 후 약
 6초 안에 객체 열 개가 모두 생깁니다. 그다음 Pod가 Ready가 되기까지
 몇 분이 걸립니다(step 4). LLMInferenceService를 주문서라고
 생각하면 됩니다. 여러분은 모델, 이미지, 자원만 적고, 나머지 서류 작업은 컨트롤러가
-합니다.
+합니다. 이 컨트롤러는 `kserve` 네임스페이스의 `llmisvc-controller-manager`입니다.
+옆에 있는 `kserve-controller-manager`는 predictive 모델용 InferenceService를 다루며,
+이 객체는 다루지 않습니다.
 
 | 그룹 | 객체 | 역할 |
 |---|---|---|
@@ -63,7 +65,12 @@ securityContext, 그리고 probe 타이밍입니다.
    (라벨 `kserve.io/component: workload`, 포트 8000으로) 알고, 그중 누가 고를지도 압니다
    (`endpointPickerRef`: EPP Service, 포트 9002).
 4. Envoy가 ExtProc gRPC로 **EPP**에게 "어느 Pod?"라고 묻습니다. EPP는 Pod에 점수를
-   매기고 주소 하나를 돌려줍니다.
+   매기고 주소 하나를 돌려줍니다. 요청 자체는 EPP를 지나가지 않습니다. Envoy가 답을
+   기다리는 동안 요청을 쥐고 있습니다. (이 내용은 설정에서 읽은 것입니다. walk에는 EPP가
+   고른 기록이 없고, Pod가 하나라 답도 하나뿐입니다.) 실제로 Envoy는 세 번 묻습니다.
+   Envoy Gateway는 InferencePool을 가리키는 HTTPRoute 규칙마다 ExtProc 필터를 하나씩 넣는데,
+   그런 규칙이 세 개 있기 때문입니다(아래). 이것은 이 walk가 아니라 나중 실행에서 Envoy 설정으로
+   확인했습니다. llmisvc-request-flow가 EPP 로그로 보여 줍니다.
 5. Envoy가 그 **vLLM Pod**로 요청을 보내고, 응답은 같은 길로 돌아옵니다(step 16에서
    20토큰짜리 completion을 받았습니다).
 
@@ -92,7 +99,7 @@ EPP를 쓸 수 없을 때를 대비해 pool의 `failureMode`는 `FailOpen`입니
   그 플러그인이 없습니다.
 - **storage-initializer** (init). 모델을 서빙하지 않는 스케줄러에 있으니 이상해 보입니다.
   이것은 tokenizer 사이드카 때문에 있습니다. 스케줄러 템플릿에 `tokenizer` 컨테이너가
-  있으면 KServe 컨트롤러가 vLLM Pod와 같은 init 컨테이너를 붙이되,
+  있으면 llmisvc 컨트롤러가 vLLM Pod와 같은 init 컨테이너를 붙이되,
   `STORAGE_ALLOW_PATTERNS`로 tokenizer 파일(`tokenizer.json`, `vocab.json`,
   `config.json` 등)만 받게 합니다. 가중치는 받지 않습니다. 사이드카는 이 파일을
   `/mnt/models`에서 읽습니다. 즉 기본 플러그인 설정에서는 아무도 부르지 않는 컨테이너를
