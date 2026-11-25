@@ -319,8 +319,36 @@ What the EPP log lines mean:
   shows `modelName` and `targetModelName`
 - `EPP sent response body back to proxy`: the vLLM answer went back to Envoy
 
-One request can produce several of these lines: ExtProc handles headers, body
-and trailers as separate messages.
+The same request id shows up in several complete sets of these lines, one set
+per ExtProc filter in Envoy. The HTTPRoute has three rules that send to the
+InferencePool (`/v1/completions`, `/v1/chat/completions`, `/v1/responses`), and
+Envoy Gateway adds one ExtProc filter for each of them to the Gateway's
+listener. All of them run for every request to these paths, so the EPP is asked
+once per rule: three times here, with the same single Pod as the answer. The
+check counts both:
+
+```bash verify retry=6 delay=5
+RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
+import json, sys
+print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
+          if any(b.get("kind") == "InferencePool" for b in rule.get("backendRefs", []))))')
+SETS=$(kubectl logs -n "$NS" \
+  -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
+  -c main --since=5m --tail=-1 \
+  | grep "$REQUEST_ID" | grep -c "EPP received request")
+echo "HTTPRoute rules to the InferencePool: $RULES; EPP sets for this request: $SETS"
+test "$RULES" -gt 0 && test "$SETS" -eq "$RULES"
+```
+
+Each set also ends with an error-level line, `Request latency values are
+invalid for TPOT calculation`. It does not mean the request failed; the EPP
+only skips one metric, TPOT (time per output token). The reason is in the EPP's
+source (llm-d-router v0.9.0, the image of this environment): when the answer is
+not streamed it arrives in one message, and the EPP stamps the complete time
+(`handlers/server.go`) just before the first-token time (`handlers/response.go`).
+TPOT needs the complete time to be later (`metrics/metrics.go`,
+`RecordRequestTPOT`), so the check fails and logs this line. You can see it in
+the line itself: `completeTime` is a few microseconds before `firstTokenTime`.
 
 ### 4. Which vLLM Pod handled it
 

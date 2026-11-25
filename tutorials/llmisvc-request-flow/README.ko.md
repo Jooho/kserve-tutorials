@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=14a25f0aa110 -->
+<!-- tut-translation source=README.md sha=857574b45c83 -->
 # 요청의 여정 — Gateway에서 vLLM까지
 
 <!-- tut:header -->
@@ -320,8 +320,34 @@ EPP 로그 각 줄의 의미:
   `modelName`과 `targetModelName`이 표시됩니다
 - `EPP sent response body back to proxy`: vLLM의 응답이 Envoy로 되돌아갔습니다
 
-요청 하나에 이런 줄이 여러 개 나올 수 있습니다. ExtProc이 헤더, 본문, 트레일러를
-각각 별도의 메시지로 처리하기 때문입니다.
+같은 요청 id가 이 줄들의 완전한 세트로 여러 번 나옵니다. Envoy의 ExtProc 필터마다
+한 세트입니다. HTTPRoute에는 InferencePool로 보내는 규칙이 세 개 있고(`/v1/completions`,
+`/v1/chat/completions`, `/v1/responses`), Envoy Gateway는 규칙마다 ExtProc 필터를 하나씩
+Gateway의 리스너에 추가합니다. 이 경로로 오는 요청마다 필터가 모두 실행되므로 EPP는 규칙
+수만큼 질문을 받습니다. 여기서는 세 번이고, 답은 모두 같은 Pod 하나입니다. 아래 확인은
+둘을 셉니다.
+
+```bash verify retry=6 delay=5
+RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
+import json, sys
+print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
+          if any(b.get("kind") == "InferencePool" for b in rule.get("backendRefs", []))))')
+SETS=$(kubectl logs -n "$NS" \
+  -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
+  -c main --since=5m --tail=-1 \
+  | grep "$REQUEST_ID" | grep -c "EPP received request")
+echo "HTTPRoute rules to the InferencePool: $RULES; EPP sets for this request: $SETS"
+test "$RULES" -gt 0 && test "$SETS" -eq "$RULES"
+```
+
+세트마다 마지막에 error 레벨 줄 `Request latency values are invalid for TPOT
+calculation`이 붙습니다. 요청이 실패했다는 뜻은 아니고, EPP가 TPOT(출력 토큰당 시간)
+메트릭 하나를 건너뛸 뿐입니다. 이유는 EPP 소스(이 환경의 이미지인 llm-d-router v0.9.0)에
+있습니다. 스트리밍하지 않는 답은 메시지 하나로 도착하고, EPP는 완료 시각
+(`handlers/server.go`)을 첫 토큰 시각(`handlers/response.go`)보다 바로 앞에 찍습니다.
+TPOT 계산은 완료 시각이 더 늦어야 하므로(`metrics/metrics.go`, `RecordRequestTPOT`)
+확인에 실패하고 이 줄을 남깁니다. 줄 자체에서도 보입니다. `completeTime`이
+`firstTokenTime`보다 몇 마이크로초 앞섭니다.
 
 ### 4. 어느 vLLM Pod가 처리했는가
 
