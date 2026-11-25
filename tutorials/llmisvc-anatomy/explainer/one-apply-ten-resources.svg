@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" role="img" aria-labelledby="t d">
 <title id="t">One apply, ten resources</title>
-<desc id="d">kubectl apply creates one LLMInferenceService; the KServe controller then creates ten objects in four groups, all owned by the LLMInferenceService.</desc>
+<desc id="d">kubectl apply creates one LLMInferenceService; the llmisvc controller then creates ten objects in four groups, all owned by the LLMInferenceService.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
   .h { font-size: 15px; font-weight: 650; }
@@ -37,7 +37,7 @@
 <text class="m" x="30" y="196">demo-model</text>
 
 <rect class="ctl" x="16" y="246" width="200" height="60" rx="10"/>
-<text class="h" x="30" y="271">KServe controller</text>
+<text class="h" x="30" y="271">llmisvc controller</text>
 <text class="s" x="30" y="292">+ well-known configs merged</text>
 
 <path class="arrow" d="M116 114 V148"/>

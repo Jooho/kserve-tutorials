@@ -24,7 +24,7 @@
 
 ### 빈 필드 세 개, 경로 전체
 
-매니페스트에는 `router: {scheduler: {}, route: {}, gateway: {}}`가 있습니다. KServe 컨트롤러는
+매니페스트에는 `router: {scheduler: {}, route: {}, gateway: {}}`가 있습니다. llmisvc 컨트롤러(`llmisvc-controller-manager`)는
 이것을 보고 EPP 스케줄러, HTTPRoute, InferencePool을 만들고, 라우트를 공용 Gateway
 `kserve/kserve-ingress-gateway`에 붙였습니다(step 5가 `Programmed`가 될 때까지 기다립니다).
 
@@ -177,8 +177,9 @@ step 18은 그 권한만 가진 ServiceAccount를 만들고, step 19는 그 계�
   prefix indexer 카운터가 요청마다 3씩 늘었습니다. Envoy는 요청마다 전달 한 줄만 남겼습니다.
   README는 여러 줄이 찍히는 이유를 ExtProc이 header, body, trailer를 따로 보내기 때문이라고
   설명하지만, 실행에서는 완전한 세트가 반복되었습니다. 라우트에 InferencePool을 가리키는 규칙이
-  세 개 있다는 점과 관련 있을 수 있지만, 이번 실행에서 Envoy 설정은 보지 않았으므로 원인은 열려
-  있고, 이 환경의 Envoy Gateway / AI Gateway 버전에 따라 다를 수도 있습니다.
+  세 개 있다는 것이 원인입니다. 이 walk 뒤(2026-11-24)에 읽은 Envoy 설정에는 Gateway 리스너에
+  그런 규칙마다 ExtProc 필터가 하나씩 있고, 이 경로들에서 셋 다 켜져 있습니다. README는 이제 이를
+  설명하고, 세트 수가 규칙 수와 같은지 확인합니다.
 - README의 메트릭 표는 KV-cache 메트릭에 `kv-cache-utilization-scorer`를 짝지어 두었습니다.
   이번 실행의 EPP effective configuration에는 그 scorer가 없습니다.
 - 이 환경에서 InferencePool은 Envoy AI Gateway의 `ai-gateway-controller`가 받아들입니다.

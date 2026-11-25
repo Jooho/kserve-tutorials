@@ -25,12 +25,15 @@ to a shared Gateway. The tutorial is about that one step from "one object" to
 
 ### From one object to ten
 
-![kubectl apply creates the LLMInferenceService; the KServe controller creates ten objects in four groups](one-apply-ten-resources.svg)
+![kubectl apply creates the LLMInferenceService; the llmisvc controller creates ten objects in four groups](one-apply-ten-resources.svg)
 
 The namespace is empty before the apply (step 2). Within about six seconds of
 `kubectl apply` (step 3) all ten objects exist; the Pods then need a few
 minutes until they are Ready (step 4). Think of the LLMInferenceService as an order form: you fill in the
-model, the image and the resources; the controller does the paperwork.
+model, the image and the resources; the controller does the paperwork. That
+controller is `llmisvc-controller-manager` in the `kserve` namespace; the
+`kserve-controller-manager` next to it handles the predictive InferenceService,
+not this object.
 
 | Group | Objects | What for |
 |---|---|---|
@@ -68,7 +71,13 @@ Look at the first picture again, step by step:
    Pods (by label: `kserve.io/component: workload`, port 8000) and who picks
    among them (`endpointPickerRef`: the EPP Service, port 9002).
 4. Envoy asks the **EPP** over ExtProc gRPC: "which Pod?". The EPP scores the
-   Pods and returns one address.
+   Pods and returns one address. The request itself does not pass through the
+   EPP: Envoy keeps it while it waits for the answer. (This comes from the
+   configuration; the walk did not log the EPP's choice, and with one Pod there
+   is only one answer.) Envoy in fact asks three times: Envoy Gateway adds one
+   ExtProc filter per HTTPRoute rule that points at the InferencePool, and there
+   are three such rules (below). This was seen in Envoy's configuration on a
+   later run, not in this walk; llmisvc-request-flow shows it in the EPP log.
 5. Envoy sends the request to that **vLLM Pod**; the answer comes back the same
    way (step 16 got a 20-token completion).
 
@@ -99,7 +108,7 @@ this):
   tokenizer's Unix socket, and that plugin is not in this configuration.
 - **storage-initializer** (init). It looks odd on a scheduler, which serves no
   model. It is there only because of the tokenizer sidecar: when the scheduler
-  template has a `tokenizer` container, the KServe controller adds the same
+  template has a `tokenizer` container, the llmisvc controller adds the same
   init container the vLLM Pod has, but limited by `STORAGE_ALLOW_PATTERNS` to
   the tokenizer files (`tokenizer.json`, `vocab.json`, `config.json`, ...), no
   weights. The sidecar reads them from `/mnt/models`. So with the default
