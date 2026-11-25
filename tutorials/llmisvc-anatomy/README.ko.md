@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=b1d6d0e24a7f -->
+<!-- tut-translation source=README.md sha=ee470255d3dd -->
 # 한 번의 Apply, 열 개의 리소스 — LLMInferenceService 해부
 
 <!-- tut:header -->
@@ -16,6 +16,16 @@ Kubernetes 리소스를 만듭니다. 이 튜토리얼에서는 그 과정을 �
 
 > **핵심 질문:** LLMInferenceService YAML 하나를 apply 하면
 > 클러스터 안에서는 어떤 일이 일어날까요?
+
+배울 내용:
+
+- LLMInferenceService 하나가 무엇으로 바뀌는지: vLLM 워크로드, EPP 스케줄러,
+  InferencePool, HTTPRoute, 그리고 그 사이를 잇는 Service들.
+- 직접 쓰지 않은 설정이 어디서 오는지: 여러분의 오브젝트에 합쳐지는 well-known
+  LLMInferenceServiceConfig.
+- 조각들이 어떻게 이어지는지: Gateway, HTTPRoute, InferencePool, 스케줄러, vLLM Pod.
+- 스케줄러 Pod 안에서 무엇이 돌고, 기본 설정이 그중 무엇을 쓰는지.
+- LLMInferenceService 하나만 지우면 정리가 끝나는 이유(owner reference).
 
 ## Step 0: 환경 준비
 

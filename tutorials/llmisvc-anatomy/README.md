@@ -16,6 +16,19 @@ resource is for.
 > **Key question:** what happens inside the cluster when you apply one
 > LLMInferenceService YAML?
 
+What you will learn:
+
+- What one LLMInferenceService turns into: a vLLM workload, an EPP scheduler,
+  an InferencePool, an HTTPRoute and the Services between them.
+- Where the settings you did not write come from: the well-known
+  LLMInferenceServiceConfigs that are merged into your object.
+- How the pieces connect: Gateway, HTTPRoute, InferencePool, scheduler and
+  vLLM Pods.
+- What runs inside the scheduler Pod, and which of its parts the default
+  configuration uses.
+- Why deleting the LLMInferenceService is enough to clean up (owner
+  references).
+
 ## Step 0: Environment
 
 This prepares a Kind cluster with KServe LLMInferenceService (see the environment
