@@ -1,0 +1,767 @@
+{
+  "dashboard": {
+    "panels": [
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "title": "InferencePool Status",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 0,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "inference_pool_ready_pods",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "title": "Ready Pods",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 5
+                },
+                {
+                  "color": "red",
+                  "value": 20
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 4,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "inference_pool_average_queue_size",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "title": "Avg Queue Size",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.7
+                },
+                {
+                  "color": "red",
+                  "value": 0.9
+                }
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 8,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "inference_pool_average_kv_cache_utilization",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "title": "Avg KV Cache Utilization",
+        "type": "gauge",
+        "description": "The EPP's average of vllm:kv_cache_usage_perc over the Pods of the pool, as the EPP last read it from vLLM."
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "fixedColor": "green",
+              "mode": "fixed"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "failed"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "red",
+                    "mode": "fixed"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "sum(inference_extension_scheduler_attempts_total{status=\"success\"})",
+            "legendFormat": "success"
+          },
+          {
+            "expr": "sum(inference_extension_scheduler_attempts_total{status!=\"success\"})",
+            "legendFormat": "failed"
+          }
+        ],
+        "title": "Scheduler Attempts (Success/Fail)",
+        "type": "stat",
+        "description": "EPP scheduling calls, not requests. With the default HTTPRoute Envoy calls the EPP once per route rule that points at the InferencePool (three rules), so one request counts three times."
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 1
+        },
+        "targets": [
+          {
+            "expr": "inference_pool_per_pod_queue_size",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "title": "Per-Pod Queue Size",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.3
+                },
+                {
+                  "color": "green",
+                  "value": 0.6
+                }
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 0,
+          "y": 5
+        },
+        "targets": [
+          {
+            "expr": "avg(vllm:prefix_cache_hits_total / (vllm:prefix_cache_queries_total + 0.001))",
+            "legendFormat": "Cluster Avg"
+          }
+        ],
+        "title": "Avg Cache Hit Rate",
+        "type": "gauge",
+        "description": "Computed from vLLM counters (vllm:prefix_cache_hits_total / vllm:prefix_cache_queries_total), not from the InferencePool or the EPP. Counts since each vLLM Pod started, averaged over Pods. Shows 0% before the first request: the +0.001 avoids dividing by zero."
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            },
+            "decimals": 0
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "desired (WVA)"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "fill": "dash",
+                    "dash": [
+                      10,
+                      5
+                    ]
+                  }
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "orange",
+                    "mode": "fixed"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 20,
+          "x": 4,
+          "y": 5
+        },
+        "targets": [
+          {
+            "expr": "inference_pool_ready_pods",
+            "legendFormat": "actual (Ready Pods)"
+          },
+          {
+            "expr": "wva_desired_replicas",
+            "legendFormat": "desired (WVA)"
+          }
+        ],
+        "title": "Pod Count: Actual vs Desired",
+        "type": "timeseries",
+        "description": "Actual = Ready Pods of the InferencePool. Desired comes from the WVA autoscaler (wva_desired_replicas), which this tutorial does not install: it stays empty."
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 9
+        },
+        "title": "EPP Scheduling Performance",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 5
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 10
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(inference_extension_scheduler_e2e_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(inference_extension_scheduler_e2e_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(inference_extension_scheduler_e2e_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ],
+        "title": "Scheduler E2E Latency (p50/p95/p99)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 5
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 10
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(inference_extension_plugin_duration_seconds_sum{extension_point=~\"Scorer|Picker\"}[5m])) by (plugin_name) / sum(rate(inference_extension_plugin_duration_seconds_count{extension_point=~\"Scorer|Picker\"}[5m])) by (plugin_name)",
+            "legendFormat": "{{plugin_name}}"
+          }
+        ],
+        "title": "Plugin Duration (avg)",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 18
+        },
+        "title": "Request & Token Stats",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10
+            },
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 19
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(inference_objective_request_total[5m])) by (model_name)",
+            "legendFormat": "{{model_name}}"
+          }
+        ],
+        "title": "Request Throughput (RPS)",
+        "type": "timeseries",
+        "description": "Counted by the EPP per scheduling call, so with the default HTTPRoute one request counts three times (see Scheduler Attempts)."
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 27
+        },
+        "title": "vLLM Engine Status",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.7
+                },
+                {
+                  "color": "red",
+                  "value": 0.9
+                }
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 0,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "vllm:kv_cache_usage_perc",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "title": "vLLM KV Cache Utilization",
+        "type": "gauge"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.3
+                },
+                {
+                  "color": "green",
+                  "value": 0.6
+                }
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 6,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "rate(vllm:prefix_cache_hits_total[5m]) / rate(vllm:prefix_cache_queries_total[5m])",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "title": "vLLM KV Cache Hit Rate",
+        "type": "gauge",
+        "description": "Despite the name, the prefix cache hit rate: the same vLLM counters as 'Avg Cache Hit Rate', but only over the last 5 minutes, per Pod. Empty before the first request; drops to 0% five minutes after the traffic stops."
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 15
+            }
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 12,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "vllm:num_requests_running",
+            "legendFormat": "running"
+          },
+          {
+            "expr": "vllm:num_requests_waiting",
+            "legendFormat": "waiting"
+          }
+        ],
+        "title": "vLLM Running / Waiting Requests",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 5
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 34
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(vllm:time_to_first_token_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(vllm:time_to_first_token_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(vllm:time_to_first_token_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ],
+        "title": "TTFT (Time to First Token)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 5
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 18,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(vllm:e2e_request_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(vllm:e2e_request_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(vllm:e2e_request_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ],
+        "title": "E2E Request Latency",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 12,
+          "y": 34
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(vllm:prompt_tokens_total[5m]))",
+            "legendFormat": "prompt tokens/s"
+          },
+          {
+            "expr": "sum(rate(vllm:generation_tokens_total[5m]))",
+            "legendFormat": "generation tokens/s"
+          }
+        ],
+        "title": "Prompt / Generation Token Throughput",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 40
+        },
+        "title": "Pod Resource Usage",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 15
+            },
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 41
+        },
+        "targets": [
+          {
+            "expr": "container_memory_working_set_bytes{namespace=\"kserve-demo\", pod=~\"demo-model.*\", container=\"main\"}",
+            "legendFormat": "{{pod}}"
+          }
+        ],
+        "title": "Pod Memory Usage (Working Set)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 15
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 12,
+          "y": 41
+        },
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{namespace=\"kserve-demo\", pod=~\"demo-model.*\", container=\"main\"}[5m])",
+            "legendFormat": "{{pod}}"
+          }
+        ],
+        "title": "Pod CPU Usage (cores)",
+        "type": "timeseries"
+      }
+    ],
+    "refresh": "10s",
+    "tags": [
+      "kserve",
+      "llmisvc",
+      "vllm",
+      "epp"
+    ],
+    "time": {
+      "from": "now-15m",
+      "to": "now"
+    },
+    "timezone": "browser",
+    "title": "KServe LLMIsvc Overview",
+    "uid": "llmisvc-overview"
+  },
+  "overwrite": true
+}

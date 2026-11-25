@@ -14,6 +14,7 @@ CI recently checked that it does.
 |---|---|---|---|---|---|
 | [Two Models, One Answer — InferenceGraph Ensemble and Combiner](tutorials/inferencegraph-ensemble/) | 🚧 draft | v0.18.0 | `inferencegraph` `inferenceservice` `mlserver` `storage` `ensemble` `intermediate` | `kind-kserve/v1` | no |
 | [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-kserve/v1` | no |
+| [Through the Scheduler's Eyes - Metric Observation](tutorials/llmisvc-monitoring/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `observability` `intermediate` | `kind-kserve/v1` | no |
 | [Journey of a Request — From Gateway to vLLM](tutorials/llmisvc-request-flow/) | 🚧 draft | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `envoy-gateway` `vllm` `request-flow` `observability` `intermediate` | `kind-kserve/v1` | no |
 
 **Collections** (reading paths)
@@ -21,10 +22,11 @@ CI recently checked that it does.
 - **LLMInferenceService deep dive** — From one YAML to the resources it creates, how a request is routed, how to observe it and how it scales.
   1. [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/)
   2. [Journey of a Request — From Gateway to vLLM](tutorials/llmisvc-request-flow/)
+  3. [Through the Scheduler's Eyes - Metric Observation](tutorials/llmisvc-monitoring/)
 
 **By KServe version**
 
-- **v0.18.0**: [inferencegraph-ensemble](tutorials/inferencegraph-ensemble/), [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [llmisvc-request-flow](tutorials/llmisvc-request-flow/)
+- **v0.18.0**: [inferencegraph-ensemble](tutorials/inferencegraph-ensemble/), [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [llmisvc-monitoring](tutorials/llmisvc-monitoring/), [llmisvc-request-flow](tutorials/llmisvc-request-flow/)
 
 <!-- /tut -->
 

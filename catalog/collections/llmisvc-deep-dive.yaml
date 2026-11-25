@@ -16,5 +16,6 @@ vars:
 members:
   - llmisvc-anatomy
   - llmisvc-request-flow
-  # planned (from the legacy repository): llmisvc-monitoring, llmisvc-autoscaling,
-  # llmisvc-traffic-control, llmisvc-aigateway-route, llmisvc-tracing
+  - llmisvc-monitoring
+  # planned (from the legacy repository): llmisvc-tracing, llmisvc-traffic-control,
+  # llmisvc-aigateway-route; llmisvc-autoscaling on hold (the maintainer decides)
