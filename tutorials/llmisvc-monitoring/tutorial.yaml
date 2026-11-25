@@ -1,0 +1,21 @@
+# Schema: schema/tutorial.schema.json  ·  Rules: ./tut lint  ·  Guide: CONTRIBUTING.md
+id: llmisvc-monitoring                 # must equal the directory name
+title:
+  en: "Through the Scheduler's Eyes - Metric Observation"
+  ko: "스케줄러의 눈으로 - 메트릭 관찰"
+summary:
+  en: Scrape vLLM and EPP scheduler metrics with Prometheus, import a Grafana dashboard and watch KV cache and queue metrics move under load.
+  ko: Prometheus로 vLLM과 EPP 스케줄러 메트릭을 수집하고, Grafana 대시보드를 가져와 부하 중 KV cache와 큐 메트릭의 변화를 관찰합니다.
+status: draft                   # draft -> stable -> deprecated -> archived
+group: llmisvc   # from catalog/groups.yaml: what kind of tutorial (the UI's Groups view)
+env: kind-kserve/v1             # a FROZEN profile under envs/ (required for stable)
+env_options: {types: [llmisvc]}   # LLMInferenceService + its gateway stack
+namespace: llmisvc-monitoring          # defaults to the id
+versions:
+  default: v0.18.0              # what readers and PR CI use
+  tested: [v0.18.0]             # what the weekly CI runs; must include default
+tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, observability, intermediate]
+requires: {gpu: false, cpu: 4, memory: 16Gi}
+langs: [en, ko]                 # en is the source; others are translations
+timeout_minutes: 60
+owners: [Jooho]

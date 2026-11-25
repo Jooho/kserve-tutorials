@@ -1,0 +1,25 @@
+# Scrapes both Services of the LLMInferenceService in this namespace:
+# the EPP scheduler (port "metrics", 9090, bearer token required) and
+# vLLM (port "https", 8000; the port is named https but serves plain HTTP
+# unless TLS is enabled for LLMInferenceServices).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kserve-llmisvc-metrics
+  labels:
+    release: prometheus   # kube-prometheus-stack selects ServiceMonitors by its release name
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: llminferenceservice
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    bearerTokenSecret:
+      name: metrics-reader-token
+      key: token
+  - port: https
+    path: /metrics
+    interval: 15s
+    scheme: http

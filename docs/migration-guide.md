@@ -34,6 +34,8 @@ Write down, before changing anything:
 | Which files does the text show inline? | Must become `tut:include` (step 5) |
 | Anything internal (registries, hostnames, tokens)? | Remove before committing |
 
+Before you ask the maintainer a design question about the old tutorial (where something should be installed, whether a part is shared), read that tutorial's step and its Cleanup section: they usually answer it already.
+
 ## 2. Choose the environment profile
 
 - If an existing profile builds the cluster the tutorial needs, use it.
