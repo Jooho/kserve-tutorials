@@ -52,6 +52,8 @@ Fill in `tutorial.yaml` (it starts as `status: draft`, English only). Pick `tags
 
 ## 4. Rewrite the README
 
+Decide what the tutorial teaches before converting a single command: write the "What you will learn" list for the top of the README (docs/authoring.md section 3). The old text is the starting material, not the bar: it often has the commands without saying what to look at or why. A migration that only converts commands is not done.
+
 Map the old patterns to the new ones:
 
 | Old pattern | New pattern |
@@ -64,6 +66,7 @@ Map the old patterns to the new ones:
 | "Leave everything for the next demo" | Delete. Add a `cleanup` block. The next tutorial creates what it needs. |
 | Uses resources created by a previous tutorial | Copy that manifest into this tutorial's `manifests/` and apply it here. |
 | `watch ...`, `kubectl port-forward ... &`, editors, anything interactive | `bash skip`, followed by a non-interactive `verify` equivalent where it matters. |
+| A command whose output is shown with no word on what matters in it | Say what to look at, the value from your run, and why it is that value (docs/authoring.md section 3). |
 | "You should see X" with no check | Keep the sentence and add a `verify` block that checks X. |
 | `sleep 60` while waiting | `kubectl wait ...` or `verify retry=N delay=S`. |
 | Inline copy of a YAML/py/sh file | `<!-- tut:include manifests/<file> -->` + `<!-- /tut -->`. |

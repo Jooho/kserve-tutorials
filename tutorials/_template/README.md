@@ -13,6 +13,11 @@ One paragraph: what the reader builds and why it matters.
 
 > **Key question:** the one question this tutorial answers.
 
+What you will learn:
+
+- a concept the reader will understand at the end, not a command
+- one bullet per idea; every step serves one of them
+
 ## Step 0: Environment
 
 <!-- tut:setup -->
