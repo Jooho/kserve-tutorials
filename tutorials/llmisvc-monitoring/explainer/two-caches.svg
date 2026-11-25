@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" role="img" aria-labelledby="t d">
+<title id="t">One prompt, two caches</title>
+<desc id="d">vLLM's prefix cache works on blocks of 16 tokens: a 25-token prompt has one full block that can be reused and a partial block that cannot, so 19 of 20 identical prompts reuse 16 tokens each: 304 of 500. The EPP's prefix index is a separate record of which Pod got which prompt; it is looked up three times per request, and in load 1 the hit ratios of 60 lookups add up to 59, in load 2 to 40, while vLLM reused nothing.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #2b3140; }
+  .box { fill: none; stroke: #c3c9d4; stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .full { fill: #b2f2bb; stroke: #2f9e44; stroke-width: 1.5; }
+  .part { fill: #f1f3f5; stroke: #868e96; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .miss { fill: #ffe3e3; stroke: #e03131; stroke-width: 1.5; }
+  .hit { fill: #b2f2bb; stroke: #2f9e44; stroke-width: 1.5; }
+  .r { animation: glow 6s infinite; }
+  .r2 { animation-delay: 1s } .r3 { animation-delay: 2s }
+  @keyframes glow { 0%, 100% { opacity: .35 } 15%, 45% { opacity: 1 } }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; } .box { stroke: #3a4150; }
+    .full, .hit { fill: #1f4d2a; stroke: #51cf66; } .part { fill: #1b2029; stroke: #8b93a5; }
+    .miss { fill: #4a1d1d; stroke: #ff6b6b; }
+  }
+  @media (prefers-reduced-motion: reduce) { .r { animation: none; opacity: 1; } }
+</style>
+
+<rect class="box" x="16" y="16" width="420" height="400" rx="10"/>
+<text class="h" x="32" y="42">vLLM prefix cache (inside the model server)</text>
+<text class="s" x="32" y="64">counts tokens; caches only full 16-token blocks</text>
+
+<text class="m" x="32" y="100">one prompt = 25 tokens</text>
+<rect class="full" x="32" y="110" width="220" height="34" rx="5"/>
+<text class="m" x="44" y="132">block 1: tokens 1-16</text>
+<rect class="part" x="256" y="110" width="140" height="34" rx="5"/>
+<text class="m" x="266" y="132">17-25: partial</text>
+<text class="s" x="32" y="166">request 1 computes both; block 1 stays in the cache</text>
+<text class="s" x="32" y="184">requests 2-20 find block 1: 16 of their 25 tokens</text>
+
+<text class="h" x="32" y="226">Load 1 (same prompt x 20)</text>
+<text class="m" x="32" y="250">queries +500  (20 x 25)</text>
+<text class="m" x="32" y="270">hits    +304  (19 x 16)  = 61%</text>
+<text class="h" x="32" y="312">Load 2 (different early tokens)</text>
+<text class="m" x="32" y="336">queries +520  (20 x 26)</text>
+<text class="m" x="32" y="356">hits    +0    no shared full block</text>
+<text class="s" x="32" y="396">This is the number the two hit-rate panels show.</text>
+
+<rect class="box" x="452" y="16" width="412" height="400" rx="10"/>
+<text class="h" x="468" y="42">EPP prefix index (inside the scheduler)</text>
+<text class="s" x="468" y="64">its own record: which Pod got which prompt</text>
+<text class="s" x="468" y="82">asked once per InferencePool route rule: 3 x per request</text>
+
+<text class="s" x="468" y="116">a reading of one load-2 request (only sums measured):</text>
+<g class="r"><rect class="miss" x="468" y="126" width="120" height="34" rx="5"/><text class="m" x="480" y="148">1st: miss</text></g>
+<g class="r r2"><rect class="hit" x="596" y="126" width="120" height="34" rx="5"/><text class="m" x="608" y="148">2nd: "hit"</text></g>
+<g class="r r3"><rect class="hit" x="724" y="126" width="120" height="34" rx="5"/><text class="m" x="736" y="148">3rd: "hit"</text></g>
+<text class="s" x="468" y="182">the 1st records the Pod; the next two can find it</text>
+
+<text class="h" x="468" y="226">Load 1</text>
+<text class="m" x="468" y="250">lookups +60, hit ratios add up to 59</text>
+<text class="s" x="468" y="270">of a possible 60 (blocks of 64+ tokens)</text>
+<text class="h" x="468" y="312">Load 2</text>
+<text class="m" x="468" y="336">lookups +60, hit ratios add up to 40</text>
+<text class="s" x="468" y="356">although vLLM reused nothing</text>
+<text class="s" x="468" y="396">Not shown on the dashboard; read from the EPP.</text>
+</svg>

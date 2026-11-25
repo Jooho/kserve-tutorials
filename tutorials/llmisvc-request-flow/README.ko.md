@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=857574b45c83 -->
+<!-- tut-translation source=README.md sha=8a90e0d669da -->
 # 요청의 여정 — Gateway에서 vLLM까지
 
 <!-- tut:header -->
@@ -17,6 +17,15 @@ request id로 따라가 봅니다.
 
 > **핵심 질문:** 내 요청은 어떤 경로를 거쳐 특정 Pod에 도달하며, 왜 그 Pod가
 > 선택되었을까?
+
+배울 내용:
+
+- 요청 하나가 지나가는 길: Envoy Gateway, HTTPRoute, InferencePool, EPP 스케줄러,
+  vLLM Pod, 그리고 각 구간을 어느 오브젝트가 정하는지.
+- Envoy가 EPP에 Pod를 묻는 방법(ExtProc), 그리고 EPP가 InferencePool route 규칙마다
+  한 번씩 질문을 받는 이유.
+- `x-request-id`로 요청 하나를 Envoy 로그, EPP 로그, 응답까지 따라가는 방법.
+- EPP가 Pod를 고르는 방법: scorer, 그 가중치, 그리고 scorer가 읽는 메트릭.
 
 ## 요청 흐름 개요
 

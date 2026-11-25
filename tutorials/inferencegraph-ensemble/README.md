@@ -17,6 +17,19 @@ returns their average as a single prediction.
 > **Key question:** how do you send one request to several models and get
 > back one combined answer, without writing a client-side fan-out?
 
+What you will learn:
+
+- What an InferenceGraph is: a router in front of InferenceServices, so the
+  client sends one request.
+- What an `Ensemble` router does: one request to several models, every answer
+  back.
+- What a `Sequence` router does: steps in a row, each step getting the previous
+  output (`$response`).
+- How a small custom combiner, called by `serviceUrl`, turns several
+  predictions into one.
+- How the models are served: the MLServer runtime, with the model files on a
+  PVC.
+
 <a href="images/architecture.svg" target="_blank"><img src="images/architecture.svg" width="720" alt="InferenceGraph architecture: one request, two models, one combined answer"></a>
 
 Click a picture to open it at full size.

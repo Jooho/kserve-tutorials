@@ -17,6 +17,17 @@ request id that all three share.
 > **Key question:** what path does my request take to reach a specific Pod, and
 > why was that Pod chosen?
 
+What you will learn:
+
+- The path of one request: Envoy Gateway, HTTPRoute, InferencePool, EPP
+  scheduler, vLLM Pod, and which object decides each hop.
+- How Envoy asks the EPP for a Pod (ExtProc), and why the EPP is asked once
+  per InferencePool route rule.
+- How to follow one request through the Envoy log, the EPP log and the answer
+  with its `x-request-id`.
+- How the EPP chooses a Pod: its scorers, their weights and the metrics they
+  read.
+
 ## Request flow overview
 
 <a href="images/request_flow_1.png" target="_blank"><img src="images/request_flow_1.png" width="720" alt="Request flow overview: client, Gateway, HTTPRoute, InferencePool, EPP scheduler, vLLM Pod"></a>
