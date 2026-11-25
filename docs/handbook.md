@@ -38,6 +38,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | Markdown under `docs/` has one line per paragraph (editors and GitHub wrap it); tutorial READMEs keep their line breaks, because changing them changes the source hash (translations, explainers) and re-runs e2e | authoring.md, "Writing good steps" |
 | Work passes the `tech-lead` agent before it is put to the maintainer; it asks the maintainer only what it cannot settle and keeps their answers in a notebook | AGENTS.md "The tech lead comes before the maintainer", `.claude/agents/tech-lead.md`, `.claude/tech-lead/learned.md` |
 | Plans come from the `project-planner` agent as small proposals; the maintainer approves which become GitHub issues (label `plan`); the tech lead runs them one at a time. docs/backlog.md stays the record of problems | AGENTS.md "Plans become issues, issues become work", `.claude/agents/project-planner.md` |
+| Before a version is added to `versions.tested`, the `version-scout` agent compares upstream at both versions against what each tutorial uses; it reports and proposes, a run confirms | AGENTS.md "A new product version: ask the version scout first", `.claude/agents/version-scout.md` |
 
 ## 2. Repository map
 
@@ -59,7 +60,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `.github/scripts/` | `diagnose.sh` (cluster dump on failure), `report.py` (weekly issues) | with care |
 | `.github/CODEOWNERS` | **generated** by `./tut sync` from `owners` | never by hand |
 | `docs/` | this handbook, authoring, migration, CI playbook, release, backlog, RFC, prompts (ready-made first messages for agents) | keep in step with the code |
-| `.claude/` | for AI agents: `agents/tech-lead.md` (the maintainer's stand-in), `agents/project-planner.md` (proposes small plans, files approved ones as issues), `tech-lead/learned.md` (the notebook of the maintainer's answers), `skills/` (Claude Code wrappers around `./tut`) | maintainer, the tech lead (its notebook) |
+| `.claude/` | for AI agents: `agents/tech-lead.md` (the maintainer's stand-in), `agents/project-planner.md` (proposes small plans, files approved ones as issues), `agents/version-scout.md` (which tutorials a new product version breaks, from the upstream changes), `tech-lead/learned.md` (the notebook of the maintainer's answers), `skills/` (Claude Code wrappers around `./tut`) | maintainer, the tech lead (its notebook) |
 | `build/` | generated: drafts, rejected translations, site source (git-ignored) | tools |
 | `.venv/`, `.tools/`, `.tut.env` | toolkit, pinned CLI tools, personal settings (git-ignored) | the user's machine |
 
@@ -112,7 +113,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 - The page theme is Auto / Light / Dark; both terminals (main and ⧉) follow it and share their own text size (`static/term-theme.js`).
 - Learning paths open with `?collection=`: covered `run` blocks are hidden, cleanup waits for the end, and the collection `vars` are exported.
 
-**Versions.** A tutorial lists `versions.default` (readers and PR CI) and `versions.tested` (weekly). An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on the newest upstream release (`project.yaml upstream`) and opens an issue when it fails.
+**Versions.** A tutorial lists `versions.default` (readers and PR CI) and `versions.tested` (weekly). An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on the newest upstream release (`project.yaml upstream`) and opens an issue when it fails. The canary only sees a failure after the release and not for `draft` tutorials; the `version-scout` agent reads the upstream changes between two versions and says beforehand which tutorials they touch (AGENTS.md "A new product version").
 
 ## 5. Commands by task
 
