@@ -47,6 +47,9 @@ Every shell block has exactly one role [D001]. The first runnable block is the g
 - **Write for a fresh machine.** Assume nothing but the environment profile. Create everything else in the tutorial's own namespace (`$NS`).
 - **Wait, don't sleep.** Use `kubectl wait --for=... --timeout=...` or `verify retry=N delay=S`. Never `sleep 60` hoping it is enough.
 - **Every wait has an explicit timeout**, sized for a CPU-only CI runner (cold image pulls, model download). Put the expected duration in the text.
+- **Decide what the tutorial teaches, and say it at the top.** Under the Key question, list in a few bullets, under a line "What you will learn:", what the reader will understand at the end: concepts, not commands [D016, a warning for now]. Every step serves one of them, and "What we learned" at the end answers the same list. A tutorial is not a list of commands to copy and run; a step that teaches nothing on the list is cut or says why it is there.
+- **Every step says what to look at, the value to expect, and why.** Name the field, metric or output line that matters; give the value the reader should see, taken from a real run ("in our run" for values that vary by machine); explain the mechanism that produces it (which counter rises, by about how much, and why). When a reason comes from source code or documentation rather than from the run, say so. Make the command print what the text talks about, and check stable values with a `verify`.
+- **Ask the student before you ask for review.** Give the README to the `student` agent (`.claude/agents/student.md`; other AIs: read it and do the same in a fresh context). It reads only what a reader sees and lists the questions a learner would ask ("what is the difference between these two panels?"). Answer each in the README, or write in the PR why not. At most two rounds per change: ask, update, ask once more, update, then stop; later questions go to the explainer or a follow-up.
 - **Verify what the reader is meant to learn**, not just that a command ran: counts, names, field values, a request that returns a real answer. If the prose says "you should see X", a `verify` checks X.
 - **Every step is safe to run twice** [D012]. Readers re-run steps after a failure, in a new shell, or with "To here"; CI runs every tutorial twice in the same cluster (`./tut run --twice`). Use `kubectl apply`, `kubectl create … --dry-run=client -o yaml | kubectl apply -f -`, `helm upgrade --install`, `kubectl delete … --ignore-not-found`, `>` not `>>`. A step that truly cannot repeat is fenced ` ```bash run once `: CI runs it once and the UI asks before running it again.
 - **No UI aliases in tutorials** [D013]: `k` and `kc` exist only in the UI terminal; tutorials always write `kubectl`.
@@ -56,6 +59,14 @@ Every shell block has exactly one role [D001]. The first runnable block is the g
 - Keep `timeout_minutes` in `tutorial.yaml` realistic: setup + all waits.
 
 Images in a README: `<a href="images/x.svg" target="_blank"><img src="images/x.svg" width="720" alt="what it shows"></a>`, not `![..](images/x.svg)`. Every picture then has the same width on GitHub and in the UI, and a click opens it at full size [D015]. Say once, next to the first picture, that a click opens it full size.
+
+Screenshots of a web UI (Grafana, a dashboard) come from a real run, show the state the text talks about at that point, and are cropped to the panels the text names (PNG, about 1000 px wide). Take them with Playwright in a container, never with a browser installed on the host [hard rule 10]. What worked (llmisvc-monitoring, 2026-11-24):
+
+- Image `mcr.microsoft.com/playwright/python:v1.56.0-noble` with `pip install playwright==1.56.0`. The older v1.49 Chromium could not load Grafana 13's plugins.
+- Run it with `--network host` (the Kind node IP is reachable), `--user "$(id -u):$(id -g)" -e HOME=/tmp`, and mount the output folder with `:Z` on SELinux hosts (Fedora), or the container cannot read the script.
+- Give the browser a locale: `new_context(locale="en-US")` and `-e LANG=en_US.UTF-8`. Without it the locale is `en-US@posix` and Grafana fails with "Datasource ... was not found" on every panel.
+- Log in through the API in the same browser context (`ctx.request.post(base + "/login", data={"user": "admin", "password": pw})`), then open the dashboard; HTTP basic credentials alone end on the login page.
+- Wait for the panels (network idle, then about 15 s, scroll once through the page), screenshot the full page, crop with `magick -crop` and reduce with `magick -colors 192 PNG8:`.
 
 Line breaks: in `docs/` write one line per paragraph and do not wrap by hand; a phrase then stays on one line, so `grep` and exact-match edits find it, and nothing has to be re-wrapped after a change. In a tutorial README keep the existing line breaks: reflowing changes nothing a reader sees but changes the source hash, so translations and the explainer go behind and CI runs the tutorial again.
 

@@ -31,6 +31,8 @@ Documents (README.md and translations)
        (fixed width, full size in a new tab), not ![..](X)
   D014 shared steps (tut:define / tut:use, PoC): one definition per name, `use`
        an existing name, no markers inside a definition, do not use your own
+  D016 README.md needs a "What you will learn" list before the first `## `
+       heading: what the reader will understand, not the commands (warning)
 
 Explainers (tutorials/<id>/explainer/, AI-written, never executed; tut/explain.py)
   X001 explainer/index.md missing, or its first line is not the AI marker
@@ -403,6 +405,12 @@ class Linter:
         elif exec_blocks and exec_blocks[0].in_region != "setup":
             self.err("D006", path, "a run/verify block appears before the tut:setup region",
                      exec_blocks[0].line)
+        # D016 what the tutorial teaches (docs/authoring.md section 3). A warning
+        # until the tutorials written before the rule have one.
+        intro = text.split("\n## ", 1)[0]
+        if not re.search(r"^What you will learn\b.*\n(?:[ \t]*\n)*- ", intro, re.M):
+            self.warn("D016", path, 'no "What you will learn" list before the first step: '
+                      "say what the reader will understand (docs/authoring.md section 3)")
         # D007 verify + cleanup
         roles = {b.role for b in doc.blocks if b.is_shell}
         for need in ("verify", "cleanup"):

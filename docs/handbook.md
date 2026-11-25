@@ -200,7 +200,7 @@ The weekly run catches the rest.
 - **Small PRs, one feature each.** CI e2e runs only what the PR affects; mixing a runner change into a tutorial PR runs every tutorial.
 - **Before every commit:** `make precommit`. Before a PR: also `./tut run <id> --dry-run` for tutorials you touched, and the real run when you can (`./tut run <id> --twice`).
 - **Prove behaviour-preserving refactors:** save `./tut run --dry-run`, `./tut list`, `./tut site` output before, compare after.
-- **A PR may be opened without asking once the tech lead has passed work the maintainer ordered. Never merge, push to `stable` or change repository settings** unless the maintainer asked for exactly that in the conversation.
+- **Every git or GitHub write needs the maintainer's permission, every time** (branch, commit, push, PR, merge, re-run, settings): say what, why, the exact commands and what it changes, then ask and wait. A tech-lead pass is not permission. Never push to `stable`.
 - **Leave knowledge behind:**
   - a CI failure becomes a lesson in authoring.md § Rules learned from CI, and a lint rule when it can be checked;
   - a problem you cannot fix now goes into backlog.md with evidence;

@@ -147,6 +147,29 @@ def test_D007_stable_needs_verify_but_draft_only_warns(repo):
     assert ("D007", "s") in errs and ("D007", "d") not in errs
 
 
+def warnings(root):
+    generate.sync(root)
+    return [(f.code, f.path.parent.name) for f in lint.Linter(root).run() if f.severity == "warning"]
+
+
+def test_D016_what_you_will_learn_is_a_warning_when_missing(repo):
+    make_tut(repo, "t")
+    assert ("D016", "t") in warnings(repo)
+    assert "D016" not in codes(repo)
+
+
+def test_D016_list_before_the_first_step_is_enough(repo):
+    taught = GOOD_README.replace("# T\n", "# T\n\nWhat you will learn:\n\n- why X happens\n", 1)
+    make_tut(repo, "t", taught)
+    assert ("D016", "t") not in warnings(repo)
+
+
+def test_D016_list_after_the_first_step_does_not_count(repo):
+    late = GOOD_README + "\n## Step 1: Something\n\nWhat you will learn:\n\n- too late\n"
+    make_tut(repo, "t", late)
+    assert ("D016", "t") in warnings(repo)
+
+
 def test_M001_unpinned_image(repo):
     d = make_tut(repo, "t")
     (d / "manifests" / "pod.yaml").write_text("spec:\n  containers:\n  - image: nginx\n")
