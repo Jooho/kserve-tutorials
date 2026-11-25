@@ -27,7 +27,7 @@ numbers the scheduler uses to choose a Pod.
 ### Three empty fields, a whole route
 
 The manifest has `router: {scheduler: {}, route: {}, gateway: {}}`. From these
-the KServe controller made the EPP scheduler, the HTTPRoute and the
+the llmisvc controller (`llmisvc-controller-manager`) made the EPP scheduler, the HTTPRoute and the
 InferencePool, and hung the route on the shared Gateway
 `kserve/kserve-ingress-gateway` (step 5 waits until it is `Programmed`).
 
@@ -195,9 +195,10 @@ Read them like this:
   requests, while Envoy logged one forwarded request each. The README explains
   several lines with ExtProc's separate header, body and trailer messages; the
   run shows complete repeated sets instead. The route has three rules that
-  point at the InferencePool, which may be related; this run did not look at
-  Envoy's configuration, so the cause is open, and it may depend on the
-  Envoy Gateway / AI Gateway versions of this environment.
+  point at the InferencePool, and that is the cause: Envoy's configuration (read
+  on 2026-11-24, after this walk) has one ExtProc filter per such rule on the
+  Gateway's listener, all three active for these paths. The README now says so
+  and checks that the number of sets equals the number of rules.
 - The README's metric table lists `kv-cache-utilization-scorer` for the
   KV-cache metric. That scorer is not in the EPP's effective configuration in
   this run.
