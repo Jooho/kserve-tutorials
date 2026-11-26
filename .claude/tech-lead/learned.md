@@ -244,3 +244,93 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
 - They said: "The tech lead is used too often. It should be called only when needed, not every time. I said merge, why ask the tech lead?" and "Anything git always needs my permission." (translated from Korean)
 - So: I am called before the agent shows the maintainer work it produced (a plan, a new tutorial or rework, a rule change), not for their direct orders (merge #N, re-run a job, answer a question). My pass is never permission for git or GitHub; every such step is explained (what, why, commands, impact) and asked, each time.
 - Applies to: every mode; AGENTS.md "How to work" step 4 and "The tech lead comes before the maintainer", docs/handbook.md section 9 (changed in the same PR).
+
+### 2026-11-25 Backlog C1 direction: per-tutorial revisions, old versions always go to a revision (relayed)
+- Asked / situation: the working agent discussed C1 with them (per-version blocks in the README, repo-wide release branches per KServe version, per-tutorial revisions) and brought me the agreed design for a gate. Their words reached me only through the agent's summary.
+- They said (as relayed, not quoted): per-version branches inside a README rejected (hard to read, verify splits); release branches set aside, they prefer per-tutorial revisions; fixed rule: when a tutorial changes because of a new KServe version, the old versions always go to a frozen revision (tutorials/<id>/revisions/rN/), no attempt to keep one README true for both. Readers on old KServe must still read and run the old tutorial. It must be automatable; that matters most to them.
+- So: C1's direction is taken (revisions). It fits the recorded Decision "versions are per tutorial, not per branch" (handbook, RFC 4.4); release branches would have re-opened it. Do not offer release branches or per-version README blocks again unless they raise it. Details of the design (window, bot PR, PR CI on all versions, how frozen a revision is) are not decided by this.
+- Applies to: backlog C1/C2, any version bump of a tutorial, version-scout proposals, docs/ci-playbook.md section 5.
+
+### 2026-11-25 Revisions: CI runs only the N, N-1 window, decided now
+- Asked / situation: Q2 of the revisions-design gate: decide "PR CI over every tested version" and "the N, N-1 support window" now, or after the pilot when CI time is measured [recommended: after].
+- They said: "2- \"N, N-1 window\" 만 돌리자." ("2: let's run only the N, N-1 window.")
+- So: decided now, not after the pilot; my recommendation was not taken. CI runs only versions inside the N, N-1 window, not every tested version. My reading, not their words: "CI" covers PR, weekly and release alike (one matrix rule, principle 5), so release's "full matrix = every tested version" (docs/release.md:13) becomes "every tested version in the window"; a version outside the window stays in `versions.tested` (it was verified) and is shown with "last verified" (D6), so lint (a) is unchanged. Not said: what N is (newest release upstream, or newest version any tutorial tests). State the reading in the design doc; a correction outranks it.
+- Applies to: plan.py matrices, release verdict, docs/release.md, RFC 4.4/4.15, the revisions design doc.
+
+### 2026-11-25 Frozen revisions have no exceptions
+- Asked / situation: Q3: may a frozen revision get typo or broken-link fixes? (a) no, frozen like envs/lib, revisit if a fix is ever needed [recommended]; (b) allow them with a lint exception.
+- They said: "3 -a"
+- So: a revision is frozen like envs/lib: lint (b) has no exception, and sync does not touch revisions/. If a fix is ever needed, it goes back to them.
+- Applies to: lint (b), sync, `revision start`, the design doc.
+
+### 2026-11-25 New versions into tested: a bot PR, the maintainer merges
+- Asked / situation: Q1 of the revisions-design gate: should a bot add a new KServe version to `versions.tested`? (a) canary passes -> bot opens the PR with the version-scout result attached, the maintainer merges; needs a PAT or GitHub App token (repository setting) [recommended]; (b) no bot, an agent runs the scout and opens the PR. They first asked what "canary" means.
+- They said: "오 그렇군. a로 진행하는게 좋겠군 maintainer가 merge해야지." ("Oh, I see. Better to go with (a); the maintainer has to merge.")
+- So: (a). Automation may go up to opening the PR; the merge stays theirs. The scout result travels with the PR, so the handbook Decision "scout before tested" holds (it is satisfied, not re-opened). The token (PAT or App) and the workflow permissions are a repository setting: theirs to set up, per action. Lesson about my questions: a term I used without explaining ("canary") cost them a round; explain project terms in the question itself.
+- Applies to: scheduled.yml, the bot workflow, handbook Decisions (scout row), how questions are worded.
+- Corrected on 2026-11-25 by "No AI in GitHub Actions" (below): the workflow opens the bot PR without the scout result; a local agent runs version-scout and adds it to the PR before the maintainer merges.
+
+### 2026-11-25 Keep stable; release automatically once a month, skip when nothing changed
+- Asked / situation: question 4 (relayed by the working agent): keep the `stable` branch or not, and how releases start (backlog D9, D12).
+- They said: "4번은 b로 하고 gitaction으로 1달에 한번 stable branch로 옮기는거 어때? main이 망가질수도 있으니.." then "주단위는 너무 자주인거 같아.. 그렇게 자주 update될거 같지 않은데" then "좋다 변경이 없으면 tag생성없이 한다면 문제 없겠네 4번은 이렇게 정하자" ("4: (b), and how about a GitHub Action moving it to stable once a month? main may break.." / "weekly seems too often.. I do not think it will be updated that often" / "good, if there is no tag when nothing changed, no problem; let's decide 4 this way").
+- So: `stable` stays, because main can break; readers only see a commit where the whole window passed together. release.yml runs by itself once a month (cron), not weekly. No new commit on main since the last release: skip (no verify, no tag). Verify fails: nothing moves, an issue is opened. The `YYYY.MM.N` tag, the GitHub Release and a manual `make release` stay. This replaces D12 (auto release after a green weekly run) and changes D9. The monthly publish to `stable` without asking each time is their own standing approval for that workflow only; it does not loosen "every git write by an agent needs permission".
+- Applies to: release.yml, docs/release.md, backlog D9/D10/D12, handbook Decisions (stable row), RFC 4.15.
+
+### 2026-11-25 Tutorial proposals for new features are issues
+- Asked / situation: question 3 (relayed): how features from a new KServe release become tutorials.
+- They said: "이슈로 두는게 좋을거 같은데" ("I think keeping them as issues would be good").
+- So: one GitHub issue per candidate feature (label `tutorial-proposal`, from a template); they approve or reject on the issue; an approved issue becomes one tutorial PR (status draft), built by a local agent on Kind. The template, label and who files them are the working agent's reading, not their words. Filing each issue is a GitHub write: it still needs their permission (AGENTS.md How to work, step 4), the same as the planner's `plan` issues. Not answered yet: the adoption criteria.
+- Applies to: new-release work, the issue template, the project-planner/version-scout split.
+
+### 2026-11-25 No AI in GitHub Actions
+- Asked / situation: the same discussion; where the AI steps run.
+- They said: "ai는 모두 로컬에서 돌려야해 api key가 없거든" ("AI must all run locally; there is no API key").
+- So: no workflow calls an AI CLI or API (none does today: no TUT_AI, claude or codex in .github/). Every AI step (version-scout, drafting, explainers, reviews, any feature-scouting) runs on a local machine. Workflows only prepare the work: a bot PR (new version in tested) or an issue ("new release vX"); a local agent then adds the AI part. A PAT or App token for PRs is not an AI key and stays allowed. Their reason is the missing key, so this may change if a key ever exists; until they say so, it is a rule.
+- Applies to: every workflow, the Q1 bot PR, release-time feature scouting, any proposal that puts an agent in CI. A rule for everyone: belongs in AGENTS.md and the handbook Decisions.
+
+### 2026-11-25 feature-scout is its own agent (relayed 2026-11-26)
+- Asked / situation: how to build the scouting of new features of a KServe release: (1-a) extend version-scout, (1-b) a new agent `feature-scout`.
+- They said: "1-b가 좋을거 같아" ("1-b seems good").
+- So: a separate `feature-scout` agent, not a second job for version-scout; it is created in its own later PR, not in the RFC PR. Like every agent here it runs locally ("No AI in GitHub Actions"). One more agent was asked for this time; it does not license others (see "Open: agents by framework").
+- Applies to: RFC 0002 section 8 and rollout, backlog C8, the version-scout file (it stays about breakage).
+
+### 2026-11-25 Adoption criteria for tutorial proposals stay as proposed (relayed 2026-11-26)
+- Asked / situation: question 2: the criteria for turning a new feature into a tutorial proposal: user-facing (not an internal refactor), runs on CPU kind (GPU waits for D7), API reasonably stable (alpha or feature gate flagged, lower priority), a mechanism to teach, no overlap with an existing tutorial.
+- They said: "2번은 그대로 둔다" ("leave 2 as it is").
+- So: the criteria are accepted as written; they go into the `tutorial-proposal` template and feature-scout as they are. The issue fields and the label name are still the working agent's design, not their words.
+- Applies to: feature-scout, the issue template, reviews of proposals.
+
+### 2026-11-25 Image mirroring on hold (relayed 2026-11-26)
+- Asked / situation: a proposal to mirror the vLLM CPU image to quay after the public.ecr.aws 429s (backlog A10).
+- They said: "image관련된것은 일단 안해도 돼" ("image-related things do not need doing for now").
+- So: no image mirror, cache or registry work now; "for now" is a postponement, not a rejection. Adding new 429 evidence to A10 is fine; changing A10's status or plan is theirs. When a 429 hits CI again: one re-run per failure stays the rule (AGENTS.md How to work, step 5), record it in A10, do not start image work.
+- Applies to: backlog A10, e2e ImagePullBackOff failures, proposals touching images or envs for pull speed.
+
+### 2026-11-26 RFC 0002: the whole implementation, in one commit (relayed)
+- Asked / situation: I had passed the RFC 0002 docs-only change; the implementation was planned as later PRs (rollout steps, feature-scout "in its own later PR").
+- They said: "문서만 하지말고 전체적인 구현까지 모두다 해야지" and "1개의 commit으로 끝내자" ("do not do only the docs, do the whole implementation" / "let's finish it as one commit").
+- So: for a design they decided, they want the design and its implementation to land together, not a docs PR followed by implementation PRs; this supersedes, for RFC 0002, "feature-scout is created in its own later PR" and the RFC's staged rollout. It does not make every change one commit: the pilot (C2) still needs a cluster run and was left out, which fits "try a new idea on one case" as a separate step. A bigger single change means the commit request must list each rule it adds (AGENTS.md hard rules, lint codes) and each thing that will act on its own after merge (scheduled workflows), because they approve it in one look.
+- Applies to: PR boundaries for designs the maintainer decided; how a large commit request is written.
+
+### 2026-11-26 RFC 0002 window: global N, skipped versions reported, dry run later (relayed)
+- Asked / situation: three questions from the gate on the RFC 0002 implementation: (1) a tutorial that has not moved to N runs nowhere under one global N; (2) what runs for a tutorial whose `tested` has no N-1, and what happens to one that skipped versions (tested v0.18 and v0.21); (3) a release dry run before the first scheduled release.
+- They said: "1.너가 찾은 문제는 맞아. 그런데 나는 0.19,0.20으로 차례로 올리면서 테스트를 할거라 이것은 자연스레 해결이 될거야. 그래도 강제로 revision을 만드는 부분이 있으면 좋을수 있겠다. 버젼을 건너뛸때도 필요하니깐 / 2. tested에 안들어있으면 N만 돌리면 되는거야. N-1은 tested version에 있는것을 의미하는거지. 만약에 이렇게 버젼이 건너뛴 tutorial이 있다면 나에게 알려줘.그리고 내가 허락하면 revision을 만들고 해당 tested에서 빼는거지. ... 어디서 new-version을 가져오는거야? upstream/kserve? / 3. 나중에 좀 하자 다 끝나서 나면 dry run을 하든지뭘하든지 해야지 지금은 너무 dev stage다" ("1: the problem you found is right, but I will move up 0.19, 0.20 one after the other while testing, so it resolves itself; still, a way to force a revision could be good, it is needed when skipping versions too / 2: if it is not in tested, run only N; N-1 means the one that is in tested. If a tutorial skipped versions like this, tell me; when I allow it, make the revision and take those versions out of tested. ... where does new-version come from? upstream kserve? / 3: later; when everything is done, do a dry run or whatever; now it is too dev stage").
+- So:
+  - One N for the whole repository stays; a lagging tutorial is not a defect to engineer around, they move tutorials one minor at a time. A command that makes a revision on demand is wanted (also for a version jump).
+  - N-1 runs for a tutorial only if its `tested` lists it; else only N.
+  - "Skipped" means a gap in a tutorial's tested minors (v0.18 then v0.21). That case is reported to them; the revision and the removal from `tested` happen only with their word, per tutorial. Old versions that are contiguous with the window are not "skipped": they stay in `tested` as "last verified" (2026-11-25 window entry); do not report them as needing a revision.
+  - "Where does new-version come from" is a question, answer it with the facts: scheduled.yml asks `repos/kserve/kserve/releases/latest` (v0.21.0 on 2026-11-26), so the canary jumps to the newest release, not to the next minor.
+  - Dry run: deferred by them, "too dev stage". My reading, not their words: a first real scheduled publish before that dry run is the same thing they deferred, so it is asked, not assumed.
+- Applies to: plan.py window and `skipped()`, `./tut revision keep/start/todo`, the `ci-window` issue, release.yml schedule, RFC 0002 sections 3 and 8, backlog C8.
+
+### 2026-11-26 N is the newest KServe release; N-1 is the newest version the tutorial tests below it (corrects the entry above)
+- Asked / situation: in my recheck I wrote that for tested [0.17, 0.18, 0.20] the versions before the gap (0.17, 0.18) are caught for a revision. The working agent then asked them (AskUserQuestion) whether N is per tutorial or one for the repository, with X tested [0.18, 0.19] while another tutorial tests 0.21.
+- They said: "[0.17, 0.18, 0.20] 이경우 0.18,0.20 이여야지" and "기본적으로 kserve 의 최신 버전이 N 이야. 각 tutorial에 해당 N이 없다면 N-1만 돌리면 된느거야" ("in the case [0.17, 0.18, 0.20] it should be 0.18, 0.20" / "basically N is the latest KServe version. If a tutorial does not have that N, just run N-1").
+- So: N = the newest upstream KServe release, not the newest version any tutorial lists. N-1 is per tutorial: the newest minor it tests below N, not "the minor before N". CI runs N and that N-1 when the tutorial tests N, otherwise only that N-1. A tutorial never "runs nowhere", so "lagging" is gone. The working agent and I both read "N-1 = previous minor" and "N = newest tested in the repository"; both readings were wrong. This supersedes those parts of "RFC 0002 window: global N, skipped versions reported" (above) and of the 2026-11-25 window entry. Still from the entry above: skipped versions are reported and moved only with their word. My reading, not their words: a gap is still reported even though its N-1 runs. The dry-run question is not answered.
+- Applies to: model.py latest/ci_minors, plan.py matrices and skipped(), release notes, RFC 0002 sections 3 and 8, every doc that defines the window. Lesson for me: when I write an example as if it were settled, they correct the example. Check examples against their words first.
+
+### 2026-11-26 Monthly release schedule stays off until a first dry run (relayed)
+- Asked / situation: dry run deferred ("too dev stage"), but merging RFC 0002 before Dec 1 would let release.yml publish for real on Dec 1 05:23 UTC: it would create `stable`, tag the first release and deploy the site, on a path never run. (a) commit the cron turned off until a first dry run passes [recommended]; (b) leave it on, a failure only opens an issue.
+- They said: "a로 하자" ("let's go with a").
+- So: the schedule is committed commented out; it is turned on by a one-line change after a first `make release` dry run passed, and that change goes to them like any other. Their monthly standing approval (2026-11-25) applies only once it is on. Fact for later, not their words: the first tag is `2026.12.0`, not `.1` (release.py counts N from 0); I had it wrong in the question.
+- Applies to: release.yml, docs/release.md, backlog C8/D12, any later request to turn the schedule on.

@@ -28,6 +28,9 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | One tutorial = one directory, self-contained; shared things are versioned parts (`envs/`, `lib/`) | RFC §4.1, §4.6, §4.7 |
 | README.md (English) is the source; translations follow it, CI runs only English | RFC §4.8, §4.11 |
 | Versions are per tutorial (`versions.tested`), not per branch; `stable` = last fully verified `main` | RFC §4.4, §4.15, release.md |
+| A change made because of a new KServe version moves the old versions to a frozen revision (`tutorials/<id>/revisions/rN/`, no exceptions); CI runs two versions per tutorial (N = the newest KServe release (upstream), N-1 = the tutorial's newest tested version below N; a tutorial without N runs only that N-1); skipped versions (a gap between tested minors) are reported (`./tut revision todo`, weekly `ci-window` issue) and moved with `./tut revision keep` after the maintainer agrees | RFC 0002, authoring.md section 6 |
+| `stable` moves once a month by schedule, skipped when `main` did not change (schedule off until a first dry run, 2026-11-26) | RFC 0002 section 8, release.md |
+| No AI in GitHub Actions: every AI step (scouts, drafts, translations, explainers) runs locally | RFC 0002 section 3, AGENTS.md hard rule 13 |
 | One env, `kind-kserve/v1`, with options (`env_options`) instead of one env per feature | RFC §6 (6), envs/kind-kserve/v1/README.md |
 | The product's install comes from KServe's own `hack/kserve-install.sh`, pinned to the tag | envs/kind-kserve/v1 |
 | New tutorials start from tested work through an AI (`./tut draft`), finished by a person | authoring.md § `./tut draft` |
@@ -38,7 +41,8 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | Markdown under `docs/` has one line per paragraph (editors and GitHub wrap it); tutorial READMEs keep their line breaks, because changing them changes the source hash (translations, explainers) and re-runs e2e | authoring.md, "Writing good steps" |
 | Work passes the `tech-lead` agent before it is put to the maintainer; it asks the maintainer only what it cannot settle and keeps their answers in a notebook | AGENTS.md "The tech lead comes before the maintainer", `.claude/agents/tech-lead.md`, `.claude/tech-lead/learned.md` |
 | Plans come from the `project-planner` agent as small proposals; the maintainer approves which become GitHub issues (label `plan`); the tech lead runs them one at a time. docs/backlog.md stays the record of problems | AGENTS.md "Plans become issues, issues become work", `.claude/agents/project-planner.md` |
-| Before a version is added to `versions.tested`, the `version-scout` agent compares upstream at both versions against what each tutorial uses; it reports and proposes, a run confirms | AGENTS.md "A new product version: ask the version scout first", `.claude/agents/version-scout.md` |
+| Before a version is added to `versions.tested`, the `version-scout` agent compares upstream at both versions against what each tutorial uses; it reports and proposes, a run confirms. A bot PR adds the version when the canary passes, a local agent adds the scout report, the maintainer merges | AGENTS.md "A new product version: ask the version scout first", `.claude/agents/version-scout.md`, RFC 0002 section 8 |
+| Tutorials for new features of a release are proposed as GitHub issues (label `tutorial-proposal`) by a local `feature-scout` agent; the maintainer approves on the issue | RFC 0002 section 8 |
 
 ## 2. Repository map
 
@@ -60,7 +64,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `.github/scripts/` | `diagnose.sh` (cluster dump on failure), `report.py` (weekly issues) | with care |
 | `.github/CODEOWNERS` | **generated** by `./tut sync` from `owners` | never by hand |
 | `docs/` | this handbook, authoring, migration, CI playbook, release, backlog, RFC, prompts (ready-made first messages for agents) | keep in step with the code |
-| `.claude/` | for AI agents: `agents/tech-lead.md` (the maintainer's stand-in), `agents/project-planner.md` (proposes small plans, files approved ones as issues), `agents/version-scout.md` (which tutorials a new product version breaks, from the upstream changes), `tech-lead/learned.md` (the notebook of the maintainer's answers), `skills/` (Claude Code wrappers around `./tut`) | maintainer, the tech lead (its notebook) |
+| `.claude/` | for AI agents: `agents/tech-lead.md` (the maintainer's stand-in), `agents/project-planner.md` (proposes small plans, files approved ones as issues), `agents/version-scout.md` (which tutorials a new product version breaks, from the upstream changes), `agents/feature-scout.md` (tutorial proposals for a release's new features), `tech-lead/learned.md` (the notebook of the maintainer's answers), `skills/` (Claude Code wrappers around `./tut`) | maintainer, the tech lead (its notebook) |
 | `build/` | generated: drafts, rejected translations, site source (git-ignored) | tools |
 | `.venv/`, `.tools/`, `.tut.env` | toolkit, pinned CLI tools, personal settings (git-ignored) | the user's machine |
 
@@ -69,14 +73,15 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | Module | Responsibility | Tests |
 |---|---|---|
 | `cli.py` | argparse front end of every `./tut` command; completion (`complete()` walks the parser) | test_completion, test_local_config |
-| `model.py` | load `tutorial.yaml`, env profiles, lib modules; `Tutorial` properties (`default_version`, `tested_versions`, `env_options`, ...); `env_settings()` → `TUT_ENV_*` | test_rules |
+| `model.py` | load `tutorial.yaml`, env profiles, lib modules; `Tutorial` properties (`default_version`, `tested_versions`, `env_options`, ...); `env_settings()` → `TUT_ENV_*`; revisions (`load_revisions`, `variants`), `resolve(t, version)`, N and N-1 (`latest()`, `ci_minors()`) | test_rules, test_revisions |
+| `revision.py` | `./tut revision start` and `keep`: copy a tutorial from the base branch into `revisions/rN/`, re-render its setup and header, re-point links, move the current tutorial to the new version | test_revisions |
 | `project.py` | load and validate `project.yaml` (`ProjectError`, lint P001) | test_project |
 | `markdown.py` | parse a README: fenced blocks with role and attrs, `<!-- tut:... -->` regions | test_rules |
 | `generate.py` | `./tut sync`: fill `tut:header`, `tut:setup`, `tut:include`, `tut:use`, `tut:catalog`; write CODEOWNERS | test_rules, test_shared |
 | `shared.py` | shared steps: definitions, `render_use`, which steps a learning path already covers | test_shared, test_learning_path |
 | `lint.py` | every rule, with a code; translation state and marking (`translation_state`, `mark_translation`) | test_rules, test_* |
 | `runner.py` | `./tut run`: README → one bash script (file, not `bash -c`), cleanup trap, `--twice`, JSON report | test_rules |
-| `plan.py` | what CI runs: `affected` (changed paths → tutorials), scheduled and canary matrices | test_rules |
+| `plan.py` | what CI runs: `affected` (changed paths → tutorials), scheduled and canary matrices, each tutorial limited to its N and N-1 (`model.latest`, `ci_minors`); skipped versions (`skipped`); new revisions in a PR | test_rules, test_revisions |
 | `catalog.py` | tags, groups, collections (resolved per version), CODEOWNERS text | test_catalog |
 | `aicli.py` | the one reader of `TUT_AI`, `TUT_AI_REVIEW` and their `_ARGS` (older `TUT_TRANSLATOR*` too); translate, draft and explain keep their own command lines | test_translate, test_draft, test_explain |
 | `translate.py` | AI translation: presets, prompt, mechanical check of the output, `draft_one` | test_translate |
@@ -113,7 +118,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 - The page theme is Auto / Light / Dark; both terminals (main and ⧉) follow it and share their own text size (`static/term-theme.js`).
 - Learning paths open with `?collection=`: covered `run` blocks are hidden, cleanup waits for the end, and the collection `vars` are exported.
 
-**Versions.** A tutorial lists `versions.default` (readers and PR CI) and `versions.tested` (weekly). An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on the newest upstream release (`project.yaml upstream`) and opens an issue when it fails. The canary only sees a failure after the release and not for `draft` tutorials; the `version-scout` agent reads the upstream changes between two versions and says beforehand which tutorials they touch (AGENTS.md "A new product version").
+**Versions.** A tutorial lists `versions.default` (what readers get) and `versions.tested` (what PR CI, the weekly run and releases run, on N, the newest KServe release, and N-1, the tutorial's newest tested version below it; RFC 0002). Older versions of a changed tutorial live in `revisions/rN/`. An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on the newest upstream release (`project.yaml upstream`) and opens an issue when it fails. The canary only sees a failure after the release and not for `draft` tutorials; the `version-scout` agent reads the upstream changes between two versions and says beforehand which tutorials they touch (AGENTS.md "A new product version").
 
 ## 5. Commands by task
 
@@ -165,12 +170,12 @@ The AI CLI runs on the user's machine with the user's login. No API keys are in 
 |---|---|---|
 | `ci.yml` | every PR, push to main | job `check`: `make test`, `make lint BASE=<base>`, `make site`, `./tut affected`; then `e2e / <id> @ <version>` for the affected tutorials only |
 | `run-tutorials.yml` | called by the others | one job per matrix entry: `make doctor`, `./tut run --version V --twice --keep-on-failure --report`, diagnostics on failure, teardown, report artifact |
-| `scheduled.yml` | weekly + manual | every tutorial × every tested version, and the canary; `report.py` files one issue per failure |
-| `release.yml` | `make release` | full matrix at one commit; if green, fast-forward `stable`, tag `YYYY.MM.N`, publish the site |
+| `scheduled.yml` | weekly + manual | every tutorial and revision × its N and N-1, and the canary; `report.py` files one issue per failure; job `new-version`: a bot PR adding a version the canary passed (secret `TUT_BOT_TOKEN`), and a `new-release` issue for feature-scout; job `skipped-versions`: one `ci-window` issue listing tutorials with a gap in `versions.tested` |
+| `release.yml` | `make release`; monthly (1st, 05:23 UTC) once turned on after a first dry run | full in-window matrix at one commit; if green, fast-forward `stable`, tag `YYYY.MM.N`, publish the site; scheduled: skip when nothing changed, issue on failure |
 | `site.yml` | push to `stable` | build and publish the site |
 
 What runs in a PR is decided by `plan.affected`:
-- a change under `tutorials/<id>/` runs that tutorial;
+- a change under `tutorials/<id>/` runs that tutorial on its in-window versions, and a new or touched `revisions/rN/` on its own;
 - a change under `envs/<env>/` runs the tutorials using that env;
 - a change under `lib/<m>/` runs the tutorials that list it in `uses`;
 - any file in `EXECUTION_PATHS` (runner, parser, setup generator, `project.yaml`, tool installer, local config, `run-tutorials.yml`, diagnose) runs **every** tutorial;

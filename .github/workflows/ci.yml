@@ -36,7 +36,9 @@ jobs:
         run: make site
       - name: Plan affected tutorials
         id: plan
+        env: {GH_TOKEN: "${{ github.token }}"}
         run: |
+          export TUT_LATEST_VERSION=$(gh api "repos/$(./tut project --get upstream)/releases/latest" --jq .tag_name)   # N (RFC 0002)
           m=$(./tut affected --base "${{ steps.base.outputs.ref }}" --json)
           echo "matrix=$m" >> "$GITHUB_OUTPUT"
           echo "Affected: $m" | tee -a "$GITHUB_STEP_SUMMARY"

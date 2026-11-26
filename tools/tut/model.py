@@ -3,10 +3,15 @@
 Everything the tooling knows about a tutorial comes from two places:
   tutorials/<id>/tutorial.yaml   metadata (status, versions, env, ...)
   tutorials/<id>/README*.md      the document, which is also the test
+
+Older versions of a tutorial live in tutorials/<id>/revisions/rN/ (RFC 0002): a
+frozen copy with its own tutorial.yaml. `resolve(t, version)` picks the current
+tutorial or the revision tested with that version.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +25,8 @@ LANGS = ("en", "ko")
 # AI-written explainer of a tutorial: read by people, never executed (tut.explain)
 EXPLAINER_DIR = "explainer"
 VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+REVISIONS_DIR = "revisions"
+REVISION_RE = re.compile(r"^r([1-9][0-9]*)$")
 
 
 def readme_name(lang: str) -> str:
@@ -28,6 +35,12 @@ def readme_name(lang: str) -> str:
 
 def version_key(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.lstrip("v").split("."))
+
+
+def minor(v: str) -> tuple[int, int]:
+    """(major, minor) of vX.Y.Z: a reader on v0.19.2 reads what was tested as v0.19.x."""
+    k = version_key(v)
+    return (k[0], k[1] if len(k) > 1 else 0)
 
 
 @dataclass
@@ -74,6 +87,26 @@ class Tutorial:
     path: Path
     meta: dict
     errors: list[str] = field(default_factory=list)  # load-time problems
+    revision: str | None = None   # "r1", ... for tutorials/<id>/revisions/rN; None = current
+
+    @property
+    def key(self) -> str:
+        """Unique name of this variant: "<id>" or "<id>@r1"."""
+        return f"{self.id}@{self.revision}" if self.revision else self.id
+
+    @property
+    def root(self) -> Path:
+        """The repository root (a revision lives two directories deeper)."""
+        return self.path.parents[3] if self.revision else self.path.parents[1]
+
+    @property
+    def rel(self) -> str:
+        """Directory relative to the repository root, e.g. tutorials/a/revisions/r1."""
+        return self.path.relative_to(self.root).as_posix()
+
+    @property
+    def frozen(self) -> bool:
+        return bool(self.meta.get("frozen", False))
 
     @property
     def status(self) -> str:
@@ -155,6 +188,88 @@ def load_tutorials(root: Path = REPO_ROOT, include_template: bool = False) -> li
                 t.errors.append(f"tutorial.yaml is not valid YAML: {e}")
         out.append(t)
     return out
+
+
+def load_revisions(t: Tutorial) -> list[Tutorial]:
+    """tutorials/<id>/revisions/rN/ of a current tutorial, r1 first."""
+    if t.revision:
+        return []
+    d = t.path / REVISIONS_DIR
+    if not d.is_dir():
+        return []
+    out = []
+    for p in sorted((p for p in d.iterdir() if p.is_dir() and REVISION_RE.match(p.name)),
+                    key=lambda p: int(REVISION_RE.match(p.name).group(1))):
+        r = Tutorial(id=t.id, path=p, meta={}, revision=p.name)
+        f = p / "tutorial.yaml"
+        if not f.exists():
+            r.errors.append("missing tutorial.yaml")
+        else:
+            try:
+                r.meta = yaml.safe_load(f.read_text()) or {}
+            except yaml.YAMLError as e:
+                r.errors.append(f"tutorial.yaml is not valid YAML: {e}")
+        out.append(r)
+    return out
+
+
+def variants(t: Tutorial) -> list[Tutorial]:
+    """The current tutorial and its revisions."""
+    return [t, *load_revisions(t)]
+
+
+def resolve(t: Tutorial, version: str | None) -> Tutorial | None:
+    """The variant a reader on `version` uses (RFC 0002 section 6): the current
+    tutorial if it was tested with that version, else the revision that was;
+    an exact tag first, then the same minor. None: not available."""
+    if not version:
+        return t
+    vs = [v for v in variants(t) if not v.errors]
+    for v in vs:
+        if version in v.tested_versions:
+            return v
+    if not VERSION_RE.match(version):
+        return None
+    for v in vs:
+        if any(minor(x) == minor(version) for x in v.tested_versions if VERSION_RE.match(x)):
+            return v
+    return None
+
+
+LATEST_ENV = "TUT_LATEST_VERSION"
+
+
+def latest(tutorials: list[Tutorial]) -> tuple[int, int] | None:
+    """N (RFC 0002): the product's newest minor. CI sets TUT_LATEST_VERSION to
+    the upstream's latest release (project.yaml upstream); without it (offline,
+    tests) N is the newest minor any tutorial or revision tests. The newer of
+    the two wins, so no tested version is above N."""
+    ms = {minor(v) for t in tutorials for x in variants(t) for v in x.tested_versions
+          if VERSION_RE.match(str(v))}
+    env = os.environ.get(LATEST_ENV, "").strip()
+    if VERSION_RE.match(env):
+        ms.add(minor(env))
+    return max(ms) if ms else None
+
+
+def ci_minors(t: Tutorial, n: tuple[int, int] | None) -> set[tuple[int, int]]:
+    """The minors CI runs for tutorial `t` (its current version and revisions
+    together): N if one of them tests N, and N-1 = the newest tested minor
+    below N. A tutorial without N runs only that N-1 (it has not moved yet)."""
+    ms = sorted({minor(v) for x in variants(t) if not x.errors for v in x.tested_versions
+                 if VERSION_RE.match(str(v))})
+    if not ms:
+        return set()
+    if n is None:
+        n = ms[-1]
+    below = [m for m in ms if m < n]
+    if n in ms:
+        return {n, below[-1]} if below else {n}
+    return {below[-1]} if below else set()
+
+
+def runs_in_ci(version: str, minors: set[tuple[int, int]]) -> bool:
+    return VERSION_RE.match(version) is not None and minor(version) in minors
 
 
 def load_envs(root: Path = REPO_ROOT) -> dict[str, EnvProfile]:

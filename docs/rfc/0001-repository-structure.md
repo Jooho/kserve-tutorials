@@ -120,6 +120,8 @@ Release branches (one per KServe version) were rejected because they tie every t
 
 Readers use `versions.default` unless they set `KSERVE_VERSION` themselves; the generated setup block does `export KSERVE_VERSION="${KSERVE_VERSION:-<default>}"`.
 
+Content that differs per version: older versions keep a frozen copy of the tutorial in `tutorials/<id>/revisions/rN/`, and CI runs only the window N, N-1 (RFC 0002).
+
 ### 4.5 Lifecycle
 
 ```text
@@ -307,7 +309,7 @@ A `series: {name, order}` field in `tutorial.yaml` was the first design; it was 
 
 ### 4.15 Release channel
 
-Two branches: `main` for development and `stable` for readers. A release promotes a commit of `main` to `stable` (fast-forward only) after the full matrix — every runnable tutorial × every tested KServe version — passes at that commit, and tags it `YYYY.MM.N`. The site is published from `stable`. Because `stable` is always an earlier commit of `main`, there are no back-ports, unlike the per-KServe-version branches rejected in §4.4. Details: docs/release.md.
+Two branches: `main` for development and `stable` for readers. A release promotes a commit of `main` to `stable` (fast-forward only) after the full matrix (every runnable tutorial and revision x every tested KServe version inside the CI window) passes at that commit, and tags it `YYYY.MM.N`. The site is published from `stable`. Because `stable` is always an earlier commit of `main`, there are no back-ports, unlike the per-KServe-version branches rejected in §4.4. Details: docs/release.md. The release runs monthly by schedule over the N, N-1 window (RFC 0002 section 8).
 
 ### 4.16 AI-assisted maintenance
 

@@ -45,6 +45,15 @@ Explainers (tutorials/<id>/explainer/, AI-written, never executed; tut/explain.p
   X004 unsafe SVG: <script>, on*= handlers, foreignObject, external href / url()
   X005 AI explainer not reviewed yet, or README.md changed since (warning)
 
+Revisions (tutorials/<id>/revisions/rN/, docs/rfc/0002-tutorial-revisions.md)
+  R001 a revision's tutorial.yaml: valid, `frozen: true`, same id, default in tested;
+       `frozen` only in revisions
+  R002 a frozen revision was modified (compare with --base)
+  R003 a revision may only use frozen env and lib parts
+  R004 a version removed from a tutorial's versions.tested (compare with --base)
+       must be in one of its revisions (./tut revision start)
+  R005 a version is tested by two variants of one tutorial (which one would run?)
+
 Catalog (catalog/)
   G001 every tag must be listed in catalog/tags.yaml (suggests the closest one)
   G002 catalog/tags.yaml invalid (schema, unknown group)
@@ -90,8 +99,8 @@ import jsonschema
 import yaml
 
 from . import catalog, generate, markdown, project, shared
-from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, Tutorial, load_envs,
-                    load_modules, load_schema, load_tutorials)
+from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, REVISIONS_DIR, Tutorial, load_envs,
+                    load_modules, load_revisions, load_schema, load_tutorials)
 
 TRANSLATION_RE = re.compile(
     r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)((?:\s+[a-z]+=\S+)*)\s*-->")
@@ -246,12 +255,15 @@ class Linter:
             self.lint_docs(t)
             self.lint_manifests(t)
             self.lint_explainer(t)
+            self.lint_revisions(t, schema)
         self.lint_catalog()
         self.lint_envs()
         self.lint_modules()
         if self.base:
             self.lint_frozen("envs", "profile.yaml", "E002")
             self.lint_frozen("lib", "module.yaml", "L003")
+            self.lint_frozen_revisions()
+            self.lint_removed_versions()
         self.lint_generated()
         return self.findings
 
@@ -596,6 +608,79 @@ class Linter:
             self.lint_script_pipes(sorted(mod.path.rglob("*.sh")), "L006")
             if ref not in used:
                 self.warn("L005", f, "not used by any tutorial")
+
+    # ------------------------------------------------------------ revisions
+    def lint_revisions(self, t: Tutorial, schema: dict):
+        if t.meta.get("frozen"):
+            self.err("R001", t.path / "tutorial.yaml", "`frozen` is only for revisions "
+                     "(tutorials/<id>/revisions/rN/); the current tutorial keeps changing")
+        seen: dict[str, str] = {v: "current" for v in t.tested_versions}
+        for r in load_revisions(t):
+            f = r.path / "tutorial.yaml"
+            for e in r.errors:
+                self.err("R001", f, e)
+            if r.errors:
+                continue
+            v = jsonschema.Draft202012Validator(schema)
+            for e in sorted(v.iter_errors(r.meta), key=lambda e: list(e.path)):
+                self.err("R001", f, f"{'/'.join(str(p) for p in e.path) or '(root)'}: {e.message}")
+            if not r.frozen:
+                self.err("R001", f, "a revision needs `frozen: true` (it is never edited)")
+            if r.meta.get("id") != t.id:
+                self.err("R001", f, f"id {r.meta.get('id')!r} != {t.id!r}")
+            if r.default_version and r.default_version not in r.tested_versions:
+                self.err("R001", f, f"versions.default {r.default_version} is not in versions.tested")
+            env = self.envs.get(r.env_ref) if r.env_ref else None
+            if r.env_ref and (env is None or not env.frozen):
+                self.err("R003", f, f"env {r.env_ref} is {'missing' if env is None else 'not frozen'}; "
+                         "a revision must keep running as it was")
+            for ref in r.uses:
+                mod = self.modules.get(ref)
+                if mod is None or not mod.frozen:
+                    self.err("R003", f, f"lib {ref} is {'missing' if mod is None else 'not frozen'}")
+            for ver in r.tested_versions:
+                if ver in seen:
+                    self.err("R005", f, f"{ver} is tested by {seen[ver]} and {r.revision}; "
+                             "one version, one variant")
+                seen[ver] = r.revision
+
+    def _git(self, *args) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=self.root, capture_output=True, text=True)
+
+    def lint_frozen_revisions(self):
+        """R002: a revision that exists on --base did not change."""
+        d = self._git("diff", "--name-only", f"{self.base}...HEAD", "--", "tutorials/")
+        if d.returncode != 0:
+            self.warn("R002", self.root / "tutorials", f"cannot diff against {self.base}: {d.stderr.strip()}")
+            return
+        seen = set()
+        for path in d.stdout.split():
+            parts = Path(path).parts
+            if len(parts) < 5 or parts[2] != REVISIONS_DIR:
+                continue
+            rev = "/".join(parts[:4])
+            if rev in seen:
+                continue
+            seen.add(rev)
+            if self._git("cat-file", "-e", f"{self.base}:{rev}/tutorial.yaml").returncode == 0:
+                self.err("R002", self.root / rev, f"{rev} is a frozen revision and cannot change; "
+                         "the current tutorial is where changes go")
+
+    def lint_removed_versions(self):
+        """R004: a version that leaves versions.tested goes to a revision."""
+        for t in self.tutorials:
+            shown = self._git("show", f"{self.base}:{t.rel}/tutorial.yaml")
+            if shown.returncode != 0 or t.errors:
+                continue
+            try:
+                old = set(((yaml.safe_load(shown.stdout) or {}).get("versions") or {}).get("tested") or [])
+            except yaml.YAMLError:
+                continue
+            kept = {v for r in load_revisions(t) if not r.errors for v in r.tested_versions}
+            for ver in sorted(old - set(t.tested_versions) - kept):
+                self.err("R004", t.path / "tutorial.yaml",
+                         f"{ver} was removed from versions.tested but no revision keeps it; run "
+                         f"`./tut revision start {t.id} --to <new version>` before changing the tutorial")
 
     def lint_script_pipes(self, scripts, code):
         for sc in scripts:

@@ -46,6 +46,8 @@ make new T=<id> [TITLE=".."] [OWNER=<handle>]   # new tutorial from tutorials/_t
 ./tut sync                  # regenerate <!-- tut:... --> regions — after every edit
 ./tut lint                  # all rules; must end with "0 error(s)"
 ./tut run <id> --dry-run    # the exact script CI will execute
+./tut revision start <id> --to <version>   # keep the tutorial as a frozen revision, move it to a new version
+./tut revision todo                        # tutorials that skipped versions; keep <id> moves them (ask first)
 ./tut run <id>              # execute for real (Docker + kubectl + Kind)
 ./tut ui                    # local web UI: run a tutorial step by step
 ./tut list [--tag T] [--status S] [--collection C]   # one line per tutorial
@@ -93,6 +95,11 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
     `owners` fields by `./tut sync`: never edit it by hand.
 12. **Never push to `stable`.** Only the release workflow moves it, and only
     forward to a fully verified commit of `main` (docs/release.md).
+13. **No AI in GitHub Actions.** There is no API key in CI. Scouts, drafts,
+    translations and explainers run locally; a workflow may open a PR or an
+    issue for a local agent to pick up (docs/rfc/0002-tutorial-revisions.md).
+14. **Never edit a revision** (`tutorials/<id>/revisions/rN/`). It is the
+    frozen tutorial for older versions; changes go to the current tutorial.
 
 ## How to work (every task)
 
@@ -194,11 +201,15 @@ break, change or make obsolete, before anything is run.
 - It edits nothing and decides nothing. Its proposals are plans: they go to the
   tech lead and then to the maintainer like any plan. A run (`./tut run <id>
   --version <target>`) confirms a finding.
-- How one tutorial carries content that differs per version is still open
-  (docs/backlog.md C1). Neither the scout nor you settle it: when a finding
-  means a tutorial cannot be true for the old and the new version at once, put
-  the choice to the maintainer for that tutorial (docs/ci-playbook.md section 5
-  lists the options).
+- When a tutorial has to change because of the new version, the old versions
+  go to a frozen revision first: `./tut revision start <id> --to <version>`,
+  then edit (docs/authoring.md "A new product version changes a tutorial").
+- When the weekly canary passes, a bot PR adds the version to
+  `versions.tested`; run the scout for that version and, with the maintainer's
+  permission, add its report to the PR. The maintainer merges.
+- New features of a release: the `feature-scout` agent
+  (`.claude/agents/feature-scout.md`) drafts `tutorial-proposal` issues; filing
+  them needs the maintainer's permission.
 
 ## Translations
 
@@ -227,7 +238,8 @@ and never triggers CI e2e.
 - `./tut explain mark` records that a person read the explainer. Never run it
   on your own judgment. Run it only when the maintainer says they read it
   ("I read it, mark it"), for the languages they name.
-- Explainer changes go in their own PR (no tutorial change in it).
+- Explainer changes go in their own PR (no tutorial change in it). Exception:
+  `./tut revision start` copies the explainer into a revision with the tutorial.
 
 ## Leave the repository smarter than you found it
 

@@ -101,6 +101,28 @@ Line breaks: in `docs/` write one line per paragraph and do not wrap by hand; a 
 
 `draft` → `stable` (CI passed, parts frozen) → `deprecated` (still works, being replaced) → `archived` (kept, not run). Deprecating or archiving needs a `deprecation` block [T006] and changes only that tutorial.
 
+### A new product version changes a tutorial: keep the old one as a revision
+
+When a tutorial has to change because of a new version (an API, a default, a component), readers on the older versions keep the tutorial as it was: a frozen copy in `tutorials/<id>/revisions/rN/` (docs/rfc/0002-tutorial-revisions.md). Always, without trying to keep one README true for both.
+
+```bash skip
+./tut revision start <id> --to v0.20.0   # copies tutorials/<id>/ from origin/main to revisions/rN (frozen),
+                                         # sets versions.tested/default of the current tutorial to v0.20.0
+# edit the tutorial for v0.20.0, ./tut sync, ./tut run <id>, make precommit
+./tut revision list                      # every tutorial and revision with its tested versions
+./tut revision todo                      # tutorials that skipped versions (a gap in versions.tested)
+./tut revision keep <id> [v0.18.0 ...]   # skipped versions: move them to a revision without a new version
+```
+
+- Freeze first, then edit; the revision and the change go into one commit. The copy is taken from the base branch, so it is what was verified.
+- The copy runs from its new place: its setup step `cd`s into the revision and links that leave the tutorial are re-pointed. `./tut sync` never writes into `revisions/`; the current README's header links each revision.
+- A revision is never edited [R002], uses only frozen env and lib parts [R003], and one version belongs to one variant [R005]. A version removed from `versions.tested` must be in a revision [R004].
+- If the tutorial defines shared steps (`tut:define`) that other tutorials copy, and you change a definition for the new version, those tutorials change too: `--with-users` starts them as well.
+- `./tut run <id> --version v0.19.0`, `./tut ui` ("My KServe" version) and the site pick the revision tested with that version, by tag, then by minor (v0.19.2 uses what was tested as v0.19.x).
+- The copy includes translations and the explainer as they were: copying them is the one exception to "explainer changes go in their own PR".
+- A change that is not about a version (a typo, more explanation) needs no revision.
+- CI runs two versions of a tutorial: N (the newest KServe release) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` and the weekly `ci-window` issue. Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
+
 ## 7. Translations
 
 `README.md` is the source. `<id>` is the tutorial's directory name.

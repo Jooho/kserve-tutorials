@@ -11,7 +11,7 @@ permissions: {contents: read}
 
 jobs:
   run:
-    name: ${{ matrix.tutorial }} @ ${{ matrix.version }}
+    name: ${{ matrix.tutorial }}${{ matrix.revision && format(' ({0})', matrix.revision) || '' }} @ ${{ matrix.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:

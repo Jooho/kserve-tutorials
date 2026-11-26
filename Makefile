@@ -73,6 +73,7 @@ precommit: ## Before every commit: ./tut sync, then make check. TRANSLATE=1 also
 	$(if $(filter 1 yes true,$(TRANSLATE)),./tut translation draft --all && ./tut sync)
 	@$(MAKE) --no-print-directory check
 	@./tut translation todo
+	@./tut revision todo
 	@if [ -n "$$(git status --short)" ]; then printf '\nNot committed yet (./tut sync may have updated some):\n'; git status --short; fi
 
 ui: ## Start the local runner UI

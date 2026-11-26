@@ -167,6 +167,10 @@
       "description": "What kind of tutorial it is: an id from catalog/groups.yaml (G003).",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "frozen": {
+      "type": "boolean",
+      "description": "Only in tutorials/<id>/revisions/rN/tutorial.yaml: a revision is a frozen copy for older versions (docs/rfc/0002-tutorial-revisions.md); lint R001/R002"
     }
   },
   "$defs": {

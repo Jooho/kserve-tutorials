@@ -41,8 +41,8 @@ function applyProject(p) {
   const title = p.title[S.lang] || p.title.en;
   document.title = title;
   $(".brand").firstChild.textContent = title + " ";
-  $("#verfilter").setAttribute("aria-label", `${p.name} version`);
-  $("#verfilter").title = `Show only the tutorials tested on this ${p.name} version`;
+  $("#verfilter").setAttribute("aria-label", `My ${p.name} version`);
+  $("#verfilter").title = `The ${p.name} version you use: the list, the page and the shell follow it (an older revision when the tutorial changed since)`;
   $("#matrix-btn").title = `Which tutorial is tested on which ${p.name} version`;
   const o = $('#sort option[value="version"]'); if (o) o.textContent = `Sort: newest ${p.name}`;
 }
@@ -75,8 +75,8 @@ async function loadList() {
   const r = await fetch("/api/tutorials").then((r) => r.json());
   S.tutorials = r.tutorials; S.versions = r.versions; applyProject(r.project);
   const sel = $("#verfilter");
-  sel.innerHTML = `<option value="">All ${P()} versions</option>` +
-    S.versions.map((v) => `<option value="${v}">${P()} ${v}</option>`).join("");
+  sel.innerHTML = `<option value="">All ${P()} versions (newest)</option>` +
+    S.versions.map((v) => `<option value="${v}">My ${P()}: ${v}</option>`).join("");
   if (!S.versions.includes(S.version)) S.version = "";
   sel.value = S.version;
   await loadCatalog();
@@ -117,13 +117,15 @@ function matches(t) {
 }
 
 function item(t, { n = null, note = "", dim = false, extra = "", col = "" } = {}) {
+  const x = variantOf(t) || t;
+  if (x.rev) note = `${note ? note + " · " : ""}older revision ${x.rev}`;
   const title = esc(t.title[S.lang] || t.title.en);
   const tags = t.tags.map((x) => `<span class="tag ${S.tagFilter.has(x) ? "on" : ""}" data-tag="${x}"
     title="${esc(S.catalog?.tags[x]?.description || "")}">#${x}</span>`).join("");
   const on = t.id === S.current && (col || null) === (S.group || null);
   return `<li data-id="${t.id}" ${col ? `data-col="${col}"` : ""} class="${on ? "on" : ""} ${dim ? "untested" : ""} ${extra}">
     <div class="t">${n ? `<span class="num">${n}</span>` : ""}${title}</div>
-    <div class="meta"><span>${statusLabel(t.status)}</span><span>${t.versions.tested.join(", ")}</span>
+    <div class="meta"><span>${statusLabel(t.status)}</span><span>${x.versions.tested.join(", ")}</span>
       ${t.gpu ? "<span>GPU</span>" : ""}${note ? `<span class="note">${note}</span>` : ""}</div>
     ${tags ? `<div class="tags">${tags}</div>` : ""}</li>`;
 }
@@ -135,7 +137,7 @@ function renderList() {
   $("#tagchips").innerHTML = [...S.tagFilter].map((x) =>
     `<span class="tag on" data-untag="${x}" title="Remove filter">#${x} ✕</span>`).join("");
   const v = S.version, html = [];                      // the version filter applies to every view
-  const onVersion = (t) => !v || t.versions.tested.includes(v);
+  const onVersion = (t) => !v || variantOf(t, v) !== null;
   if (!S.catalog) return;
   const heading = (id, title, desc, rows, kind) => {      // a collapsible section of the list
     const shown = rows.filter(Boolean);
@@ -185,16 +187,26 @@ function renderMatrix() {
   const vs = S.version ? [S.version] : S.versions;    // the Versions filter applies here too
   const rows = S.tutorials.filter(matches).map((t) => `<tr data-id="${t.id}" class="${t.status === "archived" ? "archived" : ""}">
     <td>${esc(t.title[S.lang] || t.title.en)} <span class="muted">${statusLabel(t.status)}</span></td>
-    ${vs.map((ver) => t.versions.tested.includes(ver)
-      ? `<td class="yes ${ver === t.versions.default ? "default" : ""}" title="${ver === t.versions.default ? "default version" : "tested"}">✓</td>`
-      : "<td></td>").join("")}</tr>`).join("");
+    ${vs.map((ver) => { const x = variantOf(t, ver); return !x || !x.versions.tested.includes(ver) ? "<td></td>"
+      : x.rev ? `<td class="yes" title="older revision ${x.rev} (tutorials/${t.id}/revisions/${x.rev}/)">${x.rev}</td>`
+      : `<td class="yes ${ver === t.versions.default ? "default" : ""}" title="${ver === t.versions.default ? "default version" : "tested"}">✓</td>`; }).join("")}</tr>`).join("");
   $("#matrix").innerHTML = `<h2>${S.lang === "ko" ? `${P()} 버전별 튜토리얼` : `Tutorials by ${P()} version`}</h2>
-    <p class="muted">✓ = run and verified in CI on that version; outlined = the tutorial's default version.</p>
+    <p class="muted">✓ = run and verified in CI on that version; outlined = the tutorial's default version; r1, r2 = an older revision of the tutorial is used for that version.</p>
     <table><thead><tr><th>Tutorial</th>${vs.map((v) => `<th>${v}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
   $("#matrix").hidden = false; $("#doc-wrap").hidden = true; $("#empty").hidden = true;
 }
 $("#matrix").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) openTutorial(tr.dataset.id); });
 
+// RFC 0002 section 6: the variant a reader on version v uses: the current
+// tutorial if it was tested with v, else the older revision that was (exact
+// tag first, then the same minor). null: not available for v.
+const minorOf = (v) => (v || "").split(".").slice(0, 2).join(".");
+function variantOf(t, v = S.version) {
+  const all = [{ ...t, rev: null }, ...(t.revisions || []).map((r) => ({ ...t, ...r }))];
+  if (!v) return all[0];
+  return all.find((x) => x.versions.tested.includes(v))
+    || all.find((x) => x.versions.tested.some((y) => minorOf(y) === minorOf(v))) || null;
+}
 const statusLabel = (s) => ({ draft: "🚧 draft", stable: "✅ stable", deprecated: "⚠️ deprecated", archived: "🗄️ archived" }[s] || s);
 
 $("#list").addEventListener("click", (e) => {
@@ -233,6 +245,12 @@ $("#verfilter").addEventListener("change", async (e) => {
   S.version = e.target.value; store.set("tut.verfilter", S.version);
   await loadCatalog();                                   // collections are resolved per version
   if (!$("#matrix").hidden) renderMatrix();
+  if (S.current && !$("#doc-wrap").hidden) {                  // maybe another revision now
+    await loadDoc(); renderChips(); loadEnv();
+    const want = sessionVersionFor(currentMeta());
+    if (S.sessionVersion && want !== S.sessionVersion &&
+        confirm(`The shell runs ${P()} ${S.sessionVersion}. Start a new shell with ${want}? Variables in the current shell are lost.`)) startShell();
+  }
 });
 $("#matrix-btn").onclick = () => renderMatrix();
 $("#lang").addEventListener("click", (e) => {
@@ -246,10 +264,13 @@ $("#lang").addEventListener("click", (e) => {
 });
 document.querySelectorAll("#lang button").forEach((x) => x.classList.toggle("on", x.dataset.lang === S.lang));
 
-const currentMeta = () => S.tutorials.find((t) => t.id === S.current);
+// The tutorial as the reader's version shows it: the current one or an older revision.
+const currentMeta = () => { const t = S.tutorials.find((x) => x.id === S.current); return t && (variantOf(t) || variantOf(t, "")); };
+const revQuery = () => { const r = currentMeta()?.rev; return r ? `&rev=${encodeURIComponent(r)}` : ""; };
 // The product version a tutorial runs with: picked on its version chip (only
 // versions it was tested on), else its default.
 function sessionVersionFor(t) {
+  if (S.version && t.versions.tested.includes(S.version)) return S.version;   // "My version" first
   const v = S.runVersions[t.id];
   return v && t.versions.tested.includes(v) ? v : t.versions.default;
 }
@@ -271,7 +292,7 @@ async function openTutorial(id, group = null) {
 
 async function loadDoc() {
   const col = S.group ? `&collection=${encodeURIComponent(S.group)}` : "";
-  const d = await fetch(`/api/tutorials/${S.current}?lang=${S.lang}${col}`).then((r) => r.json());
+  const d = await fetch(`/api/tutorials/${S.current}?lang=${S.lang}${col}${revQuery()}`).then((r) => r.json());
   S.doc = d; S.states = {}; S.times = {};
   for (const [k, v] of Object.entries(d.states || {})) { S.states[k] = v.state; S.times[k] = v.ts; }
   renderDoc();
@@ -348,6 +369,10 @@ const edState = (msg, cls = "") => { $("#editor-state").className = "editor-stat
 
 async function openEditor() {
   if (!S.current) return;
+  if (currentMeta()?.rev) {
+    alert(`This is the older revision ${currentMeta().rev}: a frozen copy that is never edited. Pick "All versions" to edit the current tutorial.`);
+    return;
+  }
   Object.assign(ED, { tid: S.current, lang: S.lang, file: $("#editor-pick").value });
   const r = await fetch(srcUrl()).then((r) => r.json());
   Object.assign(ED, { open: true, mtime: r.mtime, saved: r.text });
@@ -527,6 +552,7 @@ function renderChips() {
     : `<span class="chip" title="The only ${P()} version this tutorial is tested on">${P()} ${v}</span>`;
   $("#chips").innerHTML = [
     `<span class="chip">${statusLabel(t.status)}</span>`,
+    t.rev ? `<span class="chip warn" title="This tutorial changed for a newer ${P()}; for your version you see the frozen copy tutorials/${t.id}/revisions/${t.rev}/ (it is never edited). Pick All versions to see the newest.">older revision ${t.rev}</span>` : "",
     verChip,
     t.env ? `<span class="chip">env ${t.env}</span>` : "",
     ...t.uses.map((u) => `<span class="chip">lib ${u}</span>`),
@@ -535,7 +561,7 @@ function renderChips() {
     : S.doc && S.doc.translation === "behind" ? `<a href="#" class="chip warn act" data-act="translate" title="The English README changed after this translation was made. Click to translate it again with your AI CLI.">${S.lang.toUpperCase()} translation is behind the English version · ↻ update it</a>` : "",
     S.doc && S.doc.translation === "unmarked" ? `<span class="chip warn">${S.lang.toUpperCase()} translation not reviewed yet</span>` : "",
     S.doc && S.doc.translation === "draft" ? `<span class="chip warn" title="Made by an AI and checked by a program (code, commands, links unchanged), not yet by a person. After reviewing: ./tut translation mark ${S.current} ${S.lang}">🤖 ${S.lang.toUpperCase()}: AI translation, not reviewed yet</span>` : "",
-    ...Object.keys(S.doc?.explainer || {}).length ? [`<a class="chip explainchip" target="_blank" rel="noopener" href="/explain/${encodeURIComponent(S.current)}?lang=${S.lang}" title="How this tutorial works, with diagrams: written by an AI from a step-by-step run on a real cluster${Object.values(S.doc.explainer).includes("ok") ? ", reviewed by a person" : ", not reviewed yet"}. Opens in a new tab.">How it works - AI-written </a>`] : [],
+    ...Object.keys(S.doc?.explainer || {}).length ? [`<a class="chip explainchip" target="_blank" rel="noopener" href="/explain/${encodeURIComponent(S.current)}?lang=${S.lang}${revQuery()}" title="How this tutorial works, with diagrams: written by an AI from a step-by-step run on a real cluster${Object.values(S.doc.explainer).includes("ok") ? ", reviewed by a person" : ", not reviewed yet"}. Opens in a new tab.">How it works - AI-written </a>`] : [],
     S.doc?.preview?.error ? `<span class="chip bad" title="${esc(S.doc.preview.error)}">✗ sync: ${esc(S.doc.preview.error)}</span>` : "",
     S.doc?.preview?.stale ? `<span class="chip warn" title="The page shows the README as it will be after ./tut sync; the file itself is not updated yet">preview · file not synced — run make precommit</span>` : "",
     ...(S.group ? [] : pathsOf(S.current).map((c) =>
@@ -713,7 +739,7 @@ function updateProgress() {
 
 function run(idxs, stopOnFail = true, focusTerminal = true) {
   if (!idxs.length) return;
-  send({ type: "run", blocks: idxs, lang: S.doc.lang, stop_on_fail: stopOnFail });
+  send({ type: "run", blocks: idxs, lang: S.doc.lang, stop_on_fail: stopOnFail, rev: S.doc.revision || null });
   if (focusTerminal) term.focus();
   else if (document.activeElement?.closest?.(".xterm")) document.activeElement.blur();   // keep Shift+Enter for Next
 }
@@ -732,7 +758,7 @@ $("#teardown").onclick = async () => {
   if (!t?.env) { alert("This tutorial has no environment: there is no cluster to delete."); return; }
   // Say exactly which cluster goes, and warn when it was not built by these
   // tutorials (no tut-env marker): it may be one the reader uses for something else.
-  const e = await fetch(`/api/tutorials/${S.current}/env`).then((r) => r.json()).catch(() => ({}));
+  const e = await fetch(`/api/tutorials/${S.current}/env?${revQuery().slice(1)}`).then((r) => r.json()).catch(() => ({}));
   const name = e.name || "kind";
   if (e.kind && !e.cluster) { alert(`There is no Kind cluster named "${name}": nothing to delete.`); return; }
   const what = !e.cluster ? `Kind cluster "${name}" (could not check it: kind is not on this machine's PATH)`
@@ -741,7 +767,7 @@ $("#teardown").onclick = async () => {
   if (!confirm(`Delete the ${what}?\n\nRuns envs/${t.env}/teardown.sh in this terminal. Everything on the ` +
                "cluster is lost, for every tutorial using it. The next setup step builds a new one " +
                "(several minutes).")) return;
-  send({ type: "teardown" });
+  send({ type: "teardown", rev: currentMeta()?.rev || null });
   term.focus();
 };
 // ⧉ another terminal for this tutorial, alone in a new browser tab (static/shell.html)
@@ -756,7 +782,7 @@ async function loadEnv() {
   const t = currentMeta();
   if (!t.env) { $("#envbar").className = "envbar"; $("#envbar").innerHTML = ""; $("#envbar").hidden = true; return; }
   $("#envbar").hidden = false;
-  const e = await fetch(`/api/tutorials/${S.current}/env`).then((r) => r.json());
+  const e = await fetch(`/api/tutorials/${S.current}/env?${revQuery().slice(1)}`).then((r) => r.json());
   const want = `${t.env}@${sessionVersionFor(t)}`;
   const bar = $("#envbar");
   let cls = "warn", msg;

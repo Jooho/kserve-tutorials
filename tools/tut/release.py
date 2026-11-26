@@ -82,7 +82,7 @@ def notes(version: str, sha: str, reports: list[dict], repo: str = "<owner>/<rep
     proj = project.load(root)
     out = [f"## {proj.text('title')} {version}", "",
            f"Commit `{sha[:7]}` of `main`, promoted to `{STABLE_BRANCH}` after every runnable "
-           f"tutorial passed on every {proj.name} version it lists.", "",
+           f"tutorial and revision passed on every {proj.name} version CI runs for it (N and N-1).", "",
            "```bash", f"git clone -b {version} https://github.com/{repo}.git", "```", ""]
     out += ["### Verification", "", f"| Tutorial | {proj.name} | Result | Duration |", "|---|---|---|---|"]
     for r in sorted(reports, key=lambda r: (r["tutorial"], r["version"])):
@@ -93,11 +93,18 @@ def notes(version: str, sha: str, reports: list[dict], repo: str = "<owner>/<rep
         out.append("| — | — | no CI-runnable tutorials | — |")
     out += ["", "### Tutorials in this release", "",
             f"| Tutorial | Status | Tested {proj.name} | Environment |", "|---|---|---|---|"]
-    for t in load_tutorials(root):
-        if t.errors:
-            continue
-        note = "" if t.ci_runnable else " (not run in CI)"
-        out.append(f"| {t.id} | {t.status}{note} | {', '.join(t.tested_versions)} | `{t.env_ref}` |")
+    from .model import ci_minors, latest, runs_in_ci, variants
+    tutorials = load_tutorials(root)
+    n = latest(tutorials)
+    for t in tutorials:
+        ms = ci_minors(t, n)
+        for v in variants(t):
+            if v.errors:
+                continue
+            note = "" if v.ci_runnable else " (not run in CI)"
+            tested = ", ".join(x if runs_in_ci(x, ms) else f"{x} (last verified earlier, not run)"
+                               for x in v.tested_versions)
+            out.append(f"| {v.key} | {v.status}{note} | {tested} | `{v.env_ref}` |")
     if prev:
         changed = _git("diff", "--name-only", f"{prev}..{sha}", root=root).split("\n")
         parts = sorted({"/".join(Path(p).parts[:2]) if p.startswith("tutorials/") else

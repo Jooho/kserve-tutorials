@@ -57,10 +57,9 @@ Keep the target and what comes after it apart. "Still works in v0.21.0, rejected
 - What can be done, in this repository's own terms, without choosing for the maintainer:
   - leave the target out of `versions.tested`: the tutorial stays valid for the versions it lists; the site's "By version" page shows it only there
   - update the tutorial so it is true for the target, and add the target to `versions.tested`
-  - update the tutorial for the target, move `versions.default` to it and drop the versions it is no longer true for from `versions.tested` (when one README cannot be true for both)
+  - when the tutorial must change for the target: `./tut revision start <id> --to <target>` keeps it as a frozen revision for the versions it lists, then the tutorial is updated for the target (docs/rfc/0002-tutorial-revisions.md); never propose removing a version from `versions.tested` without a revision (lint R004)
   - `status: deprecated` or `archived` with a `deprecation` block and, in a collection, a replacement (docs/authoring.md "Lifecycle"; lint T006, C004)
   - a new tutorial for the new way
-  - how one tutorial should carry content that differs per version is an open decision (docs/backlog.md C1): do not settle it, point at it
 
 ## Rules for yourself
 
