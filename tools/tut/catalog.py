@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from .model import REPO_ROOT, Tutorial, load_envs, load_modules, load_tutorials
+from .model import REPO_ROOT, Tutorial, load_envs, load_modules, load_tutorials, resolve as resolve_version
 
 CATALOG = "catalog"
 
@@ -77,7 +77,9 @@ def load_collections(root: Path = REPO_ROOT) -> list[Collection]:
 
 
 def _available(t: Tutorial, version: str | None) -> bool:
-    return t.status != "archived" and (version is None or version in t.tested_versions)
+    """Not archived, and the tutorial or one of its revisions was tested with
+    `version` (RFC 0002 section 6)."""
+    return t.status != "archived" and (version is None or resolve_version(t, version) is not None)
 
 
 def _replacement(t: Tutorial, by_id: dict[str, Tutorial], version: str | None) -> Tutorial | None:
@@ -107,7 +109,9 @@ def resolve(col: Collection, by_id: dict[str, Tutorial], version: str | None = N
             out.append({"n": n, "member": mid, "shown": None, "state": "missing"})
             continue
         if _available(t, version):
-            out.append({"n": n, "member": mid, "shown": mid, "state": "ok"})
+            v = resolve_version(t, version)
+            out.append({"n": n, "member": mid, "shown": mid, "state": "ok",
+                        "revision": (v.revision if v else None) or None})
             continue
         r = _replacement(t, by_id, version)
         if r:

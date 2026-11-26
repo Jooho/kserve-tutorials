@@ -1,0 +1,53 @@
+name: Tutorial proposal (new feature of a release)
+description: One candidate tutorial for a new feature. Usually filed by a local agent running feature-scout; the maintainer approves or rejects here (docs/rfc/0002-tutorial-revisions.md section 8).
+title: "[tutorial-proposal] "
+labels: [tutorial-proposal]
+body:
+  - type: input
+    id: feature
+    attributes: {label: Feature, description: "Name, release (e.g. KServe v0.21.0), upstream PRs and issues, the release note line"}
+    validations: {required: true}
+  - type: textarea
+    id: problem
+    attributes: {label: User problem, description: "What a user cannot do without it, in one or two lines"}
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes: {label: Upstream evidence, description: "Upstream e2e tests and sample YAML (already tested manifests): paths at the release tag"}
+    validations: {required: true}
+  - type: textarea
+    id: needs
+    attributes: {label: Needs, description: "CRDs, feature gates, extra components, images and their sizes"}
+  - type: dropdown
+    id: kind
+    attributes: {label: Runs on kind + CPU?, options: ["yes", "no (say why below)"]}
+    validations: {required: true}
+  - type: textarea
+    id: existing
+    attributes: {label: Existing tutorials, description: "A new tutorial, or a change to which one (and whether it needs a revision)"}
+  - type: textarea
+    id: learn
+    attributes: {label: What you will learn, description: "3-5 points: what the reader will understand, not the commands"}
+    validations: {required: true}
+  - type: textarea
+    id: verify
+    attributes: {label: Verify points, description: "Facts a run can check"}
+    validations: {required: true}
+  - type: textarea
+    id: parts
+    attributes: {label: env / lib, description: "Parts to use (envs/<name>/vN, lib/<name>/vN), parts that are missing"}
+  - type: input
+    id: estimate
+    attributes: {label: Estimate, description: "Run time, group, collection, level tag"}
+  - type: textarea
+    id: score
+    attributes:
+      label: Score
+      description: "Each criterion: yes / no / partly, with a reason"
+      value: |
+        - Users use it (not an internal refactor):
+        - Runs on CPU kind (GPU-only waits for backlog D7):
+        - API reasonably stable (alpha or feature gate: flagged, lower priority):
+        - A mechanism to teach, not only commands:
+        - Does not overlap an existing tutorial:
+    validations: {required: true}

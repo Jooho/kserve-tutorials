@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 
 from . import generate, markdown, project
-from .model import REPO_ROOT, load_envs, load_tutorials, version_key
+from .model import REPO_ROOT, load_envs, load_tutorials, resolve, variants, version_key
 
 LANG_FILES = {"README.md": "index.md", "README.ko.md": "index.ko.md"}
 
@@ -39,7 +39,7 @@ def _copy_tree(src: Path, dst: Path):
         if p.is_dir():
             continue
         rel = p.relative_to(src)
-        target = dst / LANG_FILES.get(str(rel), str(rel))
+        target = dst / rel.parent / LANG_FILES.get(rel.name, rel.name)   # also revisions/rN/README.md
         target.parent.mkdir(parents=True, exist_ok=True)
         if p.suffix == ".md":
             text = "\n".join(_site_fence_info(l) for l in p.read_text().split("\n"))
@@ -94,7 +94,8 @@ def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
     tutorials = [t for t in load_tutorials(root) if not t.errors]
     for t in tutorials:
         _copy_tree(t.path, out / "tutorials" / t.id)
-        _explainer_links(t, out / "tutorials" / t.id)
+        for v in variants(t):
+            _explainer_links(v, out / v.rel)
     for env in load_envs(root).values():
         _copy_tree(env.path, out / "envs" / env.ref)
     proj = project.load(root)
@@ -103,13 +104,17 @@ def build_source(out: Path, root: Path = REPO_ROOT) -> Path:
         body = intro + "\n" + generate.render_catalog(tutorials, lang, root) + "\n"
         (out / name).write_text(body)
     # Per-version pages: "what can I run on <product> vX?"
-    versions = sorted({v for t in tutorials for v in t.tested_versions}, key=version_key, reverse=True)
+    # A tutorial changed for a newer version links its revision for the older ones.
+    versions = sorted({v for t in tutorials for r in variants(t) if not r.errors for v in r.tested_versions},
+                      key=version_key, reverse=True)
     lines = [f"# By {proj.name} version", ""]
     for v in versions:
         lines += [f"## {v}", ""]
         for t in tutorials:
-            if v in t.tested_versions and t.status != "archived":
-                lines.append(f"- [{t.title()}](tutorials/{t.id}/index.md) — {t.summary()}")
+            r = resolve(t, v)
+            if r is not None and t.status != "archived":
+                note = f" ({r.revision}, an older revision)" if r.revision else ""
+                lines.append(f"- [{r.title()}]({r.rel}/index.md){note} — {r.summary()}")
         lines.append("")
     (out / "versions.md").write_text("\n".join(lines))
     _link_dir_indexes(out)

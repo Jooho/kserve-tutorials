@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import doctor, generate, lint, plan, project, release, runner, site
-from .model import REPO_ROOT, load_tutorials
+from .model import REPO_ROOT, load_tutorials, resolve, variants
 
 
 def _tutorial(tid: str):
@@ -222,7 +222,15 @@ def cmd_lint(a):
 
 
 def cmd_run(a):
-    return runner.run(_tutorial(a.id), version=a.version, keep=a.keep,
+    t = _tutorial(a.id)
+    if a.version:
+        v = resolve(t, a.version)
+        if v is None:
+            tested = sorted({x for r in variants(t) for x in r.tested_versions})
+            sys.exit(f"{t.id} is not available for {a.version}: tested with {', '.join(tested) or 'none'} "
+                     f"(the tutorial or one of its revisions, docs/rfc/0002-tutorial-revisions.md)")
+        t = v
+    return runner.run(t, version=a.version, keep=a.keep,
                       dry_run=a.dry_run, teardown_env=a.teardown_env,
                       report=Path(a.report) if a.report else None,
                       keep_on_failure=a.keep_on_failure, twice=a.twice)
@@ -250,8 +258,57 @@ def cmd_affected(a):
 
 
 def cmd_matrix(a):
-    m = plan.canary_matrix(a.canary) if a.canary else plan.scheduled_matrix()
+    m = (plan.canary_matrix(a.canary) if a.canary else plan.out_of_window() if a.out_of_window
+         else plan.scheduled_matrix())
     print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['version']}" for e in m))
+
+
+def cmd_revision(a):
+    """./tut revision: older versions of a tutorial (docs/rfc/0002-tutorial-revisions.md)."""
+    from . import revision
+    if a.rcmd == "start":
+        return revision.start_cli(a.id, a.to, a.base, a.with_users)
+    if a.rcmd == "keep":
+        return revision.keep_cli(a.id, a.versions, a.base)
+    if a.rcmd == "todo":
+        todo = plan.skipped()
+        if a.json:
+            print(json.dumps(todo))
+        elif todo:
+            print("Skipped versions (a gap in versions.tested). Ask the maintainer; with their "
+                  "permission ./tut revision keep <id> moves the versions before the gap to a revision.")
+            for e in todo:
+                print(f"  {e['tutorial']:<28} before the gap: {', '.join(e['versions'])}")
+        return 0
+    for t in load_tutorials(REPO_ROOT):
+        for v in variants(t):
+            if a.id and t.id != a.id:
+                continue
+            mark = "current " if not v.revision else f"{v.revision:<8}"
+            print(f"{t.id:<28} {mark} tested {', '.join(v.tested_versions) or '-'}  env {v.env_ref or '-'}")
+    return 0
+
+
+def cmd_tested(a):
+    """./tut tested add <version> <id>...: what the canary bot PR runs after a pass."""
+    import re as _re
+    from .model import VERSION_RE
+    if not VERSION_RE.match(a.version):
+        sys.exit(f"{a.version!r} is not a version like v0.20.0")
+    for tid in a.ids:
+        t = _tutorial(tid)
+        if a.version in t.tested_versions:
+            print(f"{tid}: already tested with {a.version}")
+            continue
+        f = t.path / "tutorial.yaml"
+        text, n = _re.subn(r"^(\s+tested:\s*\[)([^\]]*)\]",
+                           lambda m: f"{m.group(1)}{m.group(2).rstrip()}{', ' if m.group(2).strip() else ''}{a.version}]",
+                           f.read_text(), count=1, flags=_re.M)
+        if not n:
+            sys.exit(f"{f}: no `tested: [...]` line under versions to add to")
+        f.write_text(text)
+        print(f"{tid}: added {a.version} to versions.tested")
+    return 0
 
 
 def cmd_explain(a):
@@ -678,8 +735,46 @@ def build_parser() -> argparse.ArgumentParser:
     g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--scheduled", action="store_true")
     g.add_argument("--canary", metavar="VERSION")
+    g.add_argument("--out-of-window", action="store_true",
+                   help="tested versions CI no longer runs (not N or N-1 of their tutorial)")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_matrix)
+
+    s = sub.add_parser("revision", help="older versions of a tutorial: list, todo, keep, start",
+                       description="A change made because of a new product version keeps the old "
+                                   "tutorial as a frozen revision (tutorials/<id>/revisions/rN/). "
+                                   "See docs/rfc/0002-tutorial-revisions.md.")
+    vsub = s.add_subparsers(dest="rcmd")
+    r = vsub.add_parser("list", help="every tutorial and revision with its tested versions (default)")
+    r.add_argument("id", nargs="?")
+    r = vsub.add_parser("todo", help="tutorials that skipped versions (a gap in versions.tested)")
+    r.add_argument("--json", action="store_true")
+    r = vsub.add_parser("keep", help="move tested versions to a frozen revision, without a new version",
+                        description="Copies tutorials/<id>/ as it is on --base to revisions/rN/ "
+                                    "(frozen) with versions.tested = VERSION..., and removes them from "
+                                    "the current tutorial. Without VERSION: the versions before a gap "
+                                    "in versions.tested (./tut revision todo). For a tutorial that skipped a "
+                                    "version; ask the maintainer first.")
+    r.add_argument("id")
+    r.add_argument("versions", nargs="*", metavar="VERSION")
+    r.add_argument("--base", default="origin/main", help="branch whose verified state is kept (default origin/main)")
+    r = vsub.add_parser("start", help="keep the tutorial as a revision, move it to a new version",
+                        description="Copies tutorials/<id>/ as it is on --base to revisions/rN/ "
+                                    "(frozen), then sets versions.tested and versions.default of the "
+                                    "current tutorial to --to. Edit the tutorial after this.")
+    r.add_argument("id")
+    r.add_argument("--to", required=True, metavar="VERSION", help="the new version, e.g. v0.20.0")
+    r.add_argument("--base", default="origin/main", help="branch whose verified state is kept (default origin/main)")
+    r.add_argument("--with-users", action="store_true",
+                   help="also start the tutorials that copy this one's shared steps (tut:use)")
+    s.set_defaults(fn=cmd_revision, id=None)
+
+    s = sub.add_parser("tested", help="add a version to versions.tested (canary bot PR)")
+    tt = s.add_subparsers(dest="tcmd", required=True)
+    r = tt.add_parser("add")
+    r.add_argument("version")
+    r.add_argument("ids", nargs="+", metavar="id")
+    s.set_defaults(fn=cmd_tested)
 
     s = sub.add_parser("translation", help="translation status (no arguments), draft, mark",
                        description="Without a subcommand: show every translation's state and the next "

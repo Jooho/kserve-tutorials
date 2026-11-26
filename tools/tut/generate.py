@@ -8,11 +8,12 @@ Region kinds
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from . import markdown, project, shared
-from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, env_tools, load_envs, load_modules, load_tutorials,
-                    readme_name, version_key)
+from .model import (LANGS, REPO_ROOT, Tutorial, env_settings, env_tools, load_envs, load_modules,
+                    load_revisions, load_tutorials, readme_name, version_key)
 
 EXT_LANG = {".yaml": "yaml", ".yml": "yaml", ".json": "json", ".py": "python",
             ".sh": "bash", ".toml": "toml", ".txt": "text", ".go": "go",
@@ -60,7 +61,7 @@ def env_tool_dirs(env_ref: str, root: Path = REPO_ROOT) -> list[str]:
 
 
 def _root(t: Tutorial) -> Path:
-    return t.path.parent.parent
+    return t.root
 
 
 def render_setup(t: Tutorial) -> str:
@@ -80,14 +81,14 @@ def render_setup(t: Tutorial) -> str:
         if dirs:
             lines.append("# pinned CLI tools of the environment, for this shell only")
             lines.append(f'export PATH="{":".join(dirs)}:$PATH"')
-        settings = env_settings(t, load_envs(t.path.parent.parent).get(env))
+        settings = env_settings(t, load_envs(t.root).get(env))
         prefix = " ".join(f"{k}={v}" for k, v in settings)
         if settings:
             lines.append("# what this tutorial needs from the environment (env_options in tutorial.yaml)")
         lines.append(f'{prefix + " " if prefix else ""}"$REPO_ROOT/envs/{env}/setup.sh"')
     if env:   # no env = no cluster (e.g. a tutorial that only runs local commands)
         lines.append('kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -')
-    lines += [f'cd "$REPO_ROOT/tutorials/{t.id}"', "```"]
+    lines += [f'cd "$REPO_ROOT/{t.rel}"', "```"]
     return "\n".join(lines)
 
 
@@ -96,7 +97,8 @@ def render_header(t: Tutorial, lang: str) -> str:
     name = project.load(_root(t)).name
     tested = ", ".join(t.tested_versions) or "—"
     env = t.env_ref or "—"
-    env_link = f"[`{env}`](../../envs/{env}/)" if t.env_ref else env
+    up = os.path.relpath(t.root, t.path).replace(os.sep, "/")
+    env_link = f"[`{env}`]({up}/envs/{env}/)" if t.env_ref else env
     if lang == "ko":
         gpu = "필요" if t.needs_gpu else "불필요"
         line = (f"> **상태:** {st} · **검증된 {name}:** {tested} · "
@@ -111,6 +113,19 @@ def render_header(t: Tutorial, lang: str) -> str:
         names = {"en": "English", "ko": "한국어"}
         links = " · ".join(f"[{names[o]}]({readme_name(o)})" for o in others)
         out += [">", f"> 🌐 {links}"]
+    if t.revision:
+        cur = os.path.relpath(t.path.parents[1], t.path).replace(os.sep, "/")
+        out += [">", (f"> **이전 리비전 ({t.revision}):** 위 버전용으로 고정된 복사본입니다. "
+                      f"최신 튜토리얼: [{t.id}]({cur}/{readme_name(lang)})") if lang == "ko" else
+                (f"> **Older revision ({t.revision}):** a frozen copy for the versions above. "
+                 f"Current tutorial: [{t.id}]({cur}/{readme_name(lang)})")]
+    else:
+        revs = [r for r in load_revisions(t) if not r.errors]
+        if revs:
+            links = " · ".join(f"{', '.join(r.tested_versions)}: [{r.revision}](revisions/{r.revision}/"
+                               f"{readme_name(lang)})" for r in reversed(revs))
+            out += [">", (f"> **이전 {name} 버전:** {links}" if lang == "ko"
+                          else f"> **Older {name} versions:** {links}")]
     dep = t.meta.get("deprecation")
     if t.status in ("deprecated", "archived") and dep:
         reason = dep.get("reason", "")
@@ -155,15 +170,17 @@ def render_catalog(tutorials: list[Tutorial], lang: str = "en", root: Path = REP
     for t in visible:
         if t.status == "archived":
             continue
-        for v in t.tested_versions:
-            by_version.setdefault(v, []).append(t)
+        for r in [t, *(x for x in load_revisions(t) if not x.errors)]:
+            for v in r.tested_versions:
+                by_version.setdefault(v, []).append(r)
     out = ["<!-- " + GEN_NOTE[lang].replace("tutorial.yaml", "tutorials/*/tutorial.yaml") + " -->",
            *hdr, *rows]
     if cols:
         out += ["", "**Collections** (reading paths)", *cols]
     out += ["", f"**By {name} version**", ""]
     for v in sorted(by_version, key=version_key, reverse=True):
-        links = ", ".join(f"[{t.id}](tutorials/{t.id}/)" for t in by_version[v])
+        links = ", ".join(f"[{t.id}{' (' + t.revision + ')' if t.revision else ''}]({t.rel}/)"
+                          for t in by_version[v])
         out.append(f"- **{v}**: {links}")
     return "\n".join(out)
 

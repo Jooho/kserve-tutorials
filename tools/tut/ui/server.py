@@ -23,7 +23,7 @@ from aiohttp import WSMsgType, web
 from .. import lint as tlint
 from .. import markdown as tmd
 from .. import project, shared
-from ..model import LANGS, REPO_ROOT, load_tutorials, version_key
+from ..model import LANGS, REPO_ROOT, load_revisions, load_tutorials, version_key
 from . import sanitize
 from .session import ShellSession
 
@@ -49,6 +49,16 @@ class UI:
         if not t:
             raise web.HTTPNotFound(text=f"unknown tutorial {tid}")
         return t
+
+    def variant(self, tid: str, rev: str | None):
+        """The tutorial, or its revision `rev` (tutorials/<id>/revisions/rN/, RFC 0002)."""
+        t = self.tutorial_or_404(tid)
+        if not rev:
+            return t
+        r = next((x for x in load_revisions(t) if x.revision == rev and not x.errors), None)
+        if r is None:
+            raise web.HTTPNotFound(text=f"{tid} has no revision {rev}")
+        return r
 
     def broadcast(self, tid: str, msg: dict):
         if msg.get("type") == "block":
@@ -78,15 +88,17 @@ class UI:
         Returns (text, the file still needs sync, sync error)."""
         from .. import generate
         raw = path.read_text()
+        if t.revision:                      # a frozen revision: never synced, shown as it is
+            return raw, False, None
         try:
             new = generate.sync_file(path, t, lang, list(self.tutorials().values()), self.root)
         except generate.SyncError as e:
             return raw, False, str(e)
         return new, new != raw, None
 
-    def doc_blocks(self, tid: str, lang: str):
+    def doc_blocks(self, tid: str, lang: str, rev: str | None = None):
         # The page and the "run" messages use the same text, so block indexes match.
-        t = self.tutorial_or_404(tid)
+        t = self.variant(tid, rev)
         path = t.readme(lang) if t.readme(lang).exists() else t.readme("en")
         text, _, _ = self.preview(t, path, lang)
         return t, path, text, tmd.parse(text)
@@ -157,7 +169,7 @@ class UI:
         that an AI wrote it."""
         from html import escape
         from .. import explain
-        t = self.tutorial_or_404(request.match_info["tid"])
+        t = self.variant(request.match_info["tid"], request.query.get("rev"))
         lang = request.query.get("lang", "en")
         if lang not in LANGS or not t.explainer(lang).exists():
             lang = "en"
@@ -167,7 +179,7 @@ class UI:
         mk, st = explain.marker(t, lang) or {}, explain.state(t, lang)
         body = md.markdown(p.read_text(), extensions=["tables", "md_in_html", "sane_lists", "fenced_code"])
         body = sanitize.clean(body)
-        base = f"/files/tutorials/{t.id}/explainer/"
+        base = f"/files/{t.rel}/explainer/"
         body = re.sub(r'(src|href)="(?!https?:|#|/|mailto:)([^"]+)"',
                       lambda m: f'{m.group(1)}="{base}{m.group(2)}"', body)
         if lang == "ko":
@@ -243,9 +255,13 @@ class UI:
                 "tags": t.meta.get("tags", []) or [], "gpu": t.needs_gpu, "langs": t.langs,
                 "group": t.meta.get("group"),
                 "replacement": (t.meta.get("deprecation") or {}).get("replacement"),
+                # older versions kept as frozen copies (RFC 0002); the UI picks one per version
+                "revisions": [{"rev": r.revision, "status": r.status, "env": r.env_ref, "uses": r.uses,
+                               "versions": {"default": r.default_version, "tested": r.tested_versions}}
+                              for r in load_revisions(t) if not r.errors],
             })
-        versions = sorted({v for t in out for v in t["versions"]["tested"]}, key=version_key,
-                          reverse=True)
+        versions = sorted({v for t in out for x in [t, *t["revisions"]] for v in x["versions"]["tested"]},
+                          key=version_key, reverse=True)
         return web.json_response({"tutorials": out, "versions": versions,
                                   "project": project.load(self.root).as_json()})
 
@@ -271,7 +287,7 @@ class UI:
     async def api_tutorial(self, request):
         tid = request.match_info["tid"]
         lang = request.query.get("lang", "en")
-        t, path, text, doc = self.doc_blocks(tid, lang)
+        t, path, text, doc = self.doc_blocks(tid, lang, request.query.get("rev"))
         _, stale, sync_error = self.preview(t, path, lang)
         col, pos = self.learning_path(tid, request.query.get("collection"))
         names = shared.block_names(doc)
@@ -305,13 +321,13 @@ class UI:
         body = "\n".join(lines)
         body = re.sub(r"<details>", '<details markdown="1">', body)
         html = md.markdown(body, extensions=["tables", "md_in_html", "sane_lists"])
-        base = f"/files/tutorials/{tid}/"
+        base = f"/files/{t.rel}/"
         html = sanitize.clean(html)        # README HTML may come from an untrusted branch
         html = re.sub(r'(src|href)="(?!https?:|#|/|mailto:)([^"]+)"',
                       lambda m: f'{m.group(1)}="{base}{m.group(2)}"', html)
         return web.json_response({
-            "id": tid, "lang": lang if t.readme(lang).exists() else "en",
-            "translation": None if lang == "en" else tlint.translation_state(t, lang),
+            "id": tid, "revision": t.revision, "lang": lang if t.readme(lang).exists() else "en",
+            "translation": None if lang == "en" or t.revision else tlint.translation_state(t, lang),
             "explainer": {l: _explainer_state(t, l) for l in LANGS if t.explainer(l).exists()},
             "file": str(path.relative_to(self.root)), "html": html, "blocks": blocks,
             "states": self.block_states.get(tid, {}),
@@ -329,7 +345,7 @@ class UI:
     def source_path(self, tid: str, lang: str, file: str = "readme") -> Path:
         """What the editor may read and write: this tutorial's README.md /
         README.<lang>.md, or its tutorial.yaml (title, tags, env ...). Nothing else."""
-        t = self.tutorial_or_404(tid)
+        t = self.tutorial_or_404(tid)   # never a revision: it is frozen (lint R002)
         if file == "tutorial.yaml":
             return t.path / "tutorial.yaml"
         if file != "readme":
@@ -425,7 +441,7 @@ class UI:
         return web.json_response({"problems": out})
 
     async def api_env(self, request):
-        t = self.tutorial_or_404(request.match_info["tid"])
+        t = self.variant(request.match_info["tid"], request.query.get("rev"))
         cluster = os.environ.get("KIND_CLUSTER_NAME", "kind")
         # kind and kubectl are the env's pinned ones in .tools/ (setup installs them
         # there), else the system's: look in both, like the setup step's PATH does.
@@ -492,7 +508,7 @@ class UI:
                 elif kind == "resize":
                     sess.resize(int(m["cols"]), int(m["rows"]))
                 elif kind == "run":
-                    _, path, _, doc = self.doc_blocks(tid, m.get("lang", "en"))
+                    _, path, _, doc = self.doc_blocks(tid, m.get("lang", "en"), m.get("rev"))
                     blocks = [{"idx": i, "role": doc.blocks[i].role, "code": doc.blocks[i].code,
                                "attrs": doc.blocks[i].attrs,
                                "label": f"{doc.blocks[i].role} · {path.name}:{doc.blocks[i].line}"}
@@ -507,7 +523,7 @@ class UI:
                     # block (index -1). Only when the shell is idle: queueing it
                     # would cancel a running queue, and typing it while a step runs
                     # would feed it to that step.
-                    t = self.tutorials().get(tid)
+                    t = self.variant(tid, m.get("rev")) if tid in self.tutorials() else None
                     if sess.busy:
                         await ws.send_str(json.dumps({"type": "notice", "message":
                             "A step is still running. Wait for it or press ■ Stop, then Teardown."}))

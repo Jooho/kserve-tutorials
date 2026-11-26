@@ -26,7 +26,7 @@ def build_script(t: Tutorial, version: str | None, keep: bool,
                  keep_on_failure: bool = False, passes: int = 1) -> tuple[str, list[markdown.Block]]:
     doc = markdown.parse(t.readme("en").read_text())
     blocks = [b for b in doc.blocks if b.is_shell and b.role in ("run", "verify", "cleanup")]
-    readme = f"tutorials/{t.id}/README.md"
+    readme = f"{t.rel}/README.md"
     out = [
         "#!/usr/bin/env bash",
         "set -Eeuo pipefail",
@@ -34,7 +34,7 @@ def build_script(t: Tutorial, version: str | None, keep: bool,
         f"export TUT_ID={shlex.quote(t.id)}",
     ]
     if version:
-        var = project.load(t.path.parent.parent).version_var
+        var = project.load(t.root).version_var
         out.append(f"export {var}={shlex.quote(version)}")
     out += [
         "TUT_BLOCK=''",
@@ -107,12 +107,13 @@ def run(t: Tutorial, version: str | None = None, keep: bool = False,
         sys.stdout.write(script)
         return 0
     version = version or t.default_version
-    name = project.load(t.path.parent.parent).name
+    name = project.load(t.root).name
     state_file = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / f"tut-{t.id}-{os.getpid()}.state"
     env = dict(os.environ, TUT_STATE_FILE=str(state_file))
     timeout = int(t.meta.get("timeout_minutes", 45)) * 60
     started = time.time()
-    print(f"▶ {t.id} with {name} {version} ({len(steps)} steps, timeout {timeout // 60}m)", flush=True)
+    which = f"{t.id} ({t.revision}, an older revision)" if t.revision else t.id
+    print(f"▶ {which} with {name} {version} ({len(steps)} steps, timeout {timeout // 60}m)", flush=True)
     # Run the script from a file, not `bash -c <script>`: with -c the whole tutorial
     # is in the shell's command line, so a step like `pkill -f "[p]ort-forward ..."`
     # matched the runner itself and killed it (CI-008). A reader's terminal never
@@ -131,6 +132,7 @@ def run(t: Tutorial, version: str | None = None, keep: bool = False,
         script_file.unlink(missing_ok=True)
     result = {
         "tutorial": t.id,
+        "revision": t.revision or "",
         "version": version,
         "env": t.env_ref,
         "status": "passed" if rc == 0 else "failed",
