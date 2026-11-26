@@ -453,7 +453,7 @@ scored in this configuration.
 
 ```bash verify
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -c main --tail=-1 \
-  | grep -m1 'auto-created default producer.*approx-prefix-cache-producer'
+  | grep 'auto-created default producer.*approx-prefix-cache-producer' | tail -n 1
 ```
 
 ### Read the scoring inputs from the EPP metrics

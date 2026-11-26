@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=fb1bbc13b4b7 -->
+<!-- tut-translation source=README.md sha=6056c9a9667c -->
 # Gateway에서 vLLM까지 요청이 지나가는 경로
 
 <!-- tut:header -->
@@ -443,7 +443,7 @@ EPP 스케줄러는 점수 산정 플러그인으로 모든 Pod에 점수를 매
 
 ```bash verify
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -c main --tail=-1 \
-  | grep -m1 'auto-created default producer.*approx-prefix-cache-producer'
+  | grep 'auto-created default producer.*approx-prefix-cache-producer' | tail -n 1
 ```
 
 ### EPP 지표에서 점수 계산에 쓰는 값 조회

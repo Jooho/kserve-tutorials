@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=fb1bbc13b4b7 by=codex reviewed=yes -->
+<!-- tut-explainer source=README.md sha=6056c9a9667c by=codex reviewed=yes -->
 # 요청의 흐름 - Gateway에서 vLLM까지
 
 ## 그림으로 보는 요청 흐름
