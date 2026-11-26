@@ -1,55 +1,51 @@
-<!-- tut-translation source=README.md sha=8a90e0d669da -->
-# 요청의 여정 — Gateway에서 vLLM까지
+<!-- tut-translation source=README.md sha=fb1bbc13b4b7 -->
+# Gateway에서 vLLM까지 요청이 지나가는 경로
 
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
 
 <!-- /tut -->
 
-LLMInferenceService에 `curl` 요청 하나를 보내면 클러스터 안에서는 어떤 일이
-일어날까요? 이 튜토리얼에서는 작은 모델을 배포한 뒤, 요청 하나가 Envoy Gateway와
-EPP 스케줄러를 거쳐 vLLM Pod에 도달하기까지의 과정을 세 구성 요소가 공유하는
-request id로 따라가 봅니다.
+LLMInferenceService에 `curl`로 요청을 한 번 보내면 클러스터 안에서 어떤 일이 일어날까요?
+이 튜토리얼에서는 작은 모델을 배포하고, Envoy Gateway에서 EPP 스케줄러를 거쳐 vLLM Pod에
+도달하는 요청 하나를 추적합니다. 세 구성 요소에서 공통으로 쓰는 요청 ID를 사용합니다.
 
-> **핵심 질문:** 내 요청은 어떤 경로를 거쳐 특정 Pod에 도달하며, 왜 그 Pod가
-> 선택되었을까?
+> **핵심 질문** — 요청은 어떤 경로로 특정 Pod에 도달하며, 그 Pod는 왜 선택됐을까요?
 
-배울 내용:
+이 튜토리얼에서 살펴볼 내용입니다.
 
-- 요청 하나가 지나가는 길: Envoy Gateway, HTTPRoute, InferencePool, EPP 스케줄러,
-  vLLM Pod, 그리고 각 구간을 어느 오브젝트가 정하는지.
-- Envoy가 EPP에 Pod를 묻는 방법(ExtProc), 그리고 EPP가 InferencePool route 규칙마다
-  한 번씩 질문을 받는 이유.
-- `x-request-id`로 요청 하나를 Envoy 로그, EPP 로그, 응답까지 따라가는 방법.
-- EPP가 Pod를 고르는 방법: scorer, 그 가중치, 그리고 scorer가 읽는 메트릭.
+- 요청 하나가 Envoy Gateway, HTTPRoute, InferencePool, EPP 스케줄러, vLLM Pod를
+  거치는 경로와 각 구간에서 다음 목적지를 결정하는 객체를 살펴봅니다.
+- Envoy가 ExtProc로 EPP에 Pod 선택을 요청하는 방법과 InferencePool로 연결되는
+  경로 규칙마다 EPP를 한 번씩 호출하는 이유를 알아봅니다.
+- `x-request-id`로 Envoy 로그, EPP 로그, 응답에서 같은 요청을 찾습니다.
+- EPP가 Pod를 고를 때 쓰는 점수 산정 플러그인과 각 플러그인의 가중치, 참조하는 지표를 살펴봅니다.
 
-## 요청 흐름 개요
+## 요청 흐름 한눈에 보기
 
-<a href="images/request_flow_1.png" target="_blank"><img src="images/request_flow_1.png" width="720" alt="요청 흐름 개요: 클라이언트, Gateway, HTTPRoute, InferencePool, EPP 스케줄러, vLLM Pod"></a>
+<a href="images/request_flow_1.png" target="_blank"><img src="images/request_flow_1.png" width="720" alt="클라이언트에서 Gateway, HTTPRoute, InferencePool, EPP 스케줄러를 거쳐 vLLM Pod에 도달하는 요청 흐름"></a>
 
-그림에서는 네임스페이스가 `kserve-demo`로 표시되어 있지만, 이 튜토리얼에서는 `$NS`입니다.
-그림을 클릭하면 원본 크기로 열립니다.
+그림의 네임스페이스는 `kserve-demo`이며, 이 튜토리얼에서는 `$NS`를 사용합니다.
+그림을 클릭하면 원래 크기로 볼 수 있습니다.
 
-핵심 포인트:
+요청을 전달할 때 각 구성 요소는 다음과 같이 동작합니다.
 
-- **HTTPRoute**의 `backendRef`는 일반 Service가 아니라 **InferencePool**을
-  가리킵니다.
-- **InferencePool**이 허브 역할을 합니다. EPP 스케줄러를 지정하고
-  (`endpointPickerRef`), vLLM Pod를 선택합니다(`selector`).
-- Envoy Gateway는 EPP를 **ExtProc**(External Processing) gRPC 서비스로
-  호출한 다음, EPP가 고른 Pod로 요청을 전달합니다.
-- URL 경로 접두사는 요청이 vLLM에 도달하기 전에 HTTPRoute의 `urlRewrite` 필터가
-  제거합니다.
+- **HTTPRoute**의 `backendRef`는 일반 Service 대신 **InferencePool**을 가리킵니다.
+- **InferencePool**은 `endpointPickerRef`로 EPP 스케줄러를 지정하고 `selector`로
+  vLLM Pod를 선택해 둘을 연결합니다.
+- Envoy Gateway는 **ExtProc**(외부 처리) gRPC 서비스로 EPP를 호출한 뒤,
+  EPP가 고른 Pod에 요청을 전달합니다.
+- 요청이 vLLM에 도달하기 전에 HTTPRoute의 `urlRewrite` 필터가 URL 경로의 접두사를 제거합니다.
 
-## Step 0: 환경 준비
+## 0단계. 환경 준비
 
-이 단계에서는 KServe LLMInferenceService와 게이트웨이 스택이 설치된 Kind
-클러스터를 준비하고(위의 환경 링크 참고), 아래에서 사용할 네임스페이스를 생성합니다.
-여러 번 실행해도 안전합니다.
+KServe LLMInferenceService와 게이트웨이 스택가 포함된 Kind 클러스터를 준비하고,
+이후 단계에서 사용할 네임스페이스를 만듭니다. 환경 구성은 위의 링크에서 확인할 수 있습니다.
+이 단계는 다시 실행해도 됩니다.
 
 <!-- tut:setup -->
 
@@ -70,12 +66,11 @@ cd "$REPO_ROOT/tutorials/llmisvc-request-flow"
 
 <!-- /tut -->
 
-## Step 1: LLMInferenceService 배포
+## 1단계. LLMInferenceService 배포
 
-요청이 도착할 목적지가 필요합니다. CPU에서 vLLM으로 `facebook/opt-125m`을
-서빙하는 LLMInferenceService 하나를 적용합니다. anatomy 튜토리얼에서 사용한 것과
-동일합니다. LLMInferenceService 깊이 보기 학습 경로를 따라오고 있다면 이미 실행 중이므로
-이 단계는 건너뜁니다.
+요청을 처리할 LLMInferenceService를 하나 배포합니다. 구조를 살펴보는 튜토리얼에서와
+같이 vLLM으로 CPU에서 `facebook/opt-125m` 모델을 구동합니다.
+LLMInferenceService 심화 과정을 따라왔다면 이미 실행 중이므로 이 단계를 건너뜁니다.
 
 <!-- tut:use llmisvc-demo-model -->
 
@@ -145,37 +140,35 @@ spec:
 
 </details>
 
-`router` 아래의 빈 객체 세 개가 이 튜토리얼의 주제입니다.
-`scheduler: {}`, `route: {}`, `gateway: {}`를 지정하면 KServe 컨트롤러가
-EPP 스케줄러, HTTPRoute, InferencePool을 생성하고 이를 Gateway에 연결합니다.
-Gateway나 라우트를 직접 만들 필요가 없습니다.
+이 튜토리얼에서는 `router` 아래의 빈 객체 세 개에 주목합니다.
+`scheduler: {}`, `route: {}`, `gateway: {}`를 설정하면 KServe 컨트롤러가
+EPP 스케줄러, HTTPRoute, InferencePool을 만들고 Gateway에 연결합니다.
+Gateway나 경로를 직접 만들 필요는 없습니다.
 
-> `route: {}`가 없으면 HTTPRoute가 생성되지 않아 Gateway가 모델에 도달할 수
-> 없습니다.
+> `route: {}`를 생략하면 HTTPRoute가 생성되지 않아 Gateway에서 모델에 접근할 수 없습니다.
 
-서비스가 `Ready` 상태가 될 때까지 기다립니다. 모델을 다운로드하고 CPU에서 vLLM을
-시작하는 데 몇 분 정도 걸립니다.
+LLMInferenceService가 `Ready` 상태가 될 때까지 기다립니다. 모델을 내려받고 CPU에서
+vLLM을 시작하는 데 몇 분이 걸립니다.
 
 ```bash verify
 kubectl wait --for=condition=Ready llminferenceservice/demo-model -n "$NS" --timeout=900s
 ```
 
-## Step 2: 생성된 라우팅 리소스 살펴보기
+## 2단계. 자동으로 생성된 라우팅 리소스 확인
 
 ```bash run
-# Gateway (환경이 kserve 네임스페이스에 생성)
+# Gateway (환경 설정에서 kserve 네임스페이스에 생성합니다)
 kubectl get gateway -A
 
-# LLMInferenceService용으로 생성된 HTTPRoute (InferencePool로 라우팅)
+# LLMInferenceService용으로 생성된 HTTPRoute (InferencePool로 요청을 보냅니다)
 kubectl get httproute -n "$NS" -o yaml
 
-# InferencePool (EPP 스케줄러와 vLLM Pod를 연결)
+# InferencePool (EPP 스케줄러와 vLLM Pod를 연결합니다)
 kubectl get inferencepool -n "$NS"
 ```
 
-HTTPRoute에서 `backendRefs`(kind는 `InferencePool`)와 `URLRewrite` 필터를
-찾아보세요. Gateway는 반드시 `Programmed` 상태여야 합니다. 그렇지 않으면 주소가
-할당되지 않아 이후 단계가 모두 동작하지 않습니다.
+HTTPRoute에서 `backendRefs`의 종류가 `InferencePool`인지 확인하고 `URLRewrite` 필터를 찾습니다.
+Gateway가 `Programmed` 상태가 되어야 주소가 생기고 이후 단계를 실행할 수 있습니다.
 
 ```bash verify
 kubectl wait --for=condition=Programmed gateway --all -n kserve --timeout=120s
@@ -184,11 +177,11 @@ kubectl get httproute -n "$NS" -o jsonpath='{.items[*].spec.rules[*].filters[*].
 test "$(kubectl get inferencepool -n "$NS" --no-headers | wc -l)" -ge 1
 ```
 
-### Gateway 엔드포인트
+### Gateway 접속 주소
 
-Kind에는 외부 로드 밸런서가 없으므로 워커 노드의 NodePort를 통해 Gateway에
-접근합니다. 공유 모듈 `llmisvc/v1`이 URL을 계산해 줍니다.
-`http://<worker node IP>:<node port>/<namespace>/demo-model`.
+Kind에는 외부 로드 밸런서가 없으므로 워커 노드의 NodePort로 Gateway에 접속합니다.
+공용 `llmisvc/v1` 모듈이 접속 주소를 `http://<worker node IP>:<node port>/<namespace>/demo-model`
+형식으로 구성합니다.
 
 ```bash run
 GATEWAY_URL=$("$TUT_LIB/llmisvc/v1/gateway-url.sh" "$NS" demo-model)
@@ -220,24 +213,24 @@ echo "http://${node_ip}:${node_port}/${ns}/${name}"
 
 </details>
 
-## Step 3: 요청을 보내고 로그 관찰하기
+## 3단계. 요청을 보내고 로그 확인
 
-요청이 지나가는 모습을 보려면 터미널을 두 개 더 열고 각각에서 로그를 따라가 보세요
-(중지하려면 `Ctrl+C`를 누릅니다).
+요청이 지나가는 과정을 보려면 터미널을 두 개 더 열어 로그를 실시간으로 확인합니다.
+`Ctrl+C`를 누르면 로그 출력을 중지할 수 있습니다.
 
-터미널 1, EPP 스케줄러(Pod 선택):
+첫 번째 터미널에서는 Pod를 선택하는 EPP 스케줄러의 로그를 확인합니다.
 
 ```bash skip
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -c main -f --tail=0
 ```
 
-터미널 2, vLLM Pod(추론):
+두 번째 터미널에서는 추론을 수행하는 vLLM Pod의 로그를 확인합니다.
 
 ```bash skip
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-workload -f --tail=0 --max-log-requests=5
 ```
 
-그런 다음 Gateway를 통해 completion 요청을 보냅니다.
+그런 다음 Gateway에 텍스트 생성 요청을 보냅니다.
 
 ```bash run
 curl -s "${GATEWAY_URL}/v1/completions" \
@@ -249,24 +242,24 @@ curl -s "${GATEWAY_URL}/v1/completions" \
   }' | python3 -m json.tool
 ```
 
-서비스가 `Ready`가 된 뒤에도 라우트가 준비되기까지 잠시 시간이 걸릴 수 있습니다.
-이 검증은 텍스트가 포함된 completion 응답이 돌아올 때까지 재시도합니다.
+LLMInferenceService가 `Ready` 상태가 된 뒤에도 경로가 동작하기까지 잠시 걸릴 수 있습니다.
+아래 명령은 생성된 텍스트가 담긴 응답이 돌아올 때까지 다시 시도합니다.
 
 ```bash verify retry=10 delay=15
 "$TUT_LIB/llmisvc/v1/completion.sh" "$GATEWAY_URL" facebook/opt-125m "Kubernetes is"
 ```
 
-> `facebook/opt-125m`은 튜토리얼을 CPU에서 실행할 수 있도록 고른 아주 작은 베이스
-> 모델입니다. 주어진 텍스트를 이어 쓰는데, 결과가 엉뚱한 경우가 많습니다. 여기서
-> 중요한 것은 응답 내용이 아니라 경로입니다.
+> `facebook/opt-125m`은 이 튜토리얼을 CPU에서 실행할 수 있도록 고른 소형 기본 모델입니다.
+> 입력 텍스트에 이어서 문장을 생성하며, 결과가 어색할 때가 많습니다.
+> 여기서 확인할 대상은 응답 내용보다 요청이 지나가는 경로입니다.
 
-## Step 4: x-request-id로 요청 하나 추적하기
+## 4단계. x-request-id로 요청 하나 추적
 
-Envoy는 모든 요청에 `x-request-id`를 부여합니다. 이 id를 EPP와 vLLM에 전달하고,
-vLLM은 이를 응답의 `id`(`cmpl-<x-request-id>`)에 사용합니다. 따라서 응답 본문의
-id가 모든 로그에서 같은 요청을 찾아내는 열쇠가 됩니다.
+Envoy는 모든 요청에 `x-request-id`를 부여해 EPP와 vLLM에 전달합니다.
+vLLM은 이 값을 응답의 `id`에 사용합니다(`cmpl-<x-request-id>`).
+따라서 응답 본문의 ID로 각 로그에서 같은 요청을 찾을 수 있습니다.
 
-### 1. 요청을 보내고 request id 추출하기
+### 1. 요청을 보내고 요청 ID 추출
 
 ```bash run
 RESPONSE=$(curl -s "${GATEWAY_URL}/v1/completions" \
@@ -279,7 +272,7 @@ RESPONSE=$(curl -s "${GATEWAY_URL}/v1/completions" \
 
 echo "$RESPONSE" | python3 -m json.tool
 
-# 응답 id는 cmpl-<x-request-id> 형식이므로 접두사를 제거
+# 응답 ID는 cmpl-<x-request-id> 형식이므로 접두사를 제거합니다
 REQUEST_ID=$(echo "$RESPONSE" | python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' | sed 's/^cmpl-//')
 echo "Request ID: $REQUEST_ID"
 ```
@@ -290,8 +283,8 @@ test -n "$REQUEST_ID"
 
 ### 2. Envoy Gateway에서 요청 찾기
 
-Envoy는 요청마다 JSON 액세스 로그를 한 줄씩 기록하는데, 요청이 끝나고 몇 초 뒤에
-기록됩니다(그래서 재시도가 필요합니다).
+Envoy는 요청이 끝나고 몇 초 뒤에 요청당 한 줄씩 JSON 액세스 로그를 남깁니다.
+따라서 로그가 나타날 때까지 조회를 다시 시도합니다.
 
 ```bash verify retry=6 delay=5
 kubectl logs -n envoy-gateway-system \
@@ -299,21 +292,20 @@ kubectl logs -n envoy-gateway-system \
   | grep "$REQUEST_ID" | python3 -m json.tool --json-lines
 ```
 
-주요 필드:
+주요 필드는 다음과 같습니다.
 
 | 필드 | 설명 |
 |-------|-------------|
-| `x-request-id` | 요청 추적 id. 같은 값으로 EPP 로그를 검색합니다 |
-| `upstream_host` | 요청이 전달된 vLLM Pod의 IP:포트 |
-| `duration` | 요청 수신부터 응답 종료까지의 전체 처리 시간(ms) |
-| `response_code` | 최종 HTTP 상태 코드. 200은 성공을 의미합니다 |
+| `x-request-id` | 요청 추적 ID입니다. EPP 로그에서 같은 값을 찾습니다. |
+| `upstream_host` | 요청을 전달받은 vLLM Pod의 IP 주소와 포트입니다. |
+| `duration` | 요청을 받은 시점부터 응답이 끝날 때까지 걸린 총 시간입니다. 단위는 밀리초입니다. |
+| `response_code` | 최종 HTTP 상태 코드입니다. 200은 성공을 뜻합니다. |
 
 ### 3. EPP 스케줄러에서 요청 찾기
 
-스케줄러는 OpenTelemetry 스팬도 로그에 출력하므로 요청 하나당 수백 줄이
-쌓입니다. 따라서 마지막 수백 줄이 아니라 최근 몇 분간의 로그를 검색합니다
-(`--tail=-1`: `-l`을 사용하면 `kubectl logs`는 기본적으로 마지막 10줄만
-보여 줍니다).
+스케줄러는 OpenTelemetry 스팬도 로그에 출력하므로 요청 하나에 수백 줄이 생깁니다.
+최근 수백 줄로 범위를 제한하는 대신 최근 몇 분 동안의 로그를 검색합니다.
+`kubectl logs`를 `-l`과 함께 쓰면 기본적으로 마지막 10줄만 가져오므로 `--tail=-1`을 지정합니다.
 
 ```bash verify retry=6 delay=5
 kubectl logs -n "$NS" \
@@ -322,19 +314,20 @@ kubectl logs -n "$NS" \
   | grep "$REQUEST_ID"
 ```
 
-EPP 로그 각 줄의 의미:
+EPP 로그의 각 줄은 다음 상황을 나타냅니다.
 
-- `EPP received request`: Envoy가 EPP에 Pod 선택을 요청했습니다(ExtProc gRPC)
-- `EPP sent request body response(s) to proxy`: Pod가 선택되었습니다. 이 줄에
-  `modelName`과 `targetModelName`이 표시됩니다
-- `EPP sent response body back to proxy`: vLLM의 응답이 Envoy로 되돌아갔습니다
+- `EPP received request`는 Envoy가 ExtProc gRPC로 EPP에 Pod 선택을 요청했다는 뜻입니다.
+- `EPP sent request body response(s) to proxy`는 Pod 선택이 끝났다는 뜻입니다.
+  이 줄에 `modelName`과 `targetModelName`이 표시됩니다.
+- `EPP sent response body back to proxy`는 vLLM의 응답이 Envoy로 돌아갔다는 뜻입니다.
 
-같은 요청 id가 이 줄들의 완전한 세트로 여러 번 나옵니다. Envoy의 ExtProc 필터마다
-한 세트입니다. HTTPRoute에는 InferencePool로 보내는 규칙이 세 개 있고(`/v1/completions`,
-`/v1/chat/completions`, `/v1/responses`), Envoy Gateway는 규칙마다 ExtProc 필터를 하나씩
-Gateway의 리스너에 추가합니다. 이 경로로 오는 요청마다 필터가 모두 실행되므로 EPP는 규칙
-수만큼 질문을 받습니다. 여기서는 세 번이고, 답은 모두 같은 Pod 하나입니다. 아래 확인은
-둘을 셉니다.
+같은 요청 ID로 이 로그 세 줄이 여러 번 나타납니다. Envoy의 ExtProc 필터마다 한 묶음씩
+기록되기 때문입니다. HTTPRoute에는 InferencePool로 요청을 보내는 규칙이 세 개
+있습니다(`/v1/completions`, `/v1/chat/completions`, `/v1/responses`).
+Envoy Gateway는 각 규칙에 해당하는 ExtProc 필터를 Gateway 리스너에 하나씩 추가합니다.
+이 경로로 들어오는 요청마다 필터 세 개가 모두 실행되므로 EPP는 규칙당 한 번씩,
+여기서는 총 세 번 호출됩니다. 세 번 모두 같은 Pod 하나를 반환합니다.
+아래 명령은 규칙 수와 로그 묶음 수를 각각 셉니다.
 
 ```bash verify retry=6 delay=5
 RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
@@ -349,42 +342,42 @@ echo "HTTPRoute rules to the InferencePool: $RULES; EPP sets for this request: $
 test "$RULES" -gt 0 && test "$SETS" -eq "$RULES"
 ```
 
-세트마다 마지막에 error 레벨 줄 `Request latency values are invalid for TPOT
-calculation`이 붙습니다. 요청이 실패했다는 뜻은 아니고, EPP가 TPOT(출력 토큰당 시간)
-메트릭 하나를 건너뛸 뿐입니다. 이유는 EPP 소스(이 환경의 이미지인 llm-d-router v0.9.0)에
-있습니다. 스트리밍하지 않는 답은 메시지 하나로 도착하고, EPP는 완료 시각
-(`handlers/server.go`)을 첫 토큰 시각(`handlers/response.go`)보다 바로 앞에 찍습니다.
-TPOT 계산은 완료 시각이 더 늦어야 하므로(`metrics/metrics.go`, `RecordRequestTPOT`)
-확인에 실패하고 이 줄을 남깁니다. 줄 자체에서도 보입니다. `completeTime`이
-`firstTokenTime`보다 몇 마이크로초 앞섭니다.
+각 묶음 끝에는 `Request latency values are invalid for TPOT calculation`이라는
+오류 수준의 로그도 남습니다. 요청 자체는 실패하지 않으며, EPP는 출력 토큰당 소요 시간인
+TPOT 지표 하나만 기록하지 않습니다. 이 환경에서 쓰는 이미지인 llm-d-router v0.9.0의
+EPP 소스에서 이유를 확인할 수 있습니다. 응답을 스트리밍하지 않으면 응답 전체가 메시지
+하나로 도착합니다. 이때 EPP는 첫 토큰 시각(`handlers/response.go`)을 기록하기 직전에
+응답 완료 시각(`handlers/server.go`)을 기록합니다. TPOT를 계산하려면 완료 시각이 첫 토큰
+시각보다 늦어야 하므로(`metrics/metrics.go`의 `RecordRequestTPOT`), 시각 검사에 실패해
+이 로그가 남습니다. 로그를 보면 `completeTime`이 `firstTokenTime`보다 몇 마이크로초 앞섭니다.
 
-### 4. 어느 vLLM Pod가 처리했는가
+### 4. 요청을 처리한 vLLM Pod 확인
 
-vLLM은 기본 설정에서 개별 요청을 로그로 남기지 않습니다. 대신 Envoy 로그의
-`upstream_host`에서 Pod를 알아냅니다.
+vLLM은 기본 설정에서 개별 요청을 로그에 남기지 않습니다. Envoy 로그의 `upstream_host`로
+요청을 처리한 Pod를 찾습니다.
 
 ```bash run
-# Envoy 액세스 로그의 upstream_host (vLLM Pod의 IP)
+# Envoy 액세스 로그에서 upstream_host를 읽어 vLLM Pod의 IP 주소를 찾습니다
 TARGET_POD_IP=$(kubectl logs -n envoy-gateway-system \
   -l gateway.envoyproxy.io/owning-gateway-name -c envoy --tail=50 \
   | grep "$REQUEST_ID" \
   | python3 -c 'import json, sys; print(json.loads(sys.stdin.readline())["upstream_host"].split(":")[0])')
 
-# 해당 IP를 가진 Pod
+# 해당 IP 주소를 가진 Pod를 찾습니다
 kubectl get pods -n "$NS" -o wide | grep "$TARGET_POD_IP"
 ```
 
-이 Pod는 스케줄러가 아니라 LLMInferenceService의 워크로드(vLLM) Pod여야
-합니다.
+이 IP 주소가 스케줄러 Pod와 구별되는 LLMInferenceService의 워크로드(vLLM) Pod 주소인지
+확인합니다.
 
 ```bash verify
 test "$(kubectl get pods -n "$NS" -l app.kubernetes.io/component=llminferenceservice-workload \
   -o jsonpath='{.items[0].status.podIP}')" = "$TARGET_POD_IP"
 ```
 
-### 5. 추적 요약
+### 5. 추적 결과 요약
 
-요청 하나(`x-request-id`)의 경로:
+`x-request-id`로 추적한 요청 하나의 경로입니다.
 
 ```text
 curl → Envoy Gateway → EPP scheduler (Pod selection) → vLLM Pod (inference)
@@ -393,9 +386,9 @@ curl → Envoy Gateway → EPP scheduler (Pod selection) → vLLM Pod (inference
                            sent response
 ```
 
-## Step 5: 로드 밸런싱 관찰하기
+## 5단계. 부하 분산 확인
 
-요청 10개를 동시에 보내고 EPP가 이를 어디로 보내는지 확인합니다.
+요청 10개를 동시에 보내고 EPP가 어느 Pod로 보내는지 확인합니다.
 
 ```bash run
 for i in $(seq 1 10); do
@@ -410,7 +403,7 @@ done
 wait
 ```
 
-Envoy 로그에서 Pod별 요청 수를 셉니다.
+Envoy 로그에서 Pod별로 전달된 요청 수를 셉니다.
 
 ```bash run
 kubectl logs -n envoy-gateway-system \
@@ -418,8 +411,8 @@ kubectl logs -n envoy-gateway-system \
   | grep -o '"upstream_host": *"[^"]*"' | sort | uniq -c | sort -rn
 ```
 
-`replicas: 1`에서는 고를 수 있는 Pod가 하나뿐이므로 요청 10개가 모두 같은
-Pod IP로 전달되었습니다. 레플리카가 더 많으면 요청이 여러 IP로 분산됩니다.
+`replicas: 1`이면 선택할 수 있는 Pod가 하나뿐이므로 요청 10개가 모두 같은 Pod IP 주소로
+전달됩니다. 복제본 수를 늘리면 요청이 여러 IP 주소로 분산됩니다.
 
 ```bash verify retry=6 delay=5
 POD_IP=$(kubectl get pods -n "$NS" -l app.kubernetes.io/component=llminferenceservice-workload \
@@ -433,19 +426,32 @@ print(n, "requests forwarded to", sys.argv[1])
 assert n >= 10' "$POD_IP"
 ```
 
-## Step 6: 스케줄러의 선택 방식
+## 6단계. 스케줄러가 Pod를 선택하는 방법
 
-EPP 스케줄러는 scorer 플러그인으로 모든 Pod에 점수를 매기고, 가중 합이 가장 높은
-Pod를 선택합니다.
+EPP 스케줄러는 점수 산정 플러그인으로 모든 Pod에 점수를 매긴 뒤, 가중치를 적용한 점수의
+합이 가장 높은 Pod를 고릅니다.
 
-<a href="images/epp_scoring_pipeline.png" target="_blank"><img src="images/epp_scoring_pipeline.png" width="720" alt="EPP 스코어링 파이프라인"></a>
+<a href="images/epp-scoring.svg" target="_blank"><img src="images/epp-scoring.svg" width="720" alt="EPP의 Pod 선택 방식. queue-scorer(가중치 2)는 EPP가 보관하는 Pod별 대기 요청 수를 쓰고, prefix-cache-scorer(가중치 3)는 EPP 자체의 접두사 인덱스를 씁니다. max-score-picker는 2xA + 3xB 값이 가장 큰 Pod를 고르고, EPP는 그 Pod의 주소를 Envoy에 반환합니다."></a>
 
-### EPP 메트릭에서 스코어링 입력값 읽기
+두 플러그인은 서로 다른 데이터를 참조합니다. `queue-scorer`는 EPP가 보관하는 Pod별
+`vllm:num_requests_waiting` 값을 사용합니다. `prefix-cache-scorer`는 vLLM의 접두사 캐시를
+읽지 않습니다. 대신 어느 Pod에 어떤 프롬프트를 보냈는지 기록한 EPP 자체 인덱스를 사용합니다.
+이 인덱스는 EPP가 자동으로 추가하는 보조 구성 요소 두 개
+(`approx-prefix-cache-producer`, `token-producer`)가 만듭니다. EPP 로그에는
+`auto-created default producer`라고 표시됩니다. 이 구성에서는 KV 캐시 사용률도 읽지만
+점수 계산에는 쓰지 않습니다.
 
-scorer가 사용하는 수치는 스케줄러의 메트릭 포트(9090)로 노출됩니다. 이
-엔드포인트는 bearer 토큰을 요구하며(`metrics-endpoint-auth: true`), 토큰
-소유자에게 비리소스 URL `/metrics`를 `get`할 권한이 있어야 합니다. 정확히 그
-권한만 가진 ServiceAccount를 생성합니다.
+```bash verify
+kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -c main --tail=-1 \
+  | grep -m1 'auto-created default producer.*approx-prefix-cache-producer'
+```
+
+### EPP 지표에서 점수 계산에 쓰는 값 조회
+
+플러그인이 점수를 계산할 때 쓰는 값은 스케줄러의 지표 포트(9090)에서 조회할 수 있습니다.
+이 주소에 접속하려면 Bearer 토큰이 필요합니다(`metrics-endpoint-auth: true`).
+토큰의 소유자에게는 리소스가 아닌 URL `/metrics`에 대한 `get` 권한이 있어야 합니다.
+이 권한만 가진 ServiceAccount를 만듭니다.
 
 ```bash run
 kubectl apply -f manifests/metrics-reader.yaml -n "$NS"
@@ -482,8 +488,8 @@ rules:
 
 </details>
 
-이제 해당 ServiceAccount로 실행되어 자신의 토큰을 전송하는 일회성 Pod에서
-메트릭을 조회합니다. 이후 단계에서 다시 호출하므로 명령을 함수로 감싸 두었습니다.
+이 ServiceAccount로 임시 Pod를 실행합니다. Pod는 자신의 토큰을 보내 지표를 조회합니다.
+이후 단계에서 다시 호출할 수 있도록 명령을 함수로 묶습니다.
 
 ```bash run
 epp_metrics() {
@@ -504,36 +510,36 @@ epp_metrics() {
 epp_metrics
 ```
 
-주요 메트릭:
+주요 지표는 다음과 같습니다.
 
-| 메트릭 | Scorer | 설명 |
+| 지표 | 점수 산정 플러그인 | 설명 |
 |--------|--------|-------------|
-| `inference_pool_average_kv_cache_utilization` | kv-cache-utilization-scorer | Pod들의 평균 KV 캐시 사용률 |
-| `inference_pool_average_queue_size` | queue-scorer | Pod들의 평균 큐 크기 |
-| `inference_pool_ready_pods` | — | 서빙 준비가 된 Pod 수 |
-| `inference_extension_prefix_indexer_hit_ratio` | prefix-cache-scorer | prefix cache 일치 비율(0.0~1.0). 비슷한 프롬프트가 반복되면 증가합니다 |
-| `inference_extension_prefix_indexer_hit_bytes` | prefix-cache-scorer | 일치한 prefix의 길이(바이트) |
-| `inference_extension_prefix_indexer_size` | prefix-cache-scorer | prefix 인덱서의 현재 크기 |
+| `inference_pool_average_kv_cache_utilization` | 해당 없음(이 구성에서는 점수 계산에 사용하지 않습니다) | Pod의 평균 KV 캐시 사용률입니다. |
+| `inference_pool_average_queue_size` | queue-scorer | Pod의 평균 대기열 크기입니다. |
+| `inference_pool_ready_pods` | — | 요청을 처리할 준비가 된 Pod 수입니다. |
+| `inference_extension_prefix_indexer_hit_ratio` | prefix-cache-scorer | 접두사 캐시 적중률입니다(0.0~1.0). 비슷한 프롬프트를 반복해서 보내면 높아집니다. |
+| `inference_extension_prefix_indexer_hit_bytes` | prefix-cache-scorer | 일치한 접두사의 길이입니다. 단위는 바이트입니다. |
+| `inference_extension_prefix_indexer_size` | prefix-cache-scorer | 접두사 인덱서의 현재 크기입니다. |
 
-풀에는 준비된 Pod가 하나 있습니다.
+InferencePool에서 요청을 처리할 준비가 된 Pod는 하나입니다.
 
 ```bash verify retry=5 delay=10
 epp_metrics | awk '$1 ~ /^inference_pool_ready_pods/ && $NF >= 1 {ok = 1} END {exit !ok}'
 ```
 
-**왜 일부 값이 0일까요?** 요청과 요청 사이에는 클러스터가 유휴 상태이기 때문입니다.
+**일부 값이 0인 이유는 무엇일까요?** 요청과 요청 사이에는 클러스터가 유휴 상태입니다.
 
-- `kv_cache_utilization`이 0: 요청이 끝나면 KV 캐시가 해제됩니다
-- `queue_size`가 0: 대기 중인 요청이 없습니다
+- `kv_cache_utilization`은 0입니다. 요청이 끝나면 KV 캐시가 해제됩니다.
+- `queue_size`는 0입니다. 대기 중인 요청이 없습니다.
 
-`prefix_indexer_size`는 0이 아닙니다. 앞 단계에서 보낸 요청들이 이미 prefix
-인덱서에 들어 있기 때문입니다.
+앞 단계에서 보낸 요청이 이미 접두사 인덱서에 기록됐으므로 `prefix_indexer_size`는
+0보다 큽니다.
 
-### 같은 프롬프트 반복하기
+### 같은 프롬프트 반복 전송
 
-prefix 메트릭은 증가만 하는 카운터와 히스토그램이므로 전후 값을 비교해야 합니다.
-지금까지 일치한 prefix 바이트 수를 기록해 두고, 같은 긴 프롬프트를 다섯 번 보낸
-다음 메트릭을 다시 읽습니다.
+접두사 지표는 값이 누적되기만 하는 카운터와 히스토그램이므로 요청 전후의 값을 비교합니다.
+지금까지 일치한 접두사의 바이트 수를 기록하고, 같은 긴 프롬프트를 다섯 번 보낸 뒤 지표를
+다시 조회합니다.
 
 ```bash run
 prefix_hit_bytes() {
@@ -549,29 +555,27 @@ done
 epp_metrics
 ```
 
-이제 다음과 같은 변화를 볼 수 있습니다.
+이제 다음 변화를 확인할 수 있습니다.
 
-- `prefix_indexer_hit_bytes_sum`이 증가했습니다. 반복된 프롬프트가 이미
-  인덱서에 있던 prefix와 일치했기 때문입니다
-- `prefix_indexer_hit_ratio`는 히스토그램입니다. 새 요청 대부분이
-  `le="1"` 버킷에 들어가므로 `_sum`이 `_count`와 거의 같은 만큼 증가합니다
-  (적중률이 1.0에 가깝다는 뜻)
-- `prefix_indexer_size`는 거의 변하지 않습니다. 프롬프트 하나는 항목을 몇 개만
-  추가하기 때문입니다
+- `prefix_indexer_hit_bytes_sum`이 증가합니다. 반복해서 보낸 프롬프트가 인덱서에
+  이미 있는 접두사와 일치했기 때문입니다.
+- `prefix_indexer_hit_ratio`는 히스토그램입니다. 새 요청 대부분이 `le="1"` 버킷에
+  집계되며, `_sum`과 `_count`가 거의 같은 양만큼 증가합니다. 적중률이 1.0에 가깝다는 뜻입니다.
+- `prefix_indexer_size`는 거의 변하지 않습니다. 프롬프트 하나로 추가되는 항목은 몇 개뿐입니다.
 
-일치한 prefix 바이트 수가 증가했습니다.
+일치한 접두사의 바이트 수가 늘어났는지 확인합니다.
 
 ```bash verify retry=5 delay=10
 prefix_hit_bytes | awk -v before="$HIT_BYTES_BEFORE" '{now = $1} END {print "before", before, "now", now; exit !(now + 0 > before + 0)}'
 ```
 
-부하가 지속되면 큐 크기와 KV 캐시 사용률도 함께 변합니다.
+부하가 계속되면 대기열 크기와 KV 캐시 사용률도 달라집니다.
 
 ## 정리
 
-LLMInferenceService를 삭제하면 컨트롤러가 이를 위해 생성한 모든 리소스
-(Deployment, Service, InferencePool, HTTPRoute)가 함께 제거됩니다. ClusterRole과
-바인딩은 클러스터 범위 리소스이므로 이름으로 직접 삭제합니다.
+LLMInferenceService를 삭제하면 컨트롤러가 이 리소스를 위해 만든 Deployment, Service,
+InferencePool, HTTPRoute가 모두 삭제됩니다. ClusterRole과 이를 연결한 바인딩은
+클러스터 범위 리소스이므로 이름을 지정해 삭제합니다.
 
 ```bash cleanup
 kubectl delete pod curl-metrics -n "$NS" --ignore-not-found
@@ -581,15 +585,16 @@ kubectl delete clusterrole llmisvc-request-flow-metrics-reader --ignore-not-foun
 kubectl delete namespace "$NS" --ignore-not-found
 ```
 
-Kind 클러스터 자체는 이 환경의 튜토리얼들이 공유합니다. 작업을 모두 마쳤다면
-환경의 `teardown.sh`로 제거하세요.
+이 환경의 튜토리얼은 같은 Kind 클러스터를 공유합니다. 사용을 마치면 환경의
+`teardown.sh`로 클러스터를 삭제합니다.
 
 ## 배운 내용
 
-- 요청은 vLLM Pod에 도달하기까지 **7단계**를 거칩니다
-- **Envoy Gateway**는 L7 프록시이고, **EPP 스케줄러**가 Pod를 선택합니다
-- EPP는 **ExtProc**(External Processing) gRPC로 Envoy와 통신합니다
-- Pod는 큐 깊이와 prefix cache 적중률의 가중 합으로 선택됩니다
-- Gateway 연결, HTTPRoute, InferencePool은 KServe가 생성하며, 직접 설정할
-  것은 없습니다
-- 하나의 `x-request-id`가 Envoy 액세스 로그, EPP 로그, vLLM 응답을 연결합니다
+- 요청은 **7단계**를 거쳐 vLLM Pod에 도달합니다.
+- **Envoy Gateway**는 L7 프록시 역할을 하고, **EPP 스케줄러**는 Pod를 고릅니다.
+- EPP는 **ExtProc**(외부 처리) gRPC로 Envoy와 통신합니다.
+- EPP는 대기열 점수(가중치 2)와 프롬프트 점수(가중치 3)의 가중합으로 Pod를 고릅니다.
+  프롬프트 점수는 EPP 자체의 접두사 인덱스를 사용해 각 Pod에 이전에 보낸 프롬프트와
+  현재 프롬프트가 얼마나 일치하는지에 따라 계산합니다.
+- KServe가 Gateway 연결, HTTPRoute, InferencePool을 자동으로 구성하므로 직접 설정할 필요가 없습니다.
+- `x-request-id` 하나로 Envoy 액세스 로그, EPP 로그, vLLM 응답을 연결해 추적할 수 있습니다.

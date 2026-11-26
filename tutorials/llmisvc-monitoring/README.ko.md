@@ -1,42 +1,43 @@
 <!-- tut-translation source=README.md sha=5f7897e55dc0 -->
-# 스케줄러의 눈으로 보기 - 메트릭 관찰
+# 스케줄러의 관점에서 메트릭 살펴보기
 
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
 
 <!-- /tut -->
 
-LLMInferenceService에는 여기서 중요한 두 종류의 Pod가 있습니다. 하나는 답을 계산하는
-모델 서버인 **vLLM**이고, 다른 하나는 **EPP**(endpoint picker)입니다. EPP는 스케줄러로,
-Gateway의 프록시인 Envoy가 각 요청을 어느 vLLM Pod로 보낼지 물어보는 대상입니다.
-InferencePool은 이 둘을 묶어 주는 오브젝트로, vLLM Pod 목록을 갖고 EPP를 지정합니다.
-두 종류의 Pod 모두 Prometheus 메트릭을 노출합니다. 이 튜토리얼에서는 Prometheus로 메트릭을
-수집하고 Grafana로 보여 준 다음, 두 가지 부하를 보내서 어떤 숫자가 왜 움직이는지 살펴봅니다.
+이 튜토리얼에서 살펴볼 LLMInferenceService의 Pod는 두 종류입니다. **vLLM**은
+응답을 계산하는 모델 서버입니다. **EPP**(엔드포인트 선택기)는 Gateway의 프록시인
+Envoy가 요청마다 어느 vLLM Pod로 보낼지 물어보는 스케줄러입니다. InferencePool은
+vLLM Pod 목록과 EPP 이름을 지정해 둘을 연결합니다. 두 종류의 Pod 모두 Prometheus
+메트릭을 노출합니다. 이 튜토리얼에서는 Prometheus로 메트릭을 수집하고 Grafana에
+표시합니다. 그런 다음 두 가지 부하를 주고 어떤 값이 왜 바뀌는지 확인합니다.
 
-> **핵심 질문:** 스케줄러는 어떤 메트릭을 보고 있으며, 부하가 걸리면 이 값들은
-> 어떻게 변할까?
+> **핵심 질문**  
+> 스케줄러는 어떤 메트릭을 보고, 부하가 걸리면 그 값은 어떻게 바뀝니까?
 
-배울 내용:
+배울 내용은 다음과 같습니다.
 
-- 숫자가 어디서 오는지: vLLM은 모델 서버 내부에서 일어나는 일(실행 중/대기 중 요청,
-  KV cache, prefix cache)을 보고하고, EPP는 풀에 대한 자신의 관점과 자신의 결정을
-  보고합니다.
-- Prometheus가 메트릭을 가져가는 방법: ServiceMonitor, 그리고 `/metrics` 엔드포인트가
-  보호되어 있는 EPP를 위한 토큰.
-- prefix cache가 무엇이고 숫자로 어떻게 읽는지: 앞부분이 같은 프롬프트에서는 어떤
-  카운터가 오르고, 그렇지 않은 프롬프트에서는 어떤 카운터가 그대로인지.
-- vLLM의 prefix cache와 EPP의 prefix index는 서로 다른 것이라는 점, 그리고 이 구성에서
-  EPP가 모든 요청을 세 번씩 세는 이유.
-- 이름이나 위치가 오해를 부르는 패널까지 포함해서 대시보드를 읽는 방법.
+- 메트릭이 어디에서 오는지 살펴봅니다. vLLM은 처리 중이거나 대기 중인 요청, KV 캐시,
+  접두사 캐시 등 모델 서버 내부 상태를 보고합니다. EPP는 자신이 파악한 풀의 상태와
+  스케줄링 결과를 보고합니다.
+- Prometheus가 메트릭을 어떻게 수집하는지 살펴봅니다. ServiceMonitor를 사용하고,
+  인증이 필요한 EPP의 `/metrics` 엔드포인트에는 토큰을 보냅니다.
+- 접두사 캐시가 무엇이며 메트릭으로 어떻게 확인하는지 살펴봅니다. 프롬프트 앞부분이
+  같을 때 어떤 카운터가 오르고, 다를 때 어떤 카운터가 그대로인지 확인합니다.
+- vLLM의 접두사 캐시와 EPP의 접두사 인덱스가 어떻게 다른지, 이 구성에서 EPP가
+  요청 하나를 왜 세 번 집계하는지 살펴봅니다.
+- 대시보드를 읽는 법을 익힙니다. 이름이나 위치만 보면 헷갈리기 쉬운 패널도 살펴봅니다.
 
-## Step 0: 환경
+## 0단계. 환경 준비
 
-KServe LLMInferenceService와 그 게이트웨이 스택이 설치된 Kind 클러스터를 준비하고(위의
-환경 링크 참고), 아래에서 사용할 namespace를 만듭니다. 여러 번 실행해도 안전합니다.
+Kind 클러스터에 KServe LLMInferenceService와 게이트웨이 스택를 준비하고, 아래에서
+사용할 네임스페이스를 만듭니다. 환경 구성은 위 링크에서 확인할 수 있습니다. 이 단계는
+다시 실행해도 안전합니다.
 
 <!-- tut:setup -->
 
@@ -57,11 +58,11 @@ cd "$REPO_ROOT/tutorials/llmisvc-monitoring"
 
 <!-- /tut -->
 
-## Step 1: LLMInferenceService 배포
+## 1단계. LLMInferenceService 배포
 
-메트릭이 나오려면 모델이 있어야 합니다. CPU에서 vLLM으로 `facebook/opt-125m`을 서빙하는
-LLMInferenceService 하나를 적용합니다. anatomy, request-flow 튜토리얼에서 쓴 것과 같은
-것입니다. LLMInferenceService 학습 경로를 따라왔다면 이미 실행 중이므로 이 단계는
+메트릭을 수집할 모델을 배포합니다. 구조와 요청 흐름을 다룬 튜토리얼에서 사용한 것과
+같이, CPU에서 vLLM으로 `facebook/opt-125m`을 서빙하는 LLMInferenceService 하나를
+적용합니다. LLMInferenceService 학습 경로를 따라왔다면 이미 실행 중이므로 이 단계는
 건너뜁니다.
 
 <!-- tut:use llmisvc-demo-model -->
@@ -132,20 +133,21 @@ spec:
 
 </details>
 
-서비스가 `Ready`가 될 때까지 기다립니다. 모델을 내려받고 CPU에서 vLLM을 시작하는 데
-몇 분 걸립니다.
+LLMInferenceService의 상태가 `Ready`가 될 때까지 기다립니다. 모델을 내려받고 CPU에서
+vLLM을 시작하는 데 몇 분 걸립니다.
 
 ```bash verify
 kubectl wait --for=condition=Ready llminferenceservice/demo-model -n "$NS" --timeout=900s
 ```
 
-## Step 2: Prometheus와 Grafana 설치
+## 2단계. Prometheus와 Grafana 설치
 
-이 환경에는 모니터링 스택이 없으므로, 같은 클러스터의 `monitoring` namespace에 Helm으로
+이 환경에는 모니터링 스택이 없으므로 Helm으로 같은 클러스터의 `monitoring`
+네임스페이스에
 [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)을
-설치합니다. Grafana는 NodePort 30090, Prometheus는 NodePort 30091로 노출되어 내 머신에서
-둘 다 접근할 수 있습니다. 처음 설치할 때는 이미지 여러 개를 받느라 몇 분 걸립니다. 같은
-스택이 필요한 이후 튜토리얼들도 이 단계를 재사용합니다.
+설치합니다. Grafana는 NodePort 30090으로, Prometheus는 NodePort 30091로 노출하므로
+둘 다 로컬 머신에서 접속할 수 있습니다. 처음 설치할 때는 이미지 여러 개를 내려받느라
+몇 분 걸립니다. 이후 같은 스택이 필요한 튜토리얼에서도 이 단계를 재사용합니다.
 
 <!-- tut:define monitoring-stack -->
 
@@ -166,14 +168,14 @@ kubectl patch svc prometheus-kube-prometheus-prometheus -n monitoring \
   -p '{"spec":{"type":"NodePort","ports":[{"name":"http-web","port":9090,"targetPort":9090,"nodePort":30091}]}}'
 ```
 
-이 chart가 설치하는 것 중 여기서 중요한 것은 세 가지입니다. ServiceMonitor
-객체를 지켜보다가 Prometheus scrape 설정으로 바꾸는 **Prometheus operator**,
-15초마다 대상을 scrape해서 숫자를 저장하는 **Prometheus** 서버, 그 숫자를
-그리는 **Grafana**입니다. 설치 중 Helm이 `unrecognized format "int32"` 같은
-경고를 출력하는데, chart의 스키마에서 나오는 것이고 설치에는 영향이 없습니다.
+이 차트가 설치하는 것 중 여기서 중요한 것은 세 가지입니다. **Prometheus operator**는
+ServiceMonitor 객체를 지켜보다가 Prometheus의 수집 설정으로 바꿉니다. **Prometheus**
+서버는 15초마다 대상에서 메트릭을 수집해 저장합니다. **Grafana**는 그 값을 그래프로
+그립니다. 설치 중에 Helm이 `unrecognized format "int32"` 같은 경고를 출력하는데, 차트의
+스키마에서 나오는 것이고 설치에는 영향이 없습니다.
 
-Helm은 operator와 Grafana까지만 기다립니다. Prometheus 서버는 operator가 조금
-뒤에 만드는 StatefulSet이므로, 이것도 기다립니다.
+Helm은 operator와 Grafana가 준비될 때까지만 기다립니다. Prometheus 서버는 operator가
+잠시 뒤에 만드는 StatefulSet이므로 이것도 기다립니다.
 
 ```bash verify retry=10 delay=15
 kubectl rollout status statefulset prometheus-prometheus-kube-prometheus-prometheus -n monitoring --timeout=300s
@@ -182,19 +184,19 @@ kubectl rollout status deployment prometheus-grafana -n monitoring --timeout=300
 
 <!-- /tut -->
 
-## Step 3: Prometheus가 vLLM과 EPP 스케줄러를 스크레이프하도록 설정
+## 3단계. Prometheus에서 vLLM과 EPP 스케줄러의 메트릭 수집
 
-### 3-1. EPP 메트릭을 읽을 수 있는 아이덴티티
+### 3-1. EPP 메트릭을 읽을 계정 준비
 
-vLLM의 `/metrics`는 Pod에 접근할 수 있는 누구에게나 열려 있습니다. EPP는 그렇지 않습니다.
-EPP는 `metrics-endpoint-auth: true`(기본값)로 배포되기 때문에 bearer token을 요구하고,
-토큰 소유자가 non-resource URL `/metrics`에 `get` 권한이 있는지 API 서버에 확인합니다.
-정확히 그 권한만 가진 ServiceAccount `metrics-reader`와, 이 계정용 장기 토큰 Secret을
-만듭니다. Prometheus는 계속해서 스크레이프하므로 만료되지 않는 이 토큰을 쓰고, Step 5의
-일회성 조회에서는 단기 토큰(`kubectl create token`)을 씁니다. 둘 다 같은 ServiceAccount에
-속합니다. `/metrics`는 namespace 안의 Kubernetes 오브젝트가 아니라 URL("non-resource
-URL")이라서 ClusterRole로만 권한을 줄 수 있습니다. 그래서 role과 그 binding은 클러스터
-범위이고, 정리 단계에서 이름으로 삭제합니다.
+vLLM의 `/metrics`는 Pod에 접속할 수 있으면 누구나 읽을 수 있습니다. EPP는 기본값인
+`metrics-endpoint-auth: true`로 배포되므로 베어러 토큰을 요구합니다. EPP는 토큰
+소유자에게 비리소스 URL인 `/metrics`의 `get` 권한이 있는지 API 서버에 확인합니다.
+이 권한만 가진 `metrics-reader` ServiceAccount와 장기 토큰을 담을 Secret을 만듭니다.
+Prometheus는 계속 메트릭을 수집하므로 만료되지 않는 이 토큰을 사용합니다. 5단계에서
+메트릭을 한 번씩 조회할 때는 `kubectl create token`으로 발급한 단기 토큰을 사용합니다.
+두 토큰 모두 같은 ServiceAccount에 속합니다. `/metrics`는 네임스페이스에 속한
+Kubernetes 객체가 아닌 비리소스 URL이므로 ClusterRole로만 권한을 부여할 수 있습니다.
+따라서 역할과 바인딩의 범위는 클러스터 전체이며, 정리할 때 이름을 지정해 삭제합니다.
 
 ```bash run
 kubectl apply -f manifests/metrics-reader.yaml -n "$NS"
@@ -240,23 +242,24 @@ type: kubernetes.io/service-account-token
 
 </details>
 
-Kubernetes가 Secret에 ServiceAccount의 토큰을 채워 넣습니다.
+Kubernetes가 Secret에 ServiceAccount의 토큰을 채웠는지 확인합니다.
 
 ```bash verify retry=5 delay=3
 test -n "$(kubectl get secret metrics-reader-token -n "$NS" -o jsonpath='{.data.token}')"
 ```
 
-### 3-2. 두 Service를 위한 ServiceMonitor
+### 3-2. 두 Service에 사용할 ServiceMonitor
 
-ServiceMonitor 하나로 vLLM(포트 8000)과 EPP 스케줄러(포트 9090)를 모두 스크레이프합니다.
-EPP 엔드포인트는 `bearerTokenSecret`에 토큰 Secret을 지정합니다. operator가 그 Secret을
-직접 읽어서 Prometheus용으로 생성하는 설정에 토큰을 써 넣고, 설정은 알아서 다시
-로드됩니다. 재시작도 필요 없고, Prometheus 자신의 ServiceAccount에 Secret 접근 권한을 줄
-필요도 없습니다. (확인해 봤습니다. Prometheus가 Secret을 읽을 수 없는 상태에서도 EPP
-타깃은 `up`이었습니다.) 이 차트의 Prometheus는 모든 namespace에서 `release: prometheus`
-레이블이 붙은 ServiceMonitor를 사용합니다. ServiceMonitor는 LLMInferenceService의 두
-Service를 레이블로 선택하고, 각 엔드포인트는 해당 이름의 포트를 가진 Service에 적용됩니다
-(EPP Service의 `metrics`, vLLM Service의 `https`).
+ServiceMonitor 하나로 vLLM(포트 8000)과 EPP 스케줄러(포트 9090)에서 메트릭을
+수집합니다. EPP 엔드포인트는 `bearerTokenSecret`에 토큰이 담긴 Secret을 지정합니다.
+오퍼레이터가 직접 그 Secret을 읽고, Prometheus용으로 생성하는 설정에 토큰을 넣습니다.
+설정은 자동으로 다시 로드되므로 재시작할 필요가 없고, Prometheus 자체의 ServiceAccount에도
+Secret을 읽을 권한이 필요 없습니다. 실제로 Prometheus가 Secret을 읽을 수 없는 상태에서도
+EPP 수집 대상이 `up`을 유지하는 것을 확인했습니다. 이 차트의 Prometheus는 모든
+네임스페이스에서 `release: prometheus` 레이블이 붙은 ServiceMonitor를 사용합니다.
+ServiceMonitor는 레이블로 LLMInferenceService의 두 Service를 선택합니다. 각 엔드포인트
+설정은 해당 포트 이름을 가진 Service에 적용됩니다. EPP Service의 포트 이름은 `metrics`,
+vLLM Service의 포트 이름은 `https`입니다.
 
 ```bash run
 kubectl apply -f manifests/servicemonitor.yaml -n "$NS"
@@ -299,11 +302,12 @@ spec:
 
 </details>
 
-### 3-3. 스크레이프 타깃 확인
+### 3-3. 수집 대상 확인
 
-NodePort를 통해 Prometheus에 타깃 목록을 요청합니다. EPP Service와 vLLM Service 모두
-`up`이어야 합니다. operator 처리, 설정 리로드, 첫 스크레이프까지 1~2분 걸리므로 검사는
-재시도합니다. 첫 스크레이프 전까지 타깃은 `unknown`으로 표시되는데, 오류가 아닙니다.
+NodePort로 Prometheus에 접속해 수집 대상을 조회합니다. EPP Service와 vLLM Service
+모두 `up`이어야 합니다. 오퍼레이터가 설정을 생성하고 Prometheus가 이를 다시 로드해
+처음 수집할 때까지 1~2분 걸리므로 확인을 재시도합니다. 첫 수집 전까지 대상이
+`unknown`으로 표시되는 것은 정상입니다.
 
 ```bash run
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
@@ -322,20 +326,20 @@ for t in json.load(sys.stdin)["data"]["activeTargets"]:
 assert {"demo-model-epp-service", "demo-model-kserve-workload-svc"} <= up, "both targets must be up"'
 ```
 
-예상 출력:
+예상 출력은 다음과 같습니다.
 
 ```text
 demo-model-epp-service: up
 demo-model-kserve-workload-svc: up
 ```
 
-## Step 4: vLLM 메트릭 직접 살펴보기
+## 4단계. vLLM 메트릭 직접 확인
 
-대시보드보다 먼저 원시 숫자를 봅니다. vLLM은 `/metrics`에 Prometheus 텍스트 형식으로
-메트릭을 노출합니다. 클러스터 안의 단기 Pod에서 읽어 옵니다. 이후 검사에서 다시 호출하기
-때문에 명령을 함수로 만들었고, 이 튜토리얼에서 다루는 줄만 출력합니다(전체 출력에는
-메트릭이 백 개쯤 있습니다). `kubectl run`이 세션이 컨테이너 로그에 기록된다고 경고하는데,
-일반적인 안내일 뿐 여기서는 상관없습니다.
+대시보드를 보기 전에 원본 값을 살펴봅니다. vLLM은 `/metrics`에서 Prometheus 텍스트
+형식으로 메트릭을 노출합니다. 클러스터 안에 잠깐 띄운 Pod에서 읽습니다. 이후 확인
+단계에서 다시 호출할 수 있도록 함수로 만들고, 이 튜토리얼에서 다루는 줄만 출력합니다.
+전체 출력에는 메트릭이 약 100개 있습니다. `kubectl run`은 세션이 컨테이너 로그에
+기록된다고 경고합니다. 일반 안내이므로 이 단계에는 영향이 없습니다.
 
 ```bash run
 vllm_metrics() {
@@ -346,38 +350,39 @@ vllm_metrics() {
 vllm_metrics | grep -E '^vllm:(num_requests_(running|waiting)|kv_cache_usage_perc|prefix_cache_(hits|queries)_total|cache_config_info)'
 ```
 
-요청을 보내기 전에 볼 것들(우리가 실행한 결과):
+아래는 요청을 하나도 보내기 전에 확인할 항목과 실행에서 관측한 값입니다.
 
 | 메트릭 | 현재 값 | 의미 |
 |--------|-----------|---------------|
-| `vllm:num_requests_running` | 0 | vLLM이 지금 계산 중인 요청 |
-| `vllm:num_requests_waiting` | 0 | 실행 중인 배치가 가득 차서 대기열에 있는 요청 |
-| `vllm:kv_cache_usage_perc` | 0 | 사용 중인 KV cache 비율(0~1) |
-| `vllm:prefix_cache_queries_total` | 0 | vLLM이 prefix cache에서 조회한 프롬프트 토큰 수 |
-| `vllm:prefix_cache_hits_total` | 0 | 그중 캐시에서 찾아서 다시 계산하지 않은 토큰 수 |
+| `vllm:num_requests_running` | 0 | vLLM이 현재 처리 중인 요청 수 |
+| `vllm:num_requests_waiting` | 0 | 처리 중인 배치가 가득 차 대기열에 들어간 요청 수 |
+| `vllm:kv_cache_usage_perc` | 0 | 사용 중인 KV 캐시의 비율(0~1) |
+| `vllm:prefix_cache_queries_total` | 0 | vLLM이 접두사 캐시에서 조회한 프롬프트 토큰 수 |
+| `vllm:prefix_cache_hits_total` | 0 | 조회한 토큰 중 캐시에서 찾아 다시 계산하지 않은 토큰 수 |
 | `vllm:cache_config_info` | 레이블 `block_size="16"`, `enable_prefix_caching="True"` | 캐시 설정 |
 
-**KV cache**는 vLLM이 처리한 모든 토큰의 중간 결과(key와 value)를 16토큰 단위 블록으로
-보관하는 곳입니다. **prefix cache**는 그 블록을 재사용합니다. 새 프롬프트가 이전
-프롬프트와 정확히 같은 토큰으로 시작하면, vLLM은 이미 계산된 블록을 찾아서 그 부분의
-작업을 건너뜁니다. `vllm:kv_cache_usage_perc`는 실행 중인 요청이 점유한 블록만 셉니다
-(비율 값이며, Grafana에서는 퍼센트로 표시). 요청이 끝나면 블록은 해제되지만 내용은
-남아 있어서, vLLM이 공간을 필요로 할 때까지 prefix cache로 계속 쓰입니다. 그래서 부하가
-끝난 뒤에는 사용률이 0으로 돌아가도 캐시는 여전히 hit합니다. `_total` 메트릭은 카운터라서
-Pod가 시작된 시점부터 증가만 합니다. 학습 경로를 따라왔다면 앞선 튜토리얼에서 이미 요청을
-몇 개 보냈으므로 카운터가 0이 아닙니다.
+vLLM은 처리한 모든 토큰의 중간 계산 결과(키와 값)를 토큰 16개 단위의 블록으로
+**KV 캐시**에 저장합니다. **접두사 캐시**는 이 블록을 재사용합니다. 새 프롬프트의
+시작 부분이 이전 프롬프트와 토큰 단위로 정확히 일치하면, vLLM은 계산을 마친 블록을
+찾아 해당 부분의 계산을 건너뜁니다. `vllm:kv_cache_usage_perc`는 처리 중인 요청이
+점유한 블록만 비율로 집계합니다. Grafana에서는 백분율로 표시합니다. 요청이 끝나면
+블록의 점유는 해제되지만 내용은 남습니다. vLLM에 공간이 필요해질 때까지 이 블록을
+접두사 캐시에서 재사용할 수 있으므로, 부하가 끝나 사용률이 0으로 돌아가도 캐시 적중은
+계속 발생할 수 있습니다. 이름이 `_total`로 끝나는 메트릭은 카운터이며 Pod가 시작한
+이후 계속 누적됩니다. 학습 경로를 따라왔다면 이전 튜토리얼에서 이미 몇 건의 요청을
+보냈으므로 카운터가 0보다 큽니다.
 
-prefix cache가 켜져 있고, 이 튜토리얼에서 설정한 블록 크기를 쓰고 있습니다(Step 7의
-노트 참고).
+접두사 캐시가 켜져 있고 블록 크기가 이 튜토리얼에서 지정한 값인지 확인합니다.
+블록 크기는 7단계의 참고에서 설명합니다.
 
 ```bash verify retry=3 delay=10
 vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep -q 'enable_prefix_caching="True"'
 ```
 
-## Step 5: EPP 스케줄러 메트릭 살펴보기
+## 5단계. EPP 스케줄러 메트릭 확인
 
-이번에는 EPP입니다. 엔드포인트에 토큰이 필요하므로, Step 3의 `metrics-reader`
-ServiceAccount로 단기 토큰을 발급받습니다.
+EPP 엔드포인트에 접속하려면 토큰이 필요합니다. 3단계에서 만든 `metrics-reader`
+ServiceAccount의 단기 토큰을 발급받아 사용합니다.
 
 ```bash run
 epp_metrics() {
@@ -390,36 +395,35 @@ epp_metrics() {
 epp_metrics '^(inference_pool_|inference_extension_scheduler_attempts_total|inference_objective_request_total|inference_extension_prefix_indexer_size)'
 ```
 
-볼 것들(우리가 실행한 결과, 요청 전):
+아래는 확인할 항목과 요청을 하나도 보내기 전에 관측한 값입니다.
 
 | 메트릭 | 현재 값 | 의미 |
 |--------|-----------|---------------|
-| `inference_pool_ready_pods` | 1 | 풀에서 Ready 상태인 vLLM Pod |
-| `inference_pool_average_queue_size` | 0 | Pod들의 `vllm:num_requests_waiting`에 대한 EPP의 평균 |
-| `inference_pool_per_pod_queue_size` | 0 | 같은 값, Pod별 |
-| `inference_pool_average_kv_cache_utilization` | 0 | `vllm:kv_cache_usage_perc`에 대한 EPP의 평균 |
-| `inference_extension_scheduler_attempts_total` | 아직 없음 | 스케줄링 결정 수. 첫 요청과 함께 줄이 나타남 |
-| `inference_objective_request_total` | 아직 없음 | EPP가 본 요청 수, 모델별 |
-| `inference_extension_prefix_indexer_size` | 0 | EPP 자체 prefix index의 항목 수(Step 7) |
+| `inference_pool_ready_pods` | 1 | 풀에서 준비된 vLLM Pod 수 |
+| `inference_pool_average_queue_size` | 0 | EPP가 각 Pod에서 읽은 `vllm:num_requests_waiting`의 평균 |
+| `inference_pool_per_pod_queue_size` | 0 | EPP가 각 Pod에서 읽은 대기 요청 수 |
+| `inference_pool_average_kv_cache_utilization` | 0 | EPP가 읽은 `vllm:kv_cache_usage_perc`의 평균 |
+| `inference_extension_scheduler_attempts_total` | 아직 표시되지 않음 | 스케줄링 결정 횟수. 첫 요청이 들어오면 표시됩니다. |
+| `inference_objective_request_total` | 아직 표시되지 않음 | EPP가 받은 요청 수를 모델별로 집계한 값 |
+| `inference_extension_prefix_indexer_size` | 0 | EPP 자체 접두사 인덱스의 항목 수(7단계) |
 
-`inference_pool_*` 값은 EPP가 직접 측정한 것이 아닙니다. EPP는 Prometheus의 15초
-스크레이프와는 별개로 자기 주기에 따라 vLLM Pod에서 값을 읽어 오고, 점수 계산에 쓸 사본을
-보관합니다. 그래서 잠깐 동안은 EPP의 사본과 vLLM의 실제 값이 다를 수 있습니다.
-`inference_extension_*` 값은 EPP 자신의 작업에 관한 것입니다. `inference_objective_*`는
-Gateway API Inference Extension의 오브젝트인 InferenceObjective에서 이름을 따왔는데, 이
-튜토리얼에서는 InferenceObjective를 만들지 않습니다. 그래도 모든 요청을 모델 이름별로
-셉니다.
+EPP는 `inference_pool_*` 값을 vLLM Pod에서 읽습니다. Prometheus의 15초 수집 주기와
+별개로 EPP 자체 일정에 맞춰 읽고, 그 값을 저장해 점수를 계산합니다. 그래서 EPP가
+저장한 값과 vLLM의 현재 값이 잠시 다를 수 있습니다. `inference_extension_*` 값은
+EPP 자체 동작을 나타냅니다. `inference_objective_*`라는 이름은 Gateway API Inference
+Extension의 객체인 InferenceObjective에서 따왔습니다. 이 튜토리얼에서는 해당 객체를
+만들지 않아도 모든 요청을 모델 이름별로 집계합니다.
 
-풀이 ready Pod 하나를 보고합니다.
+풀이 준비된 Pod 1개를 보고하는지 확인합니다.
 
 ```bash verify retry=5 delay=10
 epp_metrics '^inference_pool' | awk '$1 ~ /^inference_pool_ready_pods/ && $NF >= 1 {ok = 1} END {exit !ok}'
 ```
 
-### EPP가 Pod를 고르는 방법
+### EPP가 Pod를 선택하는 방식
 
-EPP의 설정은 KServe가 스케줄러에 인자로 넘기는 `EndpointPickerConfig`입니다. 출력해
-봅니다.
+KServe는 EPP 설정인 `EndpointPickerConfig`를 스케줄러에 실행 인수로 전달합니다.
+이 설정을 출력합니다.
 
 ```bash run
 kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
@@ -427,7 +431,7 @@ kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
   | python3 -c 'import json, sys; a = json.load(sys.stdin); print(a[a.index("--config-text") + 1])'
 ```
 
-가중치가 붙은 scorer 두 개와 picker 하나가 있습니다.
+설정에는 점수를 매기는 플러그인 2개와 각각의 가중치, 그리고 선택기 1개가 있습니다.
 
 ```bash verify
 kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
@@ -437,24 +441,24 @@ a = json.load(sys.stdin); c = a[a.index("--config-text") + 1]
 assert re.search(r"pluginRef: queue-scorer\s+weight: 2", c) and re.search(r"pluginRef: prefix-cache-scorer\s+weight: 3", c), c'
 ```
 
-| 플러그인 | 점수 계산 기준 | 가중치 |
+| 플러그인 | 점수 산정 또는 선택 기준 | 가중치 |
 |--------|---------------------|--------|
-| `queue-scorer` | EPP가 마지막으로 읽은 각 Pod의 `vllm:num_requests_waiting`: 대기가 적을수록 좋음 | 2 |
-| `prefix-cache-scorer` | EPP **자체의** prefix index: 프롬프트 중 얼마만큼을 EPP가 이미 각 Pod에 보냈는지 | 3 |
-| `max-score-picker` | 가중 합이 가장 높은 Pod를 선택 | |
+| `queue-scorer` | EPP가 각 Pod에서 마지막으로 읽은 `vllm:num_requests_waiting`을 사용합니다. 대기 요청이 적을수록 점수가 높습니다. | 2 |
+| `prefix-cache-scorer` | **EPP 자체** 접두사 인덱스를 사용합니다. EPP가 프롬프트 앞부분을 각 Pod에 얼마나 보냈는지 확인합니다. | 3 |
+| `max-score-picker` | 가중치를 적용한 점수 합계가 가장 높은 Pod를 선택합니다. | |
 
-prefix-cache-scorer는 vLLM의 prefix cache 메트릭을 읽지 **않습니다**. EPP가 스스로
-추가하는 보조 플러그인 `approx-prefix-cache-producer`(위 설정에는 없지만 EPP의 플러그인
-메트릭에 이름이 나타납니다)가 각 프롬프트를 블록 단위로 해싱하고, 스케줄링 전에 "어느
-Pod가 어떤 프롬프트를 받았는지" 인덱스에서 조회하고, 스케줄링 후에 선택된 Pod를
-기록합니다. 이 숫자가 vLLM의 숫자와 어떻게 다른지는 Step 7에서 봅니다. KV cache 사용률은
-읽기는 하지만 이 설정에서는 점수 계산에 쓰이지 않습니다.
+`prefix-cache-scorer`는 vLLM의 접두사 캐시 메트릭을 읽지 않습니다. EPP가 자체적으로
+추가하는 보조 플러그인 `approx-prefix-cache-producer`는 프롬프트를 블록 단위로
+해시합니다. 스케줄링 전에 어느 Pod에 어떤 프롬프트를 보냈는지 기록한 인덱스를 조회하고,
+선택이 끝나면 해당 Pod를 기록합니다. 이 플러그인은 위 설정에 없지만 EPP의 플러그인
+메트릭에는 이름이 나옵니다. 7단계에서 이 플러그인의 수치가 vLLM과 어떻게 다른지
+확인합니다. 이 구성에서 EPP는 KV 캐시 사용률을 읽지만 점수 계산에는 사용하지 않습니다.
 
-## Step 6: Grafana 대시보드 가져오기
+## 6단계. Grafana 대시보드 가져오기
 
-Grafana API로 대시보드를 만듭니다. [dashboard.json](dashboard.json)은 Pod 리소스
-패널에서 namespace를 `kserve-demo`로 지정하고 있는데, 가져올 때 `sed`로 이 튜토리얼의
-namespace로 바꿉니다. 다시 가져오면 대시보드를 덮어씁니다.
+Grafana API로 대시보드를 만듭니다. [dashboard.json](dashboard.json)의 Pod 리소스
+패널에는 네임스페이스가 `kserve-demo`로 지정되어 있습니다. 가져오는 과정에서 `sed`로
+이 값을 튜토리얼의 네임스페이스로 바꿉니다. 다시 가져오면 기존 대시보드를 덮어씁니다.
 
 ```bash run
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
@@ -471,105 +475,112 @@ echo "Dashboard: http://${NODE_IP}:30090/d/llmisvc-overview"
 echo "Login: admin / ${GRAFANA_PASS}"
 ```
 
-이제 Grafana에 대시보드가 있습니다.
+Grafana에 대시보드가 있는지 확인합니다.
 
 ```bash verify retry=5 delay=5
 curl -sf -u "admin:${GRAFANA_PASS}" "http://${NODE_IP}:30090/api/dashboards/uid/llmisvc-overview" \
   | python3 -c 'import json, sys; d = json.load(sys.stdin)["dashboard"]; print(d["title"]); assert d["uid"] == "llmisvc-overview"'
 ```
 
-브라우저에서 URL을 열고 로그인합니다. Step 7에서 쓸 수 있도록 페이지를 열어 두세요.
-10초마다 새로 고침됩니다.
+브라우저에서 URL을 열고 로그인합니다. 7단계에서 다시 볼 수 있도록 페이지를 열어 둡니다.
+페이지는 10초마다 새로 고쳐집니다.
 
 ### 대시보드 구성
 
-<a href="images/dashboard-layout.png" target="_blank"><img src="images/dashboard-layout.png" width="720" alt="다섯 개 섹션(InferencePool Status, EPP Scheduling Performance, Request and Token Stats, vLLM Engine Status, Pod Resource Usage)으로 구성된 Grafana 대시보드 KServe LLMIsvc Overview"></a>
+<a href="images/dashboard-layout.png" target="_blank"><img src="images/dashboard-layout.png" width="720" alt="Grafana 대시보드 KServe LLMIsvc Overview의 5개 섹션입니다. InferencePool Status, EPP Scheduling Performance, Request &amp; Token Stats, vLLM Engine Status, Pod Resource Usage가 있습니다."></a>
 
-그림을 클릭하면 원본 크기로 열립니다(Step 7이 끝난 시점에 찍은 것). 제목 옆에 (i)가 있는
-패널에는 짧은 설명이 있으니 마우스를 올려 보세요.
+그림을 클릭하면 7단계가 끝났을 때 찍은 화면을 원래 크기로 볼 수 있습니다. 제목 옆에
+(i)가 있는 패널에는 짧은 설명이 있습니다. 아이콘에 마우스를 올리면 설명이 표시됩니다.
 
-섹션 이름은 패널이 다루는 컴포넌트를 따른 것이지, 항상 숫자의 출처를 따른 것은 아닙니다.
-오해하기 쉬운 곳이 세 군데 있습니다.
+섹션 이름은 패널이 다루는 구성 요소를 기준으로 붙였습니다. 실제 메트릭 출처와 항상
+일치하는 것은 아닙니다. 특히 다음 세 항목은 이름이나 위치만 보면 헷갈리기 쉽습니다.
 
-- **Avg Cache Hit Rate**는 *InferencePool Status* 아래에 있지만, 풀이나 EPP가 아니라
-  vLLM의 카운터로 계산됩니다.
-- **vLLM KV Cache Hit Rate**는 바로 옆의 KV cache 사용률이 아니라 *prefix* cache
-  (`prefix_cache_*` 카운터)를 측정합니다.
-- **Scheduler Attempts**와 **Request Throughput**은 EPP 스케줄링 호출을 세는데, 이
-  구성에서는 요청 하나당 호출이 세 번 일어납니다(Step 7). Scheduler Attempts는 성공한
-  호출을 보여 주고, 실패한 호출은 두 번째 숫자로 나타납니다. Request Throughput은 5분
-  구간의 rate라서, 300초에 걸쳐 퍼진 60번의 호출은 급증이 아니라 몇 분 동안 초당 0.2로
-  표시됩니다.
+- **Avg Cache Hit Rate**는 *InferencePool Status*에 있지만 풀이나 EPP의 메트릭이 아닌
+  vLLM 카운터로 계산합니다.
+- **vLLM KV Cache Hit Rate**는 옆에 있는 KV 캐시 사용률과 다른 지표입니다.
+  *접두사* 캐시의 `prefix_cache_*` 카운터로 계산합니다.
+- **Scheduler Attempts**와 **Request Throughput**은 EPP 스케줄링 호출을 집계합니다.
+  이 구성에서는 요청 하나당 EPP를 세 번 호출합니다(7단계). Scheduler Attempts는
+  성공한 시도를 표시하며, 실패한 시도가 있으면 두 번째 값으로 표시합니다.
+  Request Throughput은 5분 동안의 초당 호출 수입니다. 300초에 걸쳐 호출이 60번 발생하면
+  순간적으로 치솟는 대신 몇 분 동안 초당 0.2회로 표시됩니다.
 
-학습 경로를 따라왔다면 앞선 튜토리얼의 요청도 카운터에 들어 있으므로 패널 숫자가 아래
-그림과 다릅니다. Step 7의 검사는 각 부하만의 결과를 출력합니다.
+학습 경로를 따라왔다면 이전 튜토리얼에서 보낸 요청도 카운터에 포함되므로 패널의
+수치가 아래 그림과 다를 수 있습니다. 7단계의 확인 명령은 각 부하에서 생긴 변화만
+출력합니다.
 
-**1. InferencePool Status**: EPP가 보는 풀
+**1. InferencePool Status**  
+EPP가 파악한 풀의 상태를 보여 줍니다.
 
 | 패널 | 쿼리 | 출처 |
 |-------|-------|--------|
 | Ready Pods | `inference_pool_ready_pods` | EPP |
-| Avg Queue Size | `inference_pool_average_queue_size` | EPP (vLLM 대기 요청 수의 사본) |
-| Avg KV Cache Utilization | `inference_pool_average_kv_cache_utilization` | EPP (vLLM KV cache 사용률의 사본) |
+| Avg Queue Size | `inference_pool_average_queue_size` | EPP가 vLLM에서 읽어 둔 대기 요청 수 |
+| Avg KV Cache Utilization | `inference_pool_average_kv_cache_utilization` | EPP가 vLLM에서 읽어 둔 KV 캐시 사용률 |
 | Scheduler Attempts (Success/Fail) | `inference_extension_scheduler_attempts_total` | EPP |
 | Per-Pod Queue Size | `inference_pool_per_pod_queue_size` | EPP |
-| Avg Cache Hit Rate | `vllm:prefix_cache_hits_total / vllm:prefix_cache_queries_total`, 각 Pod 시작 이후 | **vLLM** |
-| Pod Count: Actual vs Desired | `inference_pool_ready_pods`, `wva_desired_replicas` | EPP. "Desired"는 이 튜토리얼에서 설치하지 않는 WVA autoscaler에서 오므로 비어 있음 |
+| Avg Cache Hit Rate | 각 Pod가 시작한 이후의 `vllm:prefix_cache_hits_total / vllm:prefix_cache_queries_total` | **vLLM** |
+| Pod Count: Actual vs Desired | `inference_pool_ready_pods`, `wva_desired_replicas` | EPP. 목표 Pod 수는 WVA 자동 확장기가 제공하는데, 이 튜토리얼에서는 설치하지 않으므로 빈 상태로 표시됩니다. |
 
-**2. EPP Scheduling Performance**: EPP가 걸리는 시간
+**2. EPP Scheduling Performance**  
+EPP가 응답하는 데 걸리는 시간을 보여 줍니다.
 
 | 패널 | 쿼리 |
 |-------|-------|
-| Scheduler E2E Latency | `inference_extension_scheduler_e2e_duration_seconds` p50/p95/p99 |
-| Plugin Duration (avg) | scorer와 picker의 `inference_extension_plugin_duration_seconds` |
+| Scheduler E2E Latency | `inference_extension_scheduler_e2e_duration_seconds`의 p50/p95/p99 |
+| Plugin Duration (avg) | 점수를 매기는 플러그인과 선택기의 `inference_extension_plugin_duration_seconds` |
 
-Scheduler E2E Latency는 Envoy가 질문한 뒤 EPP가 답할 때까지의 시간입니다. 우리가 실행한
-결과는 50~100마이크로초였고 각 플러그인은 0.5~1.5마이크로초 걸렸습니다. vLLM이 답하는 데
-걸리는 수 초에 비하면 아주 작습니다. 여기서 느린 쪽은 EPP가 아닙니다.
+스케줄러 종단 간 지연 시간은 Envoy가 EPP에 문의하고 답을 받기까지 걸린 시간입니다.
+이 실행에서는 50~100마이크로초였고, 각 플러그인은 0.5~1.5마이크로초 걸렸습니다.
+vLLM의 응답에는 몇 초가 걸리므로 여기서 EPP가 차지하는 시간은 짧습니다.
 
 **3. Request & Token Stats**
 
 | 패널 | 쿼리 |
 |-------|-------|
-| Request Throughput (RPS) | 모델별 초당 `inference_objective_request_total` (EPP. 여기서는 요청당 3) |
+| Request Throughput (RPS) | 모델별 초당 `inference_objective_request_total` 증가량(EPP, 이 구성에서는 요청당 3회 집계) |
 
-**4. vLLM Engine Status**: vLLM Pod에서 직접
+**4. vLLM Engine Status**  
+vLLM Pod에서 직접 수집한 값을 보여 줍니다.
 
 | 패널 | 쿼리 |
 |-------|-------|
 | vLLM KV Cache Utilization | `vllm:kv_cache_usage_perc` |
-| vLLM KV Cache Hit Rate | `rate(vllm:prefix_cache_hits_total[5m]) / rate(vllm:prefix_cache_queries_total[5m])`: **최근 5분**만 |
+| vLLM KV Cache Hit Rate | `rate(vllm:prefix_cache_hits_total[5m]) / rate(vllm:prefix_cache_queries_total[5m])` (**최근 5분**만 계산) |
 | vLLM Running / Waiting Requests | `vllm:num_requests_running`, `vllm:num_requests_waiting` |
-| E2E Request Latency, TTFT | `vllm:e2e_request_latency_seconds`, `vllm:time_to_first_token_seconds` p50/p95/p99 |
-| Prompt / Generation Token Throughput | 초당 `vllm:prompt_tokens_total`, `vllm:generation_tokens_total` |
+| E2E Request Latency, TTFT | `vllm:e2e_request_latency_seconds`, `vllm:time_to_first_token_seconds`의 p50/p95/p99 |
+| Prompt / Generation Token Throughput | `vllm:prompt_tokens_total`, `vllm:generation_tokens_total`의 초당 증가량 |
 
-**5. Pod Resource Usage**: vLLM 컨테이너와 스케줄러 컨테이너의 메모리와 CPU
+**5. Pod Resource Usage**  
+vLLM과 스케줄러 컨테이너의 메모리 및 CPU 사용량을 보여 줍니다.
 
-부하를 걸기 전 패널은 다음과 같습니다. ready Pod 하나, 대기 없음, **Avg Cache Hit Rate**는
-0%(0/0이 0이 되도록 쿼리가 분모에 0.001을 더함), **vLLM KV Cache Hit Rate**는 비어
-있음(최근 5분 동안 요청이 없어서 나눌 것이 없음).
+부하를 주기 전에는 준비된 Pod가 1개이고 대기 요청은 0건입니다. **Avg Cache Hit Rate**는
+0%로 표시됩니다. 쿼리가 분모에 0.001을 더하므로 분자와 분모가 모두 0인 경우 결과가
+0이 됩니다. **vLLM KV Cache Hit Rate**는 최근 5분 동안 요청이 없어 비율을 계산할 수
+없으므로 비어 있습니다.
 
-<a href="images/panels-idle.png" target="_blank"><img src="images/panels-idle.png" width="720" alt="부하 전 InferencePool Status와 vLLM Engine Status: Ready Pods 1, 대기열 0, Scheduler Attempts 데이터 없음, Avg Cache Hit Rate 0%, vLLM KV Cache Hit Rate 비어 있음"></a>
+<a href="images/panels-idle.png" target="_blank"><img src="images/panels-idle.png" width="720" alt="부하를 주기 전의 InferencePool Status와 vLLM Engine Status입니다. 준비된 Pod는 1개, 대기 요청은 0건입니다. Scheduler Attempts는 데이터가 없고, Avg Cache Hit Rate는 0%이며, vLLM KV Cache Hit Rate는 비어 있습니다."></a>
 
-## Step 7: 부하를 걸고 메트릭 변화 관찰하기
+## 7단계. 부하를 주고 메트릭 변화 관찰
 
-클러스터 안의 Pod에서 Gateway를 거쳐 각각 20개 요청으로 된 두 번의 부하를 보냅니다.
-먼저 모두 같은 프롬프트, 그다음 앞부분부터 다른 프롬프트입니다. 아래 각 검사는 부하
-전후의 카운터를 읽기 때문에 해당 부하만의 결과를 보여 줍니다.
+클러스터 내부의 Pod에서 Gateway를 거쳐 두 차례 부하를 줍니다. 각 부하는 요청
+20건으로 구성합니다. 첫 번째는 프롬프트를 모두 똑같이 보내고, 두 번째는 프롬프트의
+앞부분을 서로 다르게 보냅니다. 아래 확인 명령은 부하를 주기 전과 후에 카운터를 읽어
+해당 부하에서 생긴 변화만 보여 줍니다.
 
-### 부하 1: 같은 프롬프트 20번 (prefix cache 재사용)
+### 첫 번째 부하. 같은 프롬프트를 20번 전송(접두사 캐시 재사용)
 
 ```bash run
-# vLLM: prefix cache의 hit와 query, 카운터 레이블 전체에 대해 합산
+# vLLM 접두사 캐시의 적중 및 조회 토큰 수를 레이블별 카운터에서 합산합니다.
 prefix_cache() {
   vllm_metrics | awk '$1 ~ /^vllm:prefix_cache_hits_total/ {h += $2} $1 ~ /^vllm:prefix_cache_queries_total/ {q += $2} END {print h + 0, q + 0}'
 }
-# EPP: 스케줄링 시도 수, prefix index 조회 수, 그리고 hit ratio의 합
+# EPP의 스케줄링 시도 횟수, 접두사 인덱스 조회 횟수, 조회별 적중률의 합계를 구합니다.
 epp_counts() {
   epp_metrics '^inference_extension_(scheduler_attempts_total|prefix_indexer_hit_ratio_(sum|count))' \
     | awk '$1 ~ /^inference_extension_scheduler_attempts_total/ {a += $NF} $1 ~ /hit_ratio_count/ {c += $NF} $1 ~ /hit_ratio_sum/ {s += $NF} END {print a + 0, c + 0, s + 0}'
 }
-# InferencePool로 보내는 HTTPRoute 규칙 수 (Envoy는 규칙마다 EPP에 한 번씩 물어봄)
+# InferencePool로 보내는 HTTPRoute 규칙을 셉니다(Envoy는 규칙마다 EPP에 한 번 문의합니다).
 RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
 import json, sys
 print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
@@ -579,10 +590,10 @@ read -r ATT0 LOOK0 RATIO0 < <(epp_counts)
 GATEWAY_SVC=$(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=kserve-ingress-gateway -o jsonpath='{.items[0].metadata.name}').envoy-gateway-system.svc:80
 BASE_PATH="/${NS}/demo-model"
 
-# 같은 프롬프트로 요청 20개, 0.3초 간격
+# 같은 프롬프트로 요청 20건을 0.3초 간격으로 보냅니다.
 kubectl delete pod load-test -n "$NS" --ignore-not-found
 kubectl run -n "$NS" load-test --rm -i --restart=Never --image=curlimages/curl:8.11.1 -- sh -c "
-# KV cache 재사용을 위한 공통 prefix
+# KV 캐시를 재사용할 수 있도록 공통 접두사를 지정합니다.
 COMMON_PREFIX='You are a helpful AI assistant specializing in computer science. Please provide a detailed explanation about'
 
 for i in \$(seq 1 20); do
@@ -597,31 +608,33 @@ echo 'KV Cache Hit Test Complete'
 "
 ```
 
-**vLLM의 prefix cache가 한 일.** 각 프롬프트는 25토큰입니다(모든 응답의
-`prompt_tokens`). vLLM은 16토큰짜리 온전한 블록만 캐시하므로, 25토큰 프롬프트에는 온전한
-블록 하나(토큰 1-16)와 재사용되지 않는 부분 블록 하나(17-25)가 있습니다. 첫 요청은 아무것도
-찾지 못하고 25토큰을 전부 계산한 뒤 블록 1을 캐시에 남깁니다. vLLM은 블록을 계산하는
-즉시 캐시하고, 프롬프트는 응답보다 먼저 계산되므로, 0.3초 간격으로 시작하는 나머지
-19개 요청은 그 블록을 찾습니다. 각각 25토큰 중 16토큰을 찾습니다. 따라서
-`prefix_cache_queries_total`은 20 x 25 = 500 오르고 `prefix_cache_hits_total`은
-19 x 16 = 304 오릅니다. 61%입니다. 매번 실행할 때마다 정확히 500 중 304가 나왔고, 이
-프롬프트로는 그 이상이 불가능합니다.
+**vLLM 접두사 캐시의 동작.** 각 프롬프트는 토큰 25개로 구성됩니다. 응답마다
+`prompt_tokens`에서 확인할 수 있습니다. vLLM은 토큰 16개가 모두 찬 블록만 캐시합니다.
+따라서 토큰 25개짜리 프롬프트에는 꽉 찬 블록 하나(1~16번째 토큰)와 재사용할 수 없는
+부분 블록 하나(17~25번째 토큰)가 있습니다. 첫 요청은 캐시에서 아무것도 찾지 못하므로
+토큰 25개를 모두 계산하고 첫 번째 블록을 캐시에 남깁니다. vLLM은 블록 계산이 끝나자마자
+캐시에 저장하고, 응답을 생성하기 전에 프롬프트부터 계산합니다. 그래서 0.3초 간격으로
+시작하는 나머지 요청 19건은 각각 토큰 25개 중 16개를 캐시에서 찾습니다.
+`prefix_cache_queries_total`은 20 x 25 = 500개, `prefix_cache_hits_total`은
+19 x 16 = 304개 늘어 적중률은 61%입니다. 실행할 때마다 프롬프트 토큰 500개 중
+정확히 304개를 캐시에서 찾았습니다. 이 프롬프트에서는 그 이상 적중할 수 없습니다.
 
-**EPP가 한 일.** 요청 20개에 대해 스케줄링 시도를 60번 했습니다. Envoy는 *ExtProc*
-(external processing)을 통해 EPP와 통신합니다. Envoy 필터가 요청을 외부 서비스에 넘기고
-답을 기다리는 방식입니다. Envoy Gateway는 InferencePool로 보내는 HTTPRoute 규칙마다
-Gateway 리스너에 이런 필터를 하나씩 추가하는데, 이 route에는 규칙이 세 개
-(`/v1/completions`, `/v1/chat/completions`, `/v1/responses`) 있습니다. 리스너의 필터들은
-모든 요청이 통과하는 체인을 이루고, catch-all 규칙만 이 필터들을 끄기 때문에,
-`/v1/completions`로 가는 요청은 세 필터를 모두 지나갑니다. 즉 EPP는 세 번 질문을
-받습니다. (llmisvc-request-flow 튜토리얼에서 EPP 로그로 세 번의 호출을 보여 줍니다.)
+**EPP의 동작.** 요청 20건에 스케줄링을 60번 시도했습니다. Envoy는 *ExtProc*(외부
+처리)로 EPP와 통신합니다. Envoy 필터가 외부 서비스에 요청을 넘기고 응답을 기다리는
+방식입니다. Envoy Gateway는 InferencePool로 요청을 보내는 HTTPRoute 규칙마다
+Gateway 리스너에 이런 필터를 하나씩 추가합니다. 이 HTTPRoute에는 `/v1/completions`,
+`/v1/chat/completions`, `/v1/responses`에 해당하는 규칙이 세 개 있습니다. 리스너의
+필터는 모든 요청이 통과하는 체인을 이루며, 다른 규칙에 해당하지 않는 요청을 받는
+기본 규칙만 이 필터를 끕니다. 따라서 `/v1/completions`로 보낸 요청은 필터 3개를
+모두 거치면서 EPP에 세 번 문의합니다. llmisvc-request-flow 튜토리얼에서는 EPP
+로그에서 이 호출 3건을 확인할 수 있습니다.
 
-prefix index는 60번 조회되었고 그중 59번 프롬프트를 찾았습니다. 맨 처음 조회만 빼고
-전부입니다. 첫 조회가 Pod를 기록했고, 이후 조회는 같은 요청이든 다음 요청이든 그 기록을
-찾았기 때문입니다. EPP는 vLLM의 tokenizer 없이 토큰 수를 추정하고 자체 블록 크기를
-사용하므로(llm-d-router 소스), 그 숫자를 vLLM의 토큰 수와 비교할 수는 없습니다. 여기서는
-각 조회의 점수가 0 아니면 1이었으므로, hit ratio의 합은 프롬프트를 찾은 조회 수와
-같습니다.
+EPP는 접두사 인덱스를 60번 조회했고, 그중 59번 프롬프트를 찾았습니다. 첫 조회에서
+Pod를 기록했기 때문에 이후에는 같은 요청이든 다음 요청이든 모두 해당 기록을 찾았습니다.
+EPP는 vLLM의 토크나이저를 사용하지 않고 토큰을 추정하며 자체 블록 크기를 사용합니다
+(llm-d-router 소스 참고). 따라서 EPP의 수치를 vLLM의 토큰 수와 직접 비교할 수
+없습니다. 여기서는 조회별 적중률이 0 또는 1이므로, 적중률의 합계는 프롬프트를 찾은
+조회 횟수와 같습니다.
 
 ```bash verify retry=3 delay=5
 read -r HITS1 QUERIES1 < <(prefix_cache)
@@ -634,30 +647,33 @@ awk -v h=$((HITS1 - HITS0)) -v q=$((QUERIES1 - QUERIES0)) -v a=$((ATT1 - ATT0)) 
 }'
 ```
 
-예상 출력(우리가 실행한 결과):
+이 실행에서 나온 예상 출력은 다음과 같습니다.
 
 ```text
 vLLM prefix cache: 304 of 500 prompt tokens were hits
 EPP: 60 scheduling attempts for 20 requests (3 route rules), 60 prefix index lookups, hit ratios add up to 59
 ```
 
-이 부하 후 대시보드(우리가 실행한 결과): **Scheduler Attempts** 60, 두 hit rate 패널 모두
-60.8%, **vLLM Running**은 15~20(Prometheus는 15초마다 샘플링하므로 배치의 어느 한
-순간을 잡습니다. 요청 20개가 모두 한 배치에 들어가므로 **waiting**과 대기열 패널은 0에
-머뭅니다), 그리고 요청이 끝나면 KV cache 게이지는 다시 0%가 됩니다.
+이 부하를 준 뒤 대시보드에서는 **Scheduler Attempts**가 60회, 두 적중률 패널의 값은
+60.8%, **vLLM에서 처리 중인 요청**은 15~20건으로 표시됐습니다. Prometheus는 15초마다
+수집하므로 배치가 처리되는 도중의 값을 포착합니다. 요청 20건이 모두 배치 하나에
+들어가므로 **대기 중인 요청**과 대기열 패널은 0을 유지합니다. 요청 처리가 끝나면
+KV 캐시 사용률은 다시 0%가 됩니다.
 
-<a href="images/panels-after-prefix.png" target="_blank"><img src="images/panels-after-prefix.png" width="720" alt="부하 1 이후: Scheduler Attempts 60, Avg Cache Hit Rate 60.8%, vLLM KV Cache Hit Rate 60.8%, 실행 중 요청 최대 약 17, 대기 0"></a>
+<a href="images/panels-after-prefix.png" target="_blank"><img src="images/panels-after-prefix.png" width="720" alt="첫 번째 부하 이후 Scheduler Attempts는 60회이고, Avg Cache Hit Rate와 vLLM KV Cache Hit Rate는 각각 60.8%입니다. 처리 중인 요청은 최대 약 17건이며 대기 중인 요청은 0건입니다."></a>
 
-> **참고:** CPU에서 vLLM의 기본값은 `block_size=128`이라서, 무언가 재사용되려면 동일한
-> 토큰이 128개 있어야 합니다. 이 튜토리얼의 LLMInferenceService는 `VLLM_ADDITIONAL_ARGS`로
-> GPU 기본값인 `--block-size 16`을 설정해서 짧은 프롬프트로도 효과가 보이게 합니다.
+> **참고**  
+> CPU에서 실행하는 vLLM의 기본값은 `block_size=128`입니다. 이때는 프롬프트의 시작 토큰
+> 128개가 일치해야 재사용이 일어납니다. 이 튜토리얼의 LLMInferenceService는 짧은
+> 프롬프트에서도 효과를 볼 수 있도록 `VLLM_ADDITIONAL_ARGS`에 GPU 기본값인
+> `--block-size 16`을 지정합니다.
 
-### 부하 2: 서로 다른 프롬프트 20개 (prefix cache 재사용 없음)
+### 두 번째 부하. 서로 다른 프롬프트 20개 전송(접두사 캐시 재사용 없음)
 
-같은 부하지만, 각 프롬프트의 처음 몇 토큰 안에 실행 번호와 자신의 번호 `$i`가 들어
-있습니다. 블록은 16토큰이 모두 일치해야만 재사용되므로, 어떤 두 프롬프트도 블록을
-공유하지 않습니다. 실행 번호는 두 번째 실행이 첫 번째 실행의 프롬프트를 찾지 못하게
-합니다.
+같은 부하를 주되, 각 프롬프트의 첫 몇 개 토큰에 실행 번호와 프롬프트 고유 번호 `$i`를
+넣습니다. 블록은 토큰 16개가 모두 일치해야 재사용하므로 어느 두 프롬프트도 같은 블록을
+공유하지 않습니다. 실행 번호를 넣으면 다시 실행해도 첫 실행의 프롬프트를 캐시에서
+찾지 않습니다.
 
 ```bash run
 read -r HITS0 QUERIES0 < <(prefix_cache)
@@ -677,13 +693,15 @@ echo 'Varied Prompts Test Complete'
 "
 ```
 
-**vLLM**: `prefix_cache_queries_total`은 520(26토큰 프롬프트 20개) 오르고
-`prefix_cache_hits_total`은 움직이지 않습니다. 520 중 0입니다.
+**vLLM**에서 `prefix_cache_queries_total`은 520개 늘었습니다. 프롬프트 20개에 토큰이
+26개씩 들어 있었습니다. `prefix_cache_hits_total`은 그대로였습니다. 조회한 프롬프트
+토큰 520개 중 캐시에서 찾은 토큰은 0개였습니다.
 
-**EPP**: 시도 60번, 조회 60번이 늘었고, vLLM은 아무것도 재사용하지 않았는데도 hit ratio의
-합은 40입니다. 각 요청의 첫 조회는 miss가 나면서 Pod를 기록하고, 잠시 뒤 다음 ExtProc
-필터가 하는 같은 요청의 두 번째, 세 번째 조회는 그 기록을 찾습니다. 요청당 세 번 호출되는
-효과가 이번에는 EPP의 hit 숫자에 다시 나타난 것입니다.
+**EPP**에서는 스케줄링 시도와 접두사 인덱스 조회가 각각 60회 더 늘었습니다. vLLM이
+재사용한 토큰은 없었지만 EPP에서 조회별 적중률을 합하면 40입니다. 각 요청의 첫 조회는
+프롬프트를 찾지 못해 Pod를 기록합니다. 뒤따르는 ExtProc 필터가 잠시 후 같은 요청으로
+두 번째와 세 번째 조회를 하면 해당 기록을 찾습니다. 요청당 세 번 호출하는 효과가
+이번에는 EPP의 적중 수치에 나타납니다.
 
 ```bash verify retry=3 delay=5
 read -r HITS1 QUERIES1 < <(prefix_cache)
@@ -696,40 +714,40 @@ awk -v h=$((HITS1 - HITS0)) -v q=$((QUERIES1 - QUERIES0)) -v a=$((ATT1 - ATT0)) 
 }'
 ```
 
-예상 출력(우리가 실행한 결과):
+이 실행에서 나온 예상 출력은 다음과 같습니다.
 
 ```text
 vLLM prefix cache: 0 of 520 prompt tokens were hits
 EPP: 60 scheduling attempts, 60 prefix index lookups, hit ratios add up to 40
 ```
 
-이제 대시보드의 두 hit rate 패널은 0%가 아니라 **29.8%**를 보여 줍니다. 구간 안의 전체
-hit를 전체 query로 나누기 때문에, 두 부하를 합쳐 1020 중 304입니다. **Scheduler Attempts**는
-120입니다.
+두 적중률 패널에는 0% 대신 **29.8%**가 표시됩니다. 각 패널은 집계 구간에 포함된
+전체 적중 토큰 수를 전체 조회 토큰 수로 나눕니다. 두 부하를 합하면 조회한 토큰
+1,020개 중 304개를 캐시에서 찾았습니다. **Scheduler Attempts**는 120회입니다.
 
-<a href="images/panels-after-varied.png" target="_blank"><img src="images/panels-after-varied.png" width="720" alt="부하 2 이후: Scheduler Attempts 120, Avg Cache Hit Rate 29.8%, vLLM KV Cache Hit Rate 29.8%"></a>
+<a href="images/panels-after-varied.png" target="_blank"><img src="images/panels-after-varied.png" width="720" alt="두 번째 부하 이후 Scheduler Attempts는 120회이고, Avg Cache Hit Rate와 vLLM KV Cache Hit Rate는 각각 29.8%입니다."></a>
 
-### 두 hit rate 패널이 갈라지는 지점
+### 두 적중률 패널의 값이 달라지는 시점
 
-마지막 부하 후 5분을 기다렸다가 다시 봅니다. **Avg Cache Hit Rate**는 여전히 29.8%입니다.
-Pod 시작 이후의 카운터로 나누는데, 카운터가 더 이상 변하지 않기 때문입니다. **vLLM KV
-Cache Hit Rate**는 0%로 떨어집니다. 최근 5분만 보는데 그동안 아무 일도 없었기 때문입니다.
-"캐시가 전체적으로 얼마나 잘 동작했나"는 앞의 패널로, "지금 어떻게 동작하고 있나"는 뒤의
-패널로 보세요.
+마지막 부하가 끝나고 5분 뒤에 다시 확인합니다. **Avg Cache Hit Rate**는 Pod가 시작한
+이후의 누적 카운터를 나눠 계산합니다. 카운터가 더 이상 바뀌지 않으므로 29.8%를
+유지합니다. **vLLM KV Cache Hit Rate**는 최근 5분만 집계하고, 그동안 요청이 없었으므로
+0%로 떨어집니다. 전체 기간의 캐시 성능은 첫 번째 패널에서, 현재 캐시 성능은 두 번째
+패널에서 확인합니다.
 
-<a href="images/panels-later.png" target="_blank"><img src="images/panels-later.png" width="720" alt="부하 5분 후: Avg Cache Hit Rate 여전히 29.8%, vLLM KV Cache Hit Rate 0%"></a>
+<a href="images/panels-later.png" target="_blank"><img src="images/panels-later.png" width="720" alt="부하가 끝난 지 5분 뒤 Avg Cache Hit Rate는 29.8%를 유지하고 vLLM KV Cache Hit Rate는 0%입니다."></a>
 
-vLLM Pod가 하나뿐이면 EPP에게는 선택지가 없습니다. 점수와 상관없이 모든 요청이 같은
-Pod로 갑니다. scorer가 결정을 바꾸는 것을 보려면 최소 두 개의 replica(매니페스트에
-`replicas: 2`)와 한 Pod의 대기열을 채우거나 하나의 프롬프트 prefix를 계속 보내는 부하가
-필요합니다. 그런 다음 Per-Pod Queue Size를 지켜보세요. 이 튜토리얼은 replica 하나를
-유지합니다.
+vLLM Pod가 하나뿐이면 점수가 어떻든 EPP는 모든 요청을 같은 Pod로 보냅니다. 점수를
+매기는 플러그인이 선택 결과를 바꾸는 모습을 보려면 복제본이 최소 2개 필요합니다
+(매니페스트에서 `replicas: 2`). 한 Pod의 대기열을 채우거나 같은 프롬프트 접두사를
+계속 보내는 부하를 준 뒤 **Per-Pod Queue Size**를 살펴봅니다. 이 튜토리얼에서는
+복제본을 1개로 유지합니다.
 
-### 부하가 Prometheus에 들어 있음
+### Prometheus에서 부하 결과 확인
 
-대시보드는 Prometheus에서 데이터를 읽습니다. Prometheus에 직접 물어보면, EPP는 ready
-Pod를 보고하고(토큰으로 스크레이프됨) vLLM은 위의 요청에 대해 토큰을 생성했습니다.
-스크레이프가 15초마다 일어나므로 재시도합니다.
+대시보드는 Prometheus에서 데이터를 읽습니다. Prometheus를 직접 조회해 토큰으로
+수집한 EPP 메트릭에 준비된 Pod가 표시되는지, 위 요청을 처리하면서 vLLM이 토큰을
+생성했는지 확인합니다. 수집 주기가 15초이므로 조회를 재시도합니다.
 
 ```bash verify retry=8 delay=15
 prom_positive() {
@@ -746,11 +764,12 @@ prom_positive 'sum(vllm:generation_tokens_total)'
 
 ## 정리
 
-LLMInferenceService를 삭제하면 컨트롤러가 그것을 위해 만든 모든 것이 제거됩니다.
-ServiceMonitor, 토큰 Secret, RBAC은 namespace와 함께 삭제되고, ClusterRole과 그 binding은
-클러스터 범위라서 이름으로 삭제합니다. 그다음 모니터링 스택을 제거합니다. Helm은 차트가
-설치한 CRD(`servicemonitors.monitoring.coreos.com`, ...)를 삭제하지 않습니다. CRD는
-클러스터에 남지만 해가 되지는 않습니다.
+LLMInferenceService를 삭제하면 컨트롤러가 해당 리소스를 위해 만든 항목이 모두
+삭제됩니다. ServiceMonitor, 토큰 Secret, 네임스페이스 범위의 RBAC 리소스는
+네임스페이스와 함께 삭제됩니다. ClusterRole과 바인딩은 클러스터 범위이므로 이름을
+지정해 삭제합니다. 그런 다음 모니터링 스택을 제거합니다. Helm은 차트가 설치한
+CRD(`servicemonitors.monitoring.coreos.com` 등)를 삭제하지 않습니다. 클러스터에
+그대로 있어도 문제없습니다.
 
 ```bash cleanup
 kubectl delete pod curl-vllm curl-epp load-test load-test-varied -n "$NS" --ignore-not-found
@@ -762,23 +781,25 @@ helm uninstall prometheus -n monitoring --ignore-not-found --wait
 kubectl delete namespace monitoring --ignore-not-found
 ```
 
-Kind 클러스터 자체는 이 환경의 튜토리얼들이 함께 쓰므로, 다 끝나면 환경의 `teardown.sh`로
-제거하세요.
+이 환경의 튜토리얼들은 Kind 클러스터를 공유합니다. 모두 마쳤으면 환경의 `teardown.sh`로
+클러스터를 삭제합니다.
 
 ## 배운 내용
 
-- vLLM과 EPP는 모두 메트릭을 노출하지만 다루는 대상이 다릅니다. vLLM은 모델 서버 내부의
-  작업(실행 중/대기 중 요청, KV cache, prefix cache)을, EPP는 자신이 보는 풀과 자신의
-  결정을 다룹니다.
-- Prometheus는 ServiceMonitor 하나로 둘 다 스크레이프합니다. EPP 엔드포인트에는
-  `get /metrics` 권한이 있는 ServiceAccount의 토큰이 필요하고, Prometheus operator가 토큰
-  Secret을 읽어 설정에 넣어 줍니다.
-- prefix cache는 온전한 블록 단위로 동작합니다. 동일한 25토큰 프롬프트 20개는 500토큰 중
-  304토큰을 재사용하고(첫 번째를 제외하고 각각 16토큰 블록 하나), 첫 블록에서 달라지는
-  프롬프트는 아무것도 재사용하지 않습니다.
-- vLLM의 prefix cache와 EPP의 prefix index는 서로 다른 것입니다. EPP는 자신이 라우팅한
-  내용을 바탕으로 자체 블록 단위로 추정할 뿐, vLLM의 캐시 메트릭을 읽지 않습니다.
-- 기본 HTTPRoute에서는 Envoy가 요청당 EPP에 세 번 물어보므로, EPP의 모든 카운터(시도,
-  요청, 인덱스 조회)는 요청 수의 세 배가 됩니다.
-- 두 hit rate 패널은 같은 vLLM 카운터를 서로 다른 구간(Pod 시작 이후, 또는 최근 5분)으로
-  계산합니다.
+- vLLM과 EPP는 서로 다른 메트릭을 노출합니다. vLLM은 처리 중이거나 대기 중인 요청,
+  KV 캐시, 접두사 캐시 등 모델 서버 내부 상태를 보고합니다. EPP는 자신이 파악한 풀의
+  상태와 스케줄링 결과를 보고합니다.
+- Prometheus는 ServiceMonitor 하나로 양쪽 메트릭을 수집합니다. EPP 엔드포인트에는
+  `get /metrics` 권한을 가진 ServiceAccount의 토큰이 필요합니다. Prometheus
+  오퍼레이터가 토큰 Secret을 읽어 설정에 넣습니다.
+- 접두사 캐시는 꽉 찬 블록 단위로 재사용합니다. 토큰이 25개씩 들어 있는 동일한
+  프롬프트를 20번 보내면 토큰 500개 중 304개를 재사용합니다. 첫 프롬프트를 제외하고
+  토큰 16개짜리 블록을 하나씩 재사용한 결과입니다. 첫 블록이 서로 다른 프롬프트에서는
+  재사용이 일어나지 않습니다.
+- vLLM의 접두사 캐시와 EPP의 접두사 인덱스는 서로 다릅니다. EPP는 이전에 어느 Pod로
+  요청을 보냈는지 기록한 정보를 바탕으로 자체 블록 단위로 일치하는 접두사를 추정합니다.
+  vLLM의 캐시 메트릭은 읽지 않습니다.
+- 기본 HTTPRoute에서는 Envoy가 요청마다 EPP에 세 번 문의합니다. 따라서 EPP의
+  스케줄링 시도, 요청, 인덱스 조회 카운터는 각각 실제 요청 수의 세 배입니다.
+- 두 적중률 패널은 같은 vLLM 카운터를 사용하지만 집계 구간이 다릅니다. 한 패널은
+  Pod가 시작한 이후부터, 다른 패널은 최근 5분만 집계합니다.

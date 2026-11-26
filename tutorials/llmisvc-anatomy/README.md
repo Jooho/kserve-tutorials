@@ -3,7 +3,7 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** 🚧 draft · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+> **Status:** ✅ stable · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
 >
 > 🌐 [한국어](README.ko.md)
 
@@ -342,12 +342,21 @@ kubectl get svc -n "$NS"
 
 | Service | Purpose | Ports |
 |---------|---------|-------|
-| `*-workload-svc` | Exposes the vLLM Pod | 8000 (HTTPS) |
+| `*-workload-svc` | Names the vLLM Pods (not used by inference requests, see below) | 8000 (HTTPS) |
 | `*-epp-service` | Exposes the EPP scheduler | 9002 (gRPC), 9003 (health), 9090 (metrics), 5557 (ZMQ) |
 
 > The metrics port (9090) is plain HTTP but requires a bearer token
 > (`metrics-endpoint-auth: true`). Reading those metrics is covered in the
 > request-flow tutorial of this series.
+
+> **Inference requests do not pass through `*-workload-svc`.** For
+> `/v1/completions`, `/v1/chat/completions` and `/v1/responses` the
+> HTTPRoute's backend is the InferencePool: the EPP picks a Pod and Envoy
+> connects to that Pod's IP directly. The workload Service serves the rest:
+> the HTTPRoute's last rule sends other paths under `/<namespace>/demo-model`
+> to it, monitoring finds the vLLM Pods through it, and clients inside the
+> cluster can call vLLM by its name. The request-flow tutorial shows the Pod
+> IP in the Envoy log.
 
 ## Step 5: Check the result
 

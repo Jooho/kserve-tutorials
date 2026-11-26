@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=0 by=claude reviewed=no -->
+<!-- tut-explainer source=README.md sha=8559b134b951 by=claude reviewed=yes -->
 # One Apply, Ten Resources: how it works
 
 ## In one picture
@@ -78,13 +78,24 @@ Look at the first picture again, step by step:
    ExtProc filter per HTTPRoute rule that points at the InferencePool, and there
    are three such rules (below). This was seen in Envoy's configuration on a
    later run, not in this walk; llmisvc-request-flow shows it in the EPP log.
-5. Envoy sends the request to that **vLLM Pod**; the answer comes back the same
-   way (step 16 got a 20-token completion).
+5. Envoy sends the request to that **vLLM Pod**, to its IP, with no Service in
+   between: the EPP's answer carries the Pod's address (header
+   `x-gateway-destination-endpoint`), and Envoy's cluster for these rules
+   connects to exactly that address. (Seen in Envoy's configuration and in the
+   Envoy log of llmisvc-request-flow, whose `upstream_host` is the Pod IP; not
+   in this walk.) The answer comes back the same way (step 16 got a 20-token
+   completion).
 
 The HTTPRoute has four rules, not one: `/v1/completions`,
 `/v1/chat/completions` and `/v1/responses` go to the InferencePool (so through
 the EPP); everything else under `/<namespace>/demo-model` goes straight to the
 workload Service and skips the EPP (dashed in the picture).
+
+So the workload Service does not carry inference requests. It is the name and
+the list of vLLM Pods for everything else: the catch-all rule (Envoy takes the
+Pods from the Service's endpoints and connects to them), Prometheus in
+llmisvc-monitoring, and clients inside the cluster that call
+`...-workload-svc:8000`.
 
 If the EPP is unavailable, the pool's `failureMode` is `FailOpen`: Envoy still
 sends requests to a Pod instead of failing them.

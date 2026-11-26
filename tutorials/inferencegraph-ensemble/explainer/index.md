@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=0 by=claude reviewed=no -->
+<!-- tut-explainer source=README.md sha=480ccf440eb4 by=claude reviewed=yes -->
 # Two Models, One Answer - InferenceGraph Ensemble and Combiner: how it works
 
 ## In one picture

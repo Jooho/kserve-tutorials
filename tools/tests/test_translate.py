@@ -43,6 +43,9 @@ def test_presets_and_unknown_translator(monkeypatch):
 
 
 def test_good_translation_passes_the_check(fake):
+    assert "never \"query 500, hit 304\"" in translate.build_prompt(GOOD_README, "ko")
+    # a shared step's prose was left in English because every tut: region was "keep"
+    assert "except inside `<!-- tut:define" in translate.build_prompt(GOOD_README, "ko")
     out = translate.run(fake("good"), translate.build_prompt(GOOD_README, "ko"))
     text = translate.extract(out)
     assert "# 티" in text and translate.check(GOOD_README, text) == []
@@ -113,3 +116,12 @@ def test_precommit_translate_drafts_every_missing_translation(tmp_path, monkeypa
     capsys.readouterr()
     cli.main(["translation", "todo"])
     assert capsys.readouterr().out == ""
+
+
+def test_translation_has_its_own_ai_setting(monkeypatch):
+    """TUT_AI writes drafts and explainers; TUT_AI_TRANSLATE, when set, translates."""
+    from tut import translate
+    monkeypatch.setenv("TUT_AI", "claude")
+    assert translate.configured().name == "claude"
+    monkeypatch.setenv("TUT_AI_TRANSLATE", "codex")
+    assert translate.configured().name == "codex"

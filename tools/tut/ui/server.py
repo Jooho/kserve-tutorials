@@ -107,9 +107,11 @@ class UI:
     async def no_stale_assets(self, request: web.Request, handler):
         """The page and its scripts change with every `git pull`: make the browser
         revalidate them (ETag) instead of mixing a new index.html with a cached
-        old app.js, which left the tutorial list empty."""
+        old app.js, which left the tutorial list empty. Tutorial files (pictures)
+        and explainer pages change while an author works on them under the same
+        name: a cached old SVG looked like a fix that did not happen."""
         resp = await handler(request)
-        if request.path == "/" or request.path.startswith(("/static/", "/shell/")):
+        if request.path == "/" or request.path.startswith(("/static/", "/shell/", "/files/", "/explain/")):
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
