@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=5f7897e55dc0 by=codex reviewed=yes -->
+<!-- tut-explainer source=README.md sha=ee43b991536d by=codex reviewed=yes -->
 # 스케줄러가 보는 지표와 관측 원리
 
 ## 그림으로 한눈에 보기

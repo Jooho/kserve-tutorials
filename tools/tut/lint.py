@@ -33,6 +33,10 @@ Documents (README.md and translations)
        an existing name, no markers inside a definition, do not use your own
   D016 README.md needs a "What you will learn" list before the first `## `
        heading: what the reader will understand, not the commands (warning)
+  D017 a pipe whose reader stops early (`| grep -q`, `| grep -m N`, `| head`)
+       after a command that can print a lot: with pipefail the writer dies of
+       SIGPIPE (exit 141) and a true check fails (CI-007; warning). Also in
+       env scripts (E004) and lib scripts (L006)
 
 Explainers (tutorials/<id>/explainer/, AI-written, never executed; tut/explain.py)
   X001 explainer/index.md missing, or its first line is not the AI marker
@@ -62,6 +66,7 @@ Script modules (lib/<name>/v<N>)
   L003 a frozen module was modified (compare with --base)
   L004 stable tutorials must only use frozen modules
   L005 module is not used by any tutorial (warning)
+  L006 = D017 in a module script (warning)
 
 Project
   P001 project.yaml missing or invalid against schema/project.schema.json
@@ -70,6 +75,7 @@ Environment profiles
   E001 profile.yaml invalid, or setup.sh / teardown.sh / README.md missing or not executable
   E002 a frozen profile was modified (compare with --base)
   E003 profile is not used by any tutorial (warning)
+  E004 = D017 in an env script (warning)
 """
 from __future__ import annotations
 
@@ -105,6 +111,37 @@ NOT_IDEMPOTENT = [
     (re.compile(r"\bkubectl\s+delete\b(?!.*--ignore-not-found)"),
      "`kubectl delete` fails with NotFound the second time; add --ignore-not-found"),
 ]
+# D017: a pipe reader that exits before reading everything (CI-007)
+PIPE_SPLIT_RE = re.compile(r"(?<!\|)\|(?![|&])")
+EARLY_EXIT_RE = re.compile(
+    r"^(?:grep\b(?=[^|]*\s(?:-[A-Za-z]*[qm]|--quiet\b|--silent\b|--max-count\b))|head\b)")
+SHORT_WRITER_RE = re.compile(r"^(?:echo|printf)\b")
+EARLY_EXIT_MSG = ("the reader stops early, so with pipefail the writer can die of SIGPIPE "
+                  "(exit 141) and a true check fails; use `| grep PATTERN >/dev/null`, or "
+                  "`| grep PATTERN | tail -n 1` to show the line (CI-007)")
+
+
+def _strip_comment(line: str) -> str:
+    """The line without a trailing `# ...` comment (quote-aware)."""
+    q = None
+    for i, c in enumerate(line):
+        if q:
+            q = None if c == q else q
+        elif c in "'\"":
+            q = c
+        elif c == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+    return line
+
+
+def early_exit_pipe(line: str) -> bool:
+    """True when a pipe reader like `grep -q` / `grep -m1` / `head` follows a
+    writer that is not a short echo/printf."""
+    parts = [re.split(r";|&&|\|\||>", x)[0].strip() for x in PIPE_SPLIT_RE.split(_strip_comment(line))]
+    return any(EARLY_EXIT_RE.match(parts[i]) and not SHORT_WRITER_RE.match(parts[i - 1])
+               for i in range(1, len(parts)))
+
+
 UI_ALIAS_RE = re.compile(r"(?:^|[|;&(]\s*|\$\(\s*)(k|kc)\s")
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|(?:src|href)=\"([^\"]+)\"")
 MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)[^)]*\)")
@@ -310,6 +347,8 @@ class Linter:
             if not b.is_shell or b.role == "skip":
                 continue
             for off, line in _logical_lines(b.code):
+                if early_exit_pipe(line):
+                    self.warn("D017", path, EARLY_EXIT_MSG, b.line + off)
                 if UI_ALIAS_RE.search(line):
                     self.err("D013", path, "`k`/`kc` are aliases of the UI terminal only; write "
                              "`kubectl` in tutorials (CI has no aliases)", b.line + off)
@@ -481,6 +520,7 @@ class Linter:
                     self.err("E001", p, "not executable (chmod +x)")
             if not (env.path / "README.md").exists():
                 self.err("E001", env.path / "README.md", "missing")
+            self.lint_script_pipes(sorted(env.path.rglob("*.sh")), "E004")
             if ref not in used:
                 self.warn("E003", prof, "not used by any tutorial")
 
@@ -553,8 +593,15 @@ class Linter:
             for sc in mod.scripts():
                 if not os.access(sc, os.X_OK):
                     self.err("L001", sc, "not executable (chmod +x)")
+            self.lint_script_pipes(sorted(mod.path.rglob("*.sh")), "L006")
             if ref not in used:
                 self.warn("L005", f, "not used by any tutorial")
+
+    def lint_script_pipes(self, scripts, code):
+        for sc in scripts:
+            for off, line in _logical_lines(sc.read_text()):
+                if early_exit_pipe(line):
+                    self.warn(code, sc, EARLY_EXIT_MSG, off)
 
     def lint_frozen(self, top: str, meta_name: str, code: str):
         """Fail when a directory <top>/<name>/<ver> that was frozen on --base changed."""

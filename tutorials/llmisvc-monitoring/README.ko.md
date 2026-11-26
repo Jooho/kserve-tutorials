@@ -1,4 +1,4 @@
-<!-- tut-translation source=README.md sha=5f7897e55dc0 -->
+<!-- tut-translation source=README.md sha=ee43b991536d -->
 # 스케줄러의 관점에서 메트릭 살펴보기
 
 <!-- tut:header -->
@@ -376,7 +376,7 @@ vLLM은 처리한 모든 토큰의 중간 계산 결과(키와 값)를 토큰 16
 블록 크기는 7단계의 참고에서 설명합니다.
 
 ```bash verify retry=3 delay=10
-vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep -q 'enable_prefix_caching="True"'
+vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep 'enable_prefix_caching="True"' >/dev/null
 ```
 
 ## 5단계. EPP 스케줄러 메트릭 확인

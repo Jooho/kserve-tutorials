@@ -383,7 +383,7 @@ The prefix cache is on, with the block size this tutorial set (see the note in
 Step 7):
 
 ```bash verify retry=3 delay=10
-vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep -q 'enable_prefix_caching="True"'
+vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep 'enable_prefix_caching="True"' >/dev/null
 ```
 
 ## Step 5: Inspect the EPP scheduler metrics
