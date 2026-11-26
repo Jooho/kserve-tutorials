@@ -80,6 +80,21 @@ def test_ci_runs_N_and_the_newest_tested_minor_below_it(repo, monkeypatch):
         ("a", "v0.20.0"), ("b", "v0.19.1")}
 
 
+def test_project_yaml_latest_pins_N(repo, monkeypatch):
+    make_tut(repo, "a", versions={"default": "v0.20.0", "tested": ["v0.18.0", "v0.20.0"]})
+    p = repo / "project.yaml"
+    p.write_text(p.read_text() + "latest: v0.20.0\n")
+    ts = model.load_tutorials(repo)
+    assert model.latest_version(repo) == "v0.20.0" and model.latest(ts) == (0, 20)
+    assert {e["version"] for e in plan.scheduled_matrix(repo)} == {"v0.18.0", "v0.20.0"}
+    # pinned below what upstream has (v0.21): CI still treats v0.20 as N
+    p.write_text(p.read_text().replace("latest: v0.20.0", "latest: v0.19.0"))
+    assert model.latest(model.load_tutorials(repo)) == (0, 20)      # a tested version above the pin wins
+    monkeypatch.setenv(model.LATEST_ENV, "v0.21.0")                  # the env var overrides the file
+    assert model.latest_version(repo) == "v0.21.0"
+    assert {e["version"] for e in plan.scheduled_matrix(repo)} == {"v0.20.0"}
+
+
 def test_pr_matrix_runs_a_new_revision_and_not_an_old_one(repo):
     make_tut(repo, "a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
     commit_all(repo)

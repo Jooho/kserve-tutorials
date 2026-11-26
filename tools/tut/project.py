@@ -34,6 +34,7 @@ class Project:
     version_var: str
     intro: dict = field(default_factory=dict)
     upstream: str | None = None
+    latest: str | None = None
     example: str | None = None
     glossary: tuple[str, ...] = ()
 
@@ -48,7 +49,8 @@ class Project:
 
     def as_json(self) -> dict:
         return {"id": self.id, "name": self.name, "title": dict(self.title),
-                "version_var": self.version_var, "upstream": self.upstream}
+                "version_var": self.version_var, "upstream": self.upstream,
+                "latest": self.latest}
 
 
 def path(root: Path) -> Path:
@@ -76,7 +78,7 @@ def _load(p: Path, _mtime: int) -> Project:
         raise ProjectError(f"{FILE}: {e}")
     return Project(id=meta["id"], name=meta["name"], title=dict(meta["title"]),
                    version_var=meta["version_var"], intro=dict(meta.get("intro") or {}),
-                   upstream=meta.get("upstream"), example=meta.get("example"),
+                   upstream=meta.get("upstream"), latest=meta.get("latest") or None, example=meta.get("example"),
                    glossary=tuple(meta.get("glossary") or ()))
 
 

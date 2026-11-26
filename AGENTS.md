@@ -53,6 +53,7 @@ make new T=<id> [TITLE=".."] [OWNER=<handle>]   # new tutorial from tutorials/_t
 ./tut list [--tag T] [--status S] [--collection C]   # one line per tutorial
 ./tut show <id>                     # everything about one tutorial
 ./tut project [--get <key>]         # what project.yaml says (product name, version_var, ...)
+./tut latest                        # the KServe version CI treats as newest (N): project.yaml `latest`, else upstream
 eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
 ./tut translation draft <id> ko   # AI draft via TUT_AI=claude|copilot|codex|cmd:...

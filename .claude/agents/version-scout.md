@@ -10,7 +10,7 @@ Read `.claude/agents/tech-lead.md` ("How the maintainer thinks") and the noteboo
 
 ## What you are given
 
-A target: a release tag, or `master` (what the next release will bring). If none is given, use the newest upstream release (`gh api repos/<upstream>/releases/latest`) and say so. The starting point is each tutorial's own `versions.default`. Optionally a subset of tutorials, or a folder that is not migrated yet.
+A target: a release tag, or `master` (what the next release will bring). If none is given, use `./tut latest` (`latest` in `project.yaml`, else the newest upstream release) and say so. The starting point is each tutorial's own `versions.default`. Optionally a subset of tutorials, or a folder that is not migrated yet.
 
 ## How to work
 

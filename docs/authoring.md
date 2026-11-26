@@ -24,7 +24,8 @@ The toolkit (`tools/`, `schema/`) names no product. What it shows or writes abou
 | `name` | labels: "Tested with KServe v0.18.0", the UI's version picker, release notes, D003 |
 | `title`, `intro` | the site's home page, the UI's title, release names |
 | `version_var` | the shell variable a tutorial reads its version from (`$KSERVE_VERSION`); the setup step exports it, `./tut run --version` sets it |
-| `upstream` | the GitHub repo whose latest release the weekly canary runs against |
+| `upstream` | the GitHub repo whose latest release `./tut latest` falls back to when `latest` is not set |
+| `latest` | the newest version this repository moves to (`./tut latest`): N of the CI window, the weekly canary and the `new-release` issue. Not set: the upstream's latest release. A tested version above it still runs as N |
 | `example` | the finished tutorial `./tut draft` shows the AI |
 | `glossary` | product terms translations keep in English |
 
@@ -121,7 +122,7 @@ When a tutorial has to change because of a new version (an API, a default, a com
 - `./tut run <id> --version v0.19.0`, `./tut ui` ("My KServe" version) and the site pick the revision tested with that version, by tag, then by minor (v0.19.2 uses what was tested as v0.19.x).
 - The copy includes translations and the explainer as they were: copying them is the one exception to "explainer changes go in their own PR".
 - A change that is not about a version (a typo, more explanation) needs no revision.
-- CI runs two versions of a tutorial: N (the newest KServe release) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` and the weekly `ci-window` issue. Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
+- CI runs two versions of a tutorial: N (`./tut latest`: `latest` in project.yaml, else the newest KServe release) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` and the weekly `ci-window` issue. Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
 
 ## 7. Translations
 
