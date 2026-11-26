@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=0 by=claude reviewed=no -->
+<!-- tut-explainer source=README.md sha=ee43b991536d by=claude reviewed=yes -->
 # Through the Scheduler's Eyes - Metric Observation: how it works
 
 ## In one picture

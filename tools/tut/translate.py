@@ -1,15 +1,16 @@
 """`./tut translation draft`: translate a tutorial README with an AI CLI the
 user is already logged in to — no API keys in this repository.
 
-Choose the tool with TUT_AI (shell, or `./tut config TUT_AI=…`; the older name
-TUT_TRANSLATOR is still read):
+Choose the tool with TUT_AI_TRANSLATE, else TUT_AI (shell, or `./tut config
+TUT_AI_TRANSLATE=…`; the older name TUT_TRANSLATOR is still read). A separate
+setting lets one CLI write drafts and explainers and another translate them:
 
   claude          Claude Code      claude -p <prompt>
   copilot         GitHub Copilot   copilot -p <prompt> -s
   codex           OpenAI Codex     codex exec --sandbox read-only … <prompt>
   cmd:<command>   anything else    <command> (prompt on stdin, translation on stdout)
 
-TUT_AI_ARGS adds flags (e.g. "--model sonnet").
+TUT_AI_TRANSLATE_ARGS (or TUT_AI_ARGS with TUT_AI) adds flags (e.g. "--model sonnet").
 
 The model only returns text. Its output is checked by a program before it is
 written: every code block, command, generated region, HTML comment and link
@@ -31,6 +32,25 @@ from . import aicli, markdown, project
 
 BEGIN, END = "<<<TUT-TRANSLATION-BEGIN>>>", "<<<TUT-TRANSLATION-END>>>"
 LANG_NAMES = {"ko": "Korean (한국어)"}
+
+# How a reader of that language expects technical text to sound. The first
+# Korean drafts kept English words inside Korean sentences ("query 500, hit
+# 304") and read as word-by-word translations (maintainer, 2026-11-25).
+LANG_STYLE = {
+    "ko": """Korean style (a native Korean engineer must find it easy to read):
+- Rebuild each sentence the way a Korean engineer would explain it to a
+  colleague; do not translate word by word. Split long sentences.
+- Do not leave plain English words inside Korean sentences when Korean has a
+  normal word for them: query -> 조회, hit -> 적중(캐시에서 찾음), load -> 부하,
+  request -> 요청, run -> 실행, step -> 단계. Keep code, metric and file names,
+  commands and the names listed below exactly as they are.
+- Say what a number counts: "프롬프트 토큰 500개 중 304개를 캐시에서 찾았습니다",
+  never "query 500, hit 304".
+- Turn labels into phrases: "Load 1" -> "첫 번째 부하", "step 21" -> "21단계".
+- Use 합니다체 throughout. Avoid translationese (~에 대해, ~을 통해, ~되어지다,
+  그것은, 이는).
+- Keep the meaning exact: no fact added, dropped or softened.""",
+}
 
 PRESETS = {
     "claude": ["claude", "-p", "{prompt}", "--output-format", "text"],
@@ -58,7 +78,7 @@ class Translator:
 
 def configured() -> Translator | None:
     try:
-        c = aicli.read("TUT_AI")
+        c = aicli.read("TUT_AI_TRANSLATE") or aicli.read("TUT_AI")
     except aicli.AICliError as e:
         raise TranslationError(str(e)) from None
     if c is None:
@@ -81,11 +101,14 @@ A program checks your output; if any rule is broken the translation is discarded
 2. Inside fenced code blocks translate ONLY comment text (after `#`); keep every
    command, flag, path, YAML key and value, and the fence lines exactly.
 3. Keep every HTML comment line exactly (`<!-- ... -->`), and keep everything
-   between a `<!-- tut:... -->` line and the next `<!-- /tut -->` line unchanged.
+   between a `<!-- tut:... -->` line and the next `<!-- /tut -->` line unchanged,
+   except inside `<!-- tut:define ... -->`: that is the author's own text (a
+   shared step); translate its prose like the rest, keep its code blocks.
 4. Keep link and image targets (the part in parentheses) unchanged.
 5. Keep these names in English: {", ".join(keep)}.
 6. Do not add, remove or reorder sections, steps, code blocks or notes.
 Use a natural technical {name} style for engineers.
+{LANG_STYLE.get(lang, "")}
 
 Output exactly three parts and nothing else:
 {BEGIN}

@@ -140,7 +140,8 @@ def test_page_and_scripts_are_always_revalidated(repo):
         ui = UI(repo)
         async with TestClient(TestServer(ui.app())) as c:
             h = {"X-Tut-Token": ui.token}
-            for path in ("/", "/static/app.js", "/static/app.css", "/static/index.html"):
+            for path in ("/", "/static/app.js", "/static/app.css", "/static/index.html",
+                         "/files/tutorials/a/README.md"):
                 r = await c.get(path, headers=h)
                 assert r.status == 200 and r.headers.get("Cache-Control") == "no-cache", path
     asyncio.run(main())

@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=0 by=claude reviewed=no -->
+<!-- tut-explainer source=README.md sha=6056c9a9667c by=claude reviewed=yes -->
 # Journey of a Request - From Gateway to vLLM: how it works
 
 ## In one picture
@@ -119,7 +119,7 @@ the EPP has one candidate. Two things make the count in step 16 noisy:
 
 ### How the scheduler chooses
 
-![Inside the EPP: parsers, then the default profile scores Pods with queue-scorer x2 and prefix-cache-scorer x3, and max-score-picker takes the highest sum; metrics-data-source keeps per-Pod numbers; metrics are exported on 9090](epp-scheduling.svg)
+![Inside the EPP: parsers, then the default profile scores Pods with queue-scorer (weight 2) and prefix-cache-scorer (weight 3), and max-score-picker takes the highest sum; the answer, one Pod address, goes back to Envoy; queue-scorer reads per-Pod queue numbers, prefix-cache-scorer the EPP's own prefix index; metrics are exported on 9090](epp-scheduling.svg)
 
 The EPP logs its effective configuration at start. Besides the configured
 plugins it adds system defaults:
@@ -127,10 +127,19 @@ plugins it adds system defaults:
 - **scheduling**: one profile, `default` (`single-profile-handler`), with
   `queue-scorer` (weight 2), `prefix-cache-scorer` (weight 3) and
   `max-score-picker`.
-- **request parsing**: `openai-parser`, `anthropic-parser`, `vllmhttp-parser`.
+- **request parsing**: `openai-parser`, `anthropic-parser`, `vllmhttp-parser`,
+  all three added by default. The requests here are OpenAI-style, and the EPP's
+  plugin metrics show only `openai-parser` at work, for requests and for
+  answers (seen in the llmisvc-monitoring runs, not in this walk).
 - **data about Pods**: `metrics-data-source` with `core-metrics-extractor`.
   The exported metric `inference_pool_per_pod_queue_size` shows that the EPP
   keeps a queue size per Pod (here `demo-model-kserve-...-rank-0`).
+- **data for the prefix scorer**: `approx-prefix-cache-producer` and
+  `token-producer`, which the EPP creates on its own ("auto-created default
+  producer" in its log). They keep the EPP's own index of which Pod got which
+  prompt; the prefix scorer reads that index, not vLLM's prefix cache. (Seen in
+  the EPP log of the llmisvc-monitoring walk on 2026-11-25, not in this walk;
+  the README checks the log line.)
 - **flow control**: the plugins `fcfs-ordering-policy`,
   `global-strict-fairness-policy`, `static-usage-limit-policy` and
   `utilization-detector` are instantiated, but the log also says "Experimental

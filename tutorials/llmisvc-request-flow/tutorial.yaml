@@ -6,7 +6,7 @@ title:
 summary:
   en: Trace one completion request through Envoy Gateway and the EPP scheduler to the vLLM Pod, and read the metrics the scheduler scores with.
   ko: 하나의 completion 요청이 Envoy Gateway와 EPP 스케줄러를 거쳐 vLLM Pod에 도달하는 경로를 추적하고, 스케줄러가 점수 계산에 쓰는 메트릭을 확인합니다.
-status: draft                   # draft -> stable -> deprecated -> archived
+status: stable                  # draft -> stable -> deprecated -> archived
 group: llmisvc   # from catalog/groups.yaml: what kind of tutorial (the UI's Groups view)
 env: kind-kserve/v1             # a FROZEN profile under envs/ (required for stable)
 env_options: {types: [llmisvc]}   # LLMInferenceService + its gateway stack

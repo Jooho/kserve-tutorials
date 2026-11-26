@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 450" role="img" aria-labelledby="t d">
 <title id="t">How the EPP picks a Pod in this run</title>
-<desc id="d">The EPP parses the request, then the scheduling profile default scores every ready Pod with queue-scorer at weight 2 and prefix-cache-scorer at weight 3, and max-score-picker takes the highest weighted sum. The metrics-data-source plugin keeps per-Pod numbers such as the queue size. The EPP exports what it sees on port 9090: pool averages and the prefix indexer histograms.</desc>
+<desc id="d">Envoy asks the EPP which Pod. The EPP parses the request, the scheduling profile default scores every ready Pod with queue-scorer at weight 2 and prefix-cache-scorer at weight 3, and max-score-picker takes the highest weighted sum. The answer, one Pod address, goes back to Envoy, which sends the request there. queue-scorer reads per-Pod queue numbers from metrics-data-source; prefix-cache-scorer reads the EPP's own prefix index. The EPP exports what it sees on port 9090.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
   .h { font-size: 15px; font-weight: 650; }
@@ -15,19 +15,37 @@
   .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
   .dash { stroke: #adb5bd; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; marker-end: url(#b); }
   .ah { fill: #6b7385; } .bh { fill: #adb5bd; }
-  .flow { stroke: #e03131; stroke-width: 2.4; fill: none; stroke-dasharray: 10 400; animation: flow 5s linear infinite; }
-  @keyframes flow { from { stroke-dashoffset: 410 } to { stroke-dashoffset: 0 } }
+  .back { stroke: #2f9e44; stroke-width: 1.6; fill: none; stroke-dasharray: 6 4; marker-end: url(#c); }
+  .gh { fill: #2f9e44; }
+  .q { fill: #1c7ed6; opacity: 0; }
+  .ans { fill: #2f9e44; opacity: 0; }
+  .q1 { animation: q1 8s infinite; } .q2 { animation: q2 8s infinite; } .ans { animation: ans 8s infinite; }
+  @keyframes q1 {
+    0% { transform: translate(132px, 136px); opacity: 0 } 3% { opacity: 1 }
+    12% { transform: translate(238px, 136px) } 24% { transform: translate(430px, 84px) }
+    32% { transform: translate(430px, 84px) } 42% { transform: translate(633px, 136px); opacity: 1 }
+    45%, 100% { transform: translate(633px, 136px); opacity: 0 } }
+  @keyframes q2 {
+    0%, 11% { transform: translate(238px, 136px); opacity: 0 } 12% { opacity: 1 }
+    24% { transform: translate(430px, 184px) } 32% { transform: translate(430px, 184px) }
+    42% { transform: translate(633px, 136px); opacity: 1 } 45%, 100% { transform: translate(633px, 136px); opacity: 0 } }
+  @keyframes ans {
+    0%, 44% { transform: translate(633px, 136px); opacity: 0 } 46% { opacity: 1 }
+    54% { transform: translate(808px, 136px) } 62% { transform: translate(808px, 278px) }
+    78% { transform: translate(74px, 278px) } 86% { transform: translate(74px, 170px); opacity: 1 }
+    90%, 100% { transform: translate(74px, 170px); opacity: 0 } }
   @media (prefers-color-scheme: dark) {
     text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
     .ep { fill: #132a3d; stroke: #4dabf7; } .sc { fill: #241f3d; stroke: #9775fa; }
     .wl { fill: #16301d; stroke: #51cf66; } .cl, .side { fill: #1b2029; } .frame { stroke: #4dabf7; }
-    .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; } .flow { stroke: #ff6b6b; }
+    .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; } .back { stroke: #51cf66; } .gh, .ans { fill: #51cf66; } .q { fill: #4dabf7; }
   }
-  @media (prefers-reduced-motion: reduce) { .flow { animation: none; stroke-dasharray: none; opacity: 0.5; } }
+  @media (prefers-reduced-motion: reduce) { .q, .ans { animation: none; opacity: 0; } }
 </style>
 <defs>
   <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker>
   <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="bh" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="gh" d="M0 0L10 5L0 10z"/></marker>
 </defs>
 
 <rect class="frame" x="150" y="16" width="576" height="248" rx="14"/>
@@ -39,25 +57,25 @@
 
 <rect class="ep" x="168" y="96" width="140" height="80" rx="10"/>
 <text class="h" x="180" y="120">parsers</text>
-<text class="m" x="180" y="140">openai-parser</text>
+<text class="m" x="180" y="140">openai-parser  (used)</text>
 <text class="m" x="180" y="154">anthropic-parser</text>
 <text class="m" x="180" y="168">vllmhttp-parser</text>
 
 <rect class="sc" x="332" y="52" width="196" height="64" rx="10"/>
-<text class="h" x="344" y="76">queue-scorer  x2</text>
-<text class="s" x="344" y="98">shorter queue, higher score</text>
+<text class="h" x="344" y="76">queue-scorer</text>
+<text class="s" x="344" y="98">weight 2: shorter queue wins</text>
 
 <rect class="sc" x="332" y="152" width="196" height="64" rx="10"/>
-<text class="h" x="344" y="176">prefix-cache-scorer  x3</text>
-<text class="s" x="344" y="198">prompt start seen before</text>
+<text class="h" x="344" y="176">prefix-cache-scorer</text>
+<text class="s" x="344" y="198">weight 3: prompt was sent here</text>
 
 <rect class="ep" x="556" y="104" width="154" height="64" rx="10"/>
 <text class="h" x="568" y="128">max-score-picker</text>
 <text class="s" x="568" y="148">highest weighted sum</text>
 
 <rect class="wl" x="752" y="104" width="112" height="64" rx="10"/>
-<text class="h" x="764" y="128">one Pod</text>
-<text class="m" x="764" y="148">ip:8000</text>
+<text class="h" x="764" y="128">answer</text>
+<text class="m" x="764" y="148">Pod ip:8000</text>
 
 <path class="arrow" d="M132 136 H166"/>
 <path class="arrow" d="M308 128 C 320 110, 318 90, 330 86"/>
@@ -65,24 +83,28 @@
 <path class="arrow" d="M528 86 C 540 90, 542 120, 554 128"/>
 <path class="arrow" d="M528 184 C 540 180, 542 152, 554 146"/>
 <path class="arrow" d="M710 136 H750"/>
-<path class="flow" d="M132 136 H168 M308 128 C 320 110, 318 90, 330 86 M528 86 C 540 90, 542 120, 554 128 M710 136 H752"/>
+<path class="back" d="M808 168 V278 H74 V172"/>
+<text class="s" x="300" y="292">answer back to Envoy, which then sends the request to that Pod</text>
 
 <text class="s" x="168" y="236">profile "default" (single-profile-handler);</text>
 <text class="s" x="168" y="252">no kv-cache-utilization-scorer in this config</text>
 
-<rect class="side" x="16" y="290" width="404" height="124" rx="10"/>
-<text class="h" x="30" y="314">What the EPP knows about Pods</text>
-<text class="m" x="30" y="336">metrics-data-source</text>
-<text class="m" x="30" y="352">  + core-metrics-extractor</text>
-<text class="s" x="30" y="376">per-Pod numbers, e.g. queue size of</text>
-<text class="m" x="30" y="394">demo-model-kserve-...-rank-0</text>
+<rect class="side" x="16" y="306" width="404" height="134" rx="10"/>
+<text class="h" x="30" y="330">What the scorers read</text>
+<text class="m" x="30" y="352">queue-scorer: metrics-data-source</text>
+<text class="s" x="30" y="370">per-Pod queue, e.g. demo-model-kserve-...-rank-0</text>
+<text class="m" x="30" y="394">prefix-cache-scorer: approx-prefix-</text>
+<text class="m" x="30" y="410">  cache-producer + token-producer</text>
+<text class="s" x="30" y="428">the EPP's own index, not vLLM's prefix cache</text>
 
-<rect class="side" x="440" y="290" width="424" height="124" rx="10"/>
-<text class="h" x="454" y="314">What it exports on :9090 (bearer token)</text>
-<text class="m" x="454" y="336">inference_pool_ready_pods</text>
-<text class="m" x="454" y="352">inference_pool_average_queue_size</text>
-<text class="m" x="454" y="368">inference_pool_average_kv_cache_utilization</text>
-<text class="m" x="454" y="384">inference_pool_average_running_requests</text>
-<text class="m" x="454" y="400">inference_extension_prefix_indexer_*</text>
-<path class="dash" d="M640 264 V288"/>
+<rect class="side" x="440" y="306" width="424" height="134" rx="10"/>
+<text class="h" x="454" y="330">What it exports on :9090 (bearer token)</text>
+<text class="m" x="454" y="354">inference_pool_ready_pods</text>
+<text class="m" x="454" y="370">inference_pool_average_queue_size</text>
+<text class="m" x="454" y="386">inference_pool_average_kv_cache_utilization</text>
+<text class="m" x="454" y="402">inference_pool_average_running_requests</text>
+<text class="m" x="454" y="418">inference_extension_prefix_indexer_*</text>
+<circle class="q q1" r="6" cx="0" cy="0"/>
+<circle class="q q2" r="6" cx="0" cy="0"/>
+<circle class="ans" r="7" cx="0" cy="0"/>
 </svg>

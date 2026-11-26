@@ -1,36 +1,34 @@
-<!-- tut-translation source=README.md sha=ee470255d3dd -->
-# 한 번의 Apply, 열 개의 리소스 — LLMInferenceService 해부
+<!-- tut-translation source=README.md sha=8559b134b951 -->
+# 한 번 적용하면 리소스 10개가 생깁니다 — LLMInferenceService의 구조
 
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
 
 <!-- /tut -->
 
-LLMInferenceService 하나를 `kubectl apply` 하면 컨트롤러가 10개 이상의
-Kubernetes 리소스를 만듭니다. 이 튜토리얼에서는 그 과정을 직접 지켜보고
-각 리소스가 어떤 역할을 하는지 설명합니다.
+LLMInferenceService를 `kubectl apply`로 한 번 적용하면 컨트롤러가 Kubernetes 리소스를
+10개 이상 생성합니다. 이 튜토리얼에서는 리소스가 생성되는 과정을 보고 각각 어떤 역할을 하는지 살펴봅니다.
 
-> **핵심 질문:** LLMInferenceService YAML 하나를 apply 하면
-> 클러스터 안에서는 어떤 일이 일어날까요?
+> **핵심 질문** — LLMInferenceService YAML 파일 하나를 적용하면 클러스터 안에서 어떤 일이 일어납니까?
 
-배울 내용:
+이 튜토리얼에서 살펴볼 내용입니다.
 
-- LLMInferenceService 하나가 무엇으로 바뀌는지: vLLM 워크로드, EPP 스케줄러,
-  InferencePool, HTTPRoute, 그리고 그 사이를 잇는 Service들.
-- 직접 쓰지 않은 설정이 어디서 오는지: 여러분의 오브젝트에 합쳐지는 well-known
-  LLMInferenceServiceConfig.
-- 조각들이 어떻게 이어지는지: Gateway, HTTPRoute, InferencePool, 스케줄러, vLLM Pod.
-- 스케줄러 Pod 안에서 무엇이 돌고, 기본 설정이 그중 무엇을 쓰는지.
-- LLMInferenceService 하나만 지우면 정리가 끝나는 이유(owner reference).
+- LLMInferenceService 하나에서 어떤 리소스가 생성되는지 살펴봅니다. vLLM 워크로드, EPP 스케줄러,
+  InferencePool, HTTPRoute와 그 사이를 연결하는 Service가 생성됩니다.
+- 직접 작성하지 않은 설정이 어디에서 오는지 살펴봅니다. KServe가 기본으로 제공하는 LLMInferenceServiceConfig의
+  설정을 사용자가 적용한 객체에 병합합니다.
+- Gateway, HTTPRoute, InferencePool, 스케줄러, vLLM Pod가 어떻게 연결되는지 살펴봅니다.
+- 스케줄러 Pod 안에서 무엇이 실행되고 기본 설정에서 어떤 구성 요소를 사용하는지 살펴봅니다.
+- OwnerReference 덕분에 LLMInferenceService만 삭제해도 정리가 끝나는 이유를 살펴봅니다.
 
-## Step 0: 환경 준비
+## 0단계 환경 준비
 
-KServe LLMInferenceService가 설치된 Kind 클러스터를 준비하고(위의 환경 링크 참고)
-아래에서 사용할 네임스페이스를 만듭니다. 여러 번 실행해도 안전합니다.
+KServe의 LLMInferenceService를 사용할 수 있는 Kind 클러스터를 준비하고(위 환경 링크 참조),
+아래에서 사용할 네임스페이스를 생성합니다. 이 단계는 다시 실행해도 안전합니다.
 
 <!-- tut:setup -->
 
@@ -51,19 +49,19 @@ cd "$REPO_ROOT/tutorials/llmisvc-anatomy"
 
 <!-- /tut -->
 
-## Step 1: Apply 전 스냅샷
+## 1단계 적용 전 상태 기록
 
-먼저 현재 상태를 기록해 둡니다. 네임스페이스는 비어 있어야 합니다.
+먼저 현재 상태를 기록합니다. 이 시점에는 네임스페이스가 비어 있어야 합니다.
 
 ```bash run
 echo "=== Before Apply ==="
 kubectl get pods,svc,deploy,inferencepool,httproute -n "$NS" 2>/dev/null || true
 ```
 
-## Step 2: LLMInferenceService 배포
+## 2단계 LLMInferenceService 배포
 
-YAML 하나만 apply 합니다. well-known config가 자동으로 주입되므로
-별도의 `LLMInferenceServiceConfig`는 필요 없습니다.
+YAML 파일 하나를 적용합니다. KServe가 기본으로 제공하는 설정이 자동으로 주입되므로
+별도의 `LLMInferenceServiceConfig`를 작성할 필요가 없습니다.
 
 <!-- tut:define llmisvc-demo-model -->
 
@@ -131,45 +129,45 @@ spec:
 
 </details>
 
-이 YAML의 핵심 포인트:
+이 YAML의 주요 필드입니다.
 
 | 필드 | 값 | 설명 |
 |-------|-------|-------------|
-| `model.uri` | `hf://facebook/opt-125m` | Hugging Face에서 자동으로 다운로드 |
-| `router.route: {}` | 필수 | 없으면 HTTPRoute가 생성되지 않음 |
-| `securityContext.runAsUser` | `1000` | vLLM CPU 이미지가 root 기준으로 빌드되어 있어 필요 |
-| `baseRefs` | 없음 | well-known config가 주입됨 (아래 참고) |
+| `model.uri` | `hf://facebook/opt-125m` | Hugging Face에서 모델을 자동으로 다운로드합니다. |
+| `router.route: {}` | 필수 | 이 필드를 지정해야 HTTPRoute가 생성됩니다. |
+| `securityContext.runAsUser` | `1000` | vLLM CPU 이미지를 루트 사용자로 빌드하므로 이 값을 지정해야 합니다. |
+| `baseRefs` | 없음 | KServe가 기본으로 제공하는 설정을 자동으로 주입합니다. 자세한 내용은 아래에서 확인할 수 있습니다. |
 
-### Well-known LLMInferenceServiceConfig 주입
+### KServe가 기본으로 제공하는 LLMInferenceServiceConfig 자동 주입
 
-KServe는 클러스터에 **well-known LLMInferenceServiceConfig**들을 설치합니다:
+KServe는 클러스터에 **KServe가 기본으로 제공하는 LLMInferenceServiceConfig**를 설치합니다.
 
-| Config | 역할 |
+| 설정 | 역할 |
 |--------|------|
-| `kserve-config-llm-template` | vLLM 컨테이너 템플릿 (command, probe, 보안 설정) |
-| `kserve-config-llm-scheduler` | EPP 스케줄러 + tokenizer 사이드카 |
+| `kserve-config-llm-template` | vLLM 컨테이너 템플릿(실행 명령, 상태 검사, 보안 설정) |
+| `kserve-config-llm-scheduler` | EPP 스케줄러와 토크나이저 사이드카 |
 
-LLMInferenceService가 생성되면 컨트롤러가 이 config들을 자동으로 **병합**합니다.
-`baseRefs`가 없어도 command, probe, EPP 스케줄러가 구성되며,
-사용자는 `image`, `env`, `resources`만 인라인으로 덮어쓰면 됩니다.
+LLMInferenceService를 생성하면 컨트롤러가 이 설정들을 자동으로 **병합합니다**.
+`baseRefs`를 생략해도 실행 명령, 상태 검사, EPP 스케줄러 설정이 들어갑니다.
+이 YAML에서 직접 재정의하는 필드는 `image`, `env`, `resources`뿐입니다.
 
-## Step 3: 리소스가 생성되는 과정 지켜보기
+## 3단계 리소스 생성 과정 확인
 
-apply 직후, 리소스가 하나씩 생성되는 모습을 지켜봅니다(두 번째 터미널에서 실행,
-`Ctrl+C`로 중지):
+적용 직후 두 번째 터미널에서 리소스가 하나씩 생성되는 모습을 확인합니다.
+관찰을 끝내려면 `Ctrl+C`를 누릅니다.
 
 ```bash skip
 watch -n 1 "kubectl get pods,svc,deploy,lws,inferencepool,httproute -n $NS 2>/dev/null"
 ```
 
-그다음 서비스가 `Ready` 상태가 될 때까지 기다립니다. 모델 다운로드와
-CPU에서 vLLM을 기동하는 데 몇 분 정도 걸립니다.
+그런 다음 LLMInferenceService가 `Ready` 상태를 보고할 때까지 기다립니다.
+모델을 다운로드하고 CPU에서 vLLM을 시작하는 데 몇 분 걸립니다.
 
 ```bash verify
 kubectl wait --for=condition=Ready llminferenceservice/demo-model -n "$NS" --timeout=900s
 ```
 
-## 리소스 맵
+## 리소스 구성도
 
 ```text
 kubectl apply -f llmisvc-cpu.yaml
@@ -199,7 +197,7 @@ kubectl apply -f llmisvc-cpu.yaml
 └───────────────────────────────────────────────────────────────┘
 ```
 
-## Step 4: 각 리소스의 역할
+## 4단계 리소스별 역할 확인
 
 ### 1. LeaderWorkerSet — 워크로드 관리
 
@@ -207,22 +205,21 @@ kubectl apply -f llmisvc-cpu.yaml
 kubectl get lws -n "$NS" -o wide
 ```
 
-LWS는 멀티 노드 배포(P/D disaggregation, DP+EP 등)에서 vLLM Pod를 관리합니다.
-단일 노드 배포(`parallelism` 없이 `replicas`만 지정)는 일반 Deployment를
-사용하므로 **여기서는 LWS가 생성되지 않으며**, 위 명령은
-`No resources found`를 출력합니다.
+LWS는 P/D 분리, DP+EP 등 여러 노드에 걸친 배포에서 vLLM Pod를 관리합니다.
+`parallelism` 없이 `replicas`만 지정한 단일 노드 배포에는 일반 Deployment를 사용합니다.
+이 튜토리얼에서는 **LWS가 생성되지 않으므로** 위 명령을 실행하면 `No resources found`가 출력됩니다.
 
-### 2. EPP 스케줄러 — 각 요청을 어디로 보낼지 결정
+### 2. EPP 스케줄러 — 요청을 보낼 Pod 선택
 
 ```bash run
 kubectl get deploy -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler --tail=20
 ```
 
-EPP(Endpoint Picker Plugin)는 큐 깊이, KV-cache 사용률 같은 신호를 바탕으로
-각 요청을 어떤 vLLM Pod가 받을지 결정합니다.
+EPP(엔드포인트 선택 플러그인)는 대기열에 쌓인 요청 수, KV 캐시 사용률 등의 지표를 보고
+각 요청을 처리할 vLLM Pod를 선택합니다.
 
-#### 스케줄러 Pod 내부
+#### 스케줄러 Pod의 내부 구성
 
 ```bash run
 kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
@@ -256,11 +253,11 @@ kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-rout
 
 | 컨테이너 | 이미지 | 역할 |
 |-----------|-------|------|
-| `storage-initializer` (init) | `kserve/storage-initializer` | tokenizer 파일만 다운로드 (`STORAGE_ALLOW_PATTERNS`로 필터링) |
-| `main` (scheduler) | `llm-d/llm-d-inference-scheduler` | EPP 스케줄러. ExtProc gRPC로 Envoy와 통신하고 스코어링 후 Pod를 선택 |
-| `tokenizer` (sidecar) | `llm-d/llm-d-uds-tokenizer` | 기본 설정에서는 **유휴 상태**. `precise-prefix-cache-scorer`가 Unix 소켓을 통해 사용 |
+| `storage-initializer` (초기화) | `kserve/storage-initializer` | `STORAGE_ALLOW_PATTERNS`로 걸러낸 토크나이저 파일만 다운로드합니다. |
+| `main` (스케줄러) | `llm-d/llm-d-inference-scheduler` | EPP 스케줄러입니다. ExtProc gRPC로 Envoy와 통신하고 점수를 계산한 뒤 Pod를 선택합니다. |
+| `tokenizer` (사이드카) | `llm-d/llm-d-uds-tokenizer` | 기본 설정에서는 **대기 상태**입니다. `precise-prefix-cache-scorer`가 Unix 소켓으로 이 컨테이너를 사용합니다. |
 
-스케줄러 Pod에는 위의 세 컨테이너가 정확히 있어야 합니다:
+스케줄러 Pod에는 위 컨테이너 3개만 있어야 합니다.
 
 ```bash verify
 POD=$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")
@@ -268,50 +265,49 @@ test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.initContainers[*].na
 test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.containers[*].name}' | wc -w)" -eq 2
 ```
 
-#### 스케줄링 플러그인 (well-known config에서 제공)
+#### 스케줄링 플러그인(KServe가 기본으로 제공하는 설정에서 가져옴)
 
 ```bash run
 kubectl describe pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
   | grep -A 15 "config-text" || true
 ```
 
-기본 구성:
+기본 설정은 다음과 같습니다.
 
-- `queue-scorer` (가중치 2) — 대기 중인 요청이 적은 Pod를 우선
-- `prefix-cache-scorer` (가중치 3) — prefix-cache 적중률이 높은 Pod를 우선 (vLLM 메트릭 기반)
-- `max-score-picker` — 합산 점수가 가장 높은 Pod를 선택
+- `queue-scorer`(가중치 2)는 대기 중인 요청이 적은 Pod에 더 높은 점수를 줍니다.
+- `prefix-cache-scorer`(가중치 3)는 vLLM 지표를 기준으로 접두사 캐시 적중률이 높은 Pod에 더 높은 점수를 줍니다.
+- `max-score-picker`는 합산 점수가 가장 높은 Pod를 선택합니다.
 
-#### tokenizer 사이드카가 유휴 상태인 이유
+#### 토크나이저 사이드카가 대기 상태인 이유
 
-well-known config(`kserve-config-llm-scheduler`)는 항상 tokenizer를 주입하지만,
-기본 `prefix-cache-scorer`는 vLLM 메트릭만 읽습니다. tokenizer는
-`precise-prefix-cache-scorer`로 전환한 뒤에야 사용됩니다.
+KServe가 기본으로 제공하는 설정인 `kserve-config-llm-scheduler`는 토크나이저를 항상 주입합니다.
+기본 플러그인인 `prefix-cache-scorer`는 vLLM 지표만 읽습니다.
+토크나이저는 `precise-prefix-cache-scorer`로 바꿨을 때만 사용합니다.
 
 <details>
-<summary>precise-prefix-cache-scorer — tokenizer가 사용되는 경우</summary>
+<summary>precise-prefix-cache-scorer에서 토크나이저를 사용하는 방식</summary>
 
-`precise-prefix-cache-scorer`를 사용하면 tokenizer가 활성화됩니다:
+`precise-prefix-cache-scorer`를 사용하면 토크나이저가 다음과 같이 동작합니다.
 
-1. tokenizer가 프롬프트를 토큰화하고 블록 해시를 계산
-2. vLLM이 ZMQ로 캐시 이벤트를 발행
-3. 스케줄러가 블록 해시와 캐시 이벤트를 매칭해 정확한 Pod를 선택
+1. 토크나이저가 프롬프트를 토큰으로 나누고 블록 해시를 계산합니다.
+2. vLLM이 ZMQ로 캐시 이벤트를 발행합니다.
+3. 스케줄러가 블록 해시를 캐시 이벤트와 대조해 정확히 일치하는 Pod를 선택합니다.
 
 | | `prefix-cache-scorer` (기본값) | `precise-prefix-cache-scorer` |
 |---|---|---|
-| 데이터 소스 | vLLM 메트릭 (`prefix_cache_hit_rate`) | vLLM의 실시간 ZMQ 이벤트 스트림 |
-| 방식 | vLLM이 보고한 적중률 사용 | 스케줄러가 토큰화 → 블록 해시 → 정확한 매칭 |
-| Tokenizer | **사용 안 함** (주입되지만 유휴 상태) | **사용** (Unix 도메인 소켓 경유) |
-| 추가 vLLM 설정 | 없음 | `--enable-kvcache`, `--block-size`, ZMQ 발행 |
+| 데이터 출처 | vLLM 지표(`prefix_cache_hit_rate`) | vLLM의 실시간 ZMQ 이벤트 스트림 |
+| 방식 | vLLM이 보고한 적중률을 사용합니다. | 스케줄러가 토큰화하고 블록 해시를 계산한 뒤 정확히 일치하는 항목을 찾습니다. |
+| 토크나이저 | **사용하지 않습니다.** 주입 후 대기 상태로 있습니다. | **사용합니다.** Unix 도메인 소켓으로 통신합니다. |
+| 추가 vLLM 설정 | 없음 | `--enable-kvcache`, `--block-size`, ZMQ 이벤트 발행 |
 
-tokenizer와 스케줄러는 같은 Pod 안에서 **Unix 도메인 소켓**
-(`/tmp/tokenizer/tokenizer-uds.socket`)으로 통신하므로 커널 네트워크 스택을
-거치지 않습니다:
+토크나이저와 스케줄러는 같은 Pod 안의 **Unix 도메인 소켓**
+(`/tmp/tokenizer/tokenizer-uds.socket`)으로 통신하므로 커널 네트워크 스택을 거치지 않습니다.
 
 ```bash skip
 kubectl exec -n "$NS" "$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")" -c main -- ls -la /tmp/tokenizer/
 ```
 
-설정 예시: [precise-prefix-kv-cache-routing](https://github.com/kserve/kserve/tree/master/docs/samples/llmisvc/precise-prefix-kv-cache-routing)
+[정밀 접두사 KV 캐시 라우팅 설정 예시](https://github.com/kserve/kserve/tree/master/docs/samples/llmisvc/precise-prefix-kv-cache-routing)
 </details>
 
 ### 3. InferencePool — 스케줄러와 워크로드 연결
@@ -320,17 +316,16 @@ kubectl exec -n "$NS" "$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")" -c main 
 kubectl get inferencepool -n "$NS" -o yaml
 ```
 
-InferencePool은 Gateway API Inference Extension에서 제공하는 CRD입니다.
-스케줄러가 워크로드 Pod를 찾아 라우팅할 수 있게 해 줍니다.
+InferencePool은 Gateway API Inference Extension이 제공하는 CRD입니다.
+스케줄러는 InferencePool로 워크로드 Pod를 찾고 해당 Pod로 요청을 보낼 수 있습니다.
 
-### 4. HTTPRoute — Gateway로부터 들어오는 트래픽
+### 4. HTTPRoute — Gateway에서 받은 트래픽 전달
 
 ```bash run
 kubectl get httproute -n "$NS" -o yaml
 ```
 
-HTTPRoute는 Gateway가 받은 요청을 InferencePool로 전달하고,
-거기서 다시 스케줄러로 넘깁니다.
+HTTPRoute는 Gateway가 받은 요청을 InferencePool로 전달합니다. 요청은 거기서 스케줄러로 이어집니다.
 
 ### 5. Service — 내부 연결
 
@@ -340,14 +335,21 @@ kubectl get svc -n "$NS"
 
 | Service | 용도 | 포트 |
 |---------|---------|-------|
-| `*-workload-svc` | vLLM Pod 노출 | 8000 (HTTPS) |
-| `*-epp-service` | EPP 스케줄러 노출 | 9002 (gRPC), 9003 (health), 9090 (metrics), 5557 (ZMQ) |
+| `*-workload-svc` | vLLM Pod에 이름을 부여합니다. 추론 요청에는 사용하지 않습니다(아래 설명 참조). | 8000 (HTTPS) |
+| `*-epp-service` | EPP 스케줄러를 노출합니다. | 9002 (gRPC), 9003 (상태 확인), 9090 (지표), 5557 (ZMQ) |
 
-> 메트릭 포트(9090)는 일반 HTTP지만 bearer 토큰이 필요합니다
-> (`metrics-endpoint-auth: true`). 메트릭 조회 방법은 이 시리즈의
-> request-flow 튜토리얼에서 다룹니다.
+> 지표 포트(9090)는 일반 HTTP를 사용하며 베어러 토큰이 필요합니다
+> (`metrics-endpoint-auth: true`). 지표를 읽는 방법은 이 시리즈의 요청 흐름 튜토리얼에서 다룹니다.
 
-## Step 5: 결과 확인
+> **추론 요청은 `*-workload-svc`를 거치지 않습니다.**
+> `/v1/completions`, `/v1/chat/completions`, `/v1/responses`에 대한 HTTPRoute의
+> 백엔드는 InferencePool입니다. EPP가 Pod를 선택하면 Envoy가 해당 Pod의 IP에 직접 연결합니다.
+> 워크로드 Service는 나머지 용도에 쓰입니다. HTTPRoute의 마지막 규칙은
+> `/<namespace>/demo-model` 아래의 다른 경로를 이 Service로 보냅니다.
+> 모니터링 시스템은 이 Service로 vLLM Pod를 찾고, 클러스터 내부 클라이언트는 이 Service 이름으로
+> vLLM을 호출할 수 있습니다. 요청 흐름 튜토리얼에서 Envoy 로그에 찍힌 Pod IP를 확인할 수 있습니다.
+
+## 5단계 결과 확인
 
 ```bash run
 echo "--- Pods ---";          kubectl get pods -n "$NS" -o wide
@@ -357,7 +359,7 @@ echo "--- HTTPRoute ---";     kubectl get httproute -n "$NS"
 echo "--- Secrets ---";       kubectl get secret -n "$NS"
 ```
 
-예상 결과 (apply 전에는 아무것도 없음 → apply 후):
+적용 전에는 리소스가 없으며, 적용 후에는 다음과 같이 생성됩니다.
 
 ```text
 Pods:          2 (vLLM x1 + scheduler x1)
@@ -368,7 +370,7 @@ HTTPRoute:     1
 Secrets:       1+ (TLS certs)
 ```
 
-같은 기대값을 자동으로 검증합니다:
+아래 명령으로 같은 결과를 자동으로 확인합니다.
 
 ```bash verify
 count() { kubectl get "$1" -n "$NS" --no-headers 2>/dev/null | wc -l; }
@@ -378,11 +380,10 @@ test "$(count inferencepool)" -eq 1
 test "$(count httproute)" -eq 1
 ```
 
-## Step 6: 요청 보내기
+## 6단계 요청 보내기
 
-LLMInferenceService가 `Ready` 상태가 되면 Gateway를 통해 completion 요청을
-보냅니다. Kind에서는 worker 노드의 NodePort를 통해 Gateway에 접근하며,
-공용 `llmisvc/v1` 모듈이 URL을 계산해 줍니다.
+LLMInferenceService가 `Ready` 상태가 되면 Gateway로 텍스트 완성 요청을 보냅니다.
+Kind에서는 작업자 노드의 NodePort로 Gateway에 접속합니다. 공용 모듈 `llmisvc/v1`이 URL을 구합니다.
 
 ```bash run
 GATEWAY_URL=$("$TUT_LIB/llmisvc/v1/gateway-url.sh" "$NS" demo-model)
@@ -393,12 +394,12 @@ echo "$GATEWAY_URL"
 "$TUT_LIB/llmisvc/v1/completion.sh" "$GATEWAY_URL" facebook/opt-125m "Kubernetes is"
 ```
 
-> **답의 내용은 신경 쓰지 마세요.** `facebook/opt-125m`은 파라미터 1억 2500만 개의
-> 아주 작은 *base* 모델로, 튜토리얼 전체가 CPU에서 몇 분 안에 돌도록 고른 것입니다.
-> 지시를 따르지 않고 글을 이어 쓰기만 하므로 엉뚱한 문장이 나오기 쉽고, 20 토큰에서
-> 끊깁니다(`"finish_reason": "length"`). 이 단계가 확인하는 것은 경로입니다. 요청이
-> Gateway와 스케줄러를 거쳐 vLLM에 닿고 텍스트가 돌아왔다는 것입니다. `temperature`가
-> 0이라 매번 같은 답이 나옵니다.
+> **응답 내용으로 판단하지 마세요.** `facebook/opt-125m`은 매개변수가 1억 2,500만 개인
+> 소형 *기본* 모델입니다. 전체 튜토리얼을 CPU에서 몇 분 안에 실행할 수 있도록 이 모델을 골랐습니다.
+> 이 모델은 지시를 따르지 않고 입력 텍스트의 뒷부분을 이어 씁니다. 어색한 문장을 생성하는 경우가 많고
+> 토큰 20개를 생성하면 멈춥니다(`"finish_reason": "length"`). 이 단계에서는 요청이 Gateway와
+> 스케줄러를 거쳐 vLLM에 도달하고 응답 텍스트가 돌아오는지 확인합니다.
+> `temperature`가 0이므로 실행할 때마다 같은 응답이 나옵니다.
 
 <details>
 <summary>lib/llmisvc/v1/gateway-url.sh</summary>
@@ -450,22 +451,21 @@ curl -sf "${url}/v1/completions" -H "Content-Type: application/json" -d "$body" 
 
 ## 정리
 
-LLMInferenceService를 삭제하면 컨트롤러가 만든 모든 리소스
-(Deployment, Service, InferencePool, HTTPRoute 등)가 OwnerReference
-cascading 삭제를 통해 함께 제거됩니다.
+LLMInferenceService를 삭제하면 OwnerReference에 따른 연쇄 삭제로 컨트롤러가 생성한
+Deployment, Service, InferencePool, HTTPRoute 등의 리소스가 모두 삭제됩니다.
 
 ```bash cleanup
 kubectl delete llminferenceservice demo-model -n "$NS" --ignore-not-found --wait=true
 kubectl delete namespace "$NS" --ignore-not-found
 ```
 
-Kind 클러스터 자체는 이 환경의 튜토리얼들이 공유합니다. 모든 작업을 마쳤다면
-환경의 `teardown.sh`로 제거하세요.
+이 환경의 튜토리얼은 Kind 클러스터를 함께 사용합니다. 사용을 모두 마치면 환경의 `teardown.sh`로
+클러스터를 삭제합니다.
 
-## 배운 점
+## 배운 내용
 
-- LLMInferenceService YAML 하나가 10개 이상의 리소스를 생성한다
-- **well-known LLMInferenceServiceConfig**가 주입되므로 별도 config가 필요 없다
-- 스케줄러 Pod는 세 개의 컨테이너로 구성된다: init (tokenizer 다운로드) + scheduler + tokenizer (기본값에서는 유휴 상태)
-- 핵심 구조: **Deployment (워크로드)** ↔ **InferencePool** ↔ **스케줄러** ↔ **HTTPRoute** ↔ **Gateway**
-- 정리 시 OwnerReference를 따라 cascading 삭제된다
+- LLMInferenceService YAML 파일 하나를 적용하면 리소스가 10개 이상 생성됩니다.
+- **KServe가 기본으로 제공하는 LLMInferenceServiceConfig**를 자동으로 주입하므로 별도로 설정을 작성할 필요가 없습니다.
+- 스케줄러 Pod에는 컨테이너가 3개 있습니다. 초기화 컨테이너가 토크나이저 파일을 다운로드하고, 스케줄러와 토크나이저가 실행됩니다. 토크나이저는 기본 설정에서 대기 상태입니다.
+- 핵심 연결 구조는 **Deployment(워크로드)** ↔ **InferencePool** ↔ **스케줄러** ↔ **HTTPRoute** ↔ **Gateway**입니다.
+- 리소스를 정리할 때는 OwnerReference를 따라 연쇄 삭제가 이뤄집니다.

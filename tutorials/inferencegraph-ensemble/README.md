@@ -3,7 +3,9 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** 🚧 draft · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+> **Status:** ✅ stable · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+>
+> 🌐 [한국어](README.ko.md)
 
 <!-- /tut -->
 
@@ -812,7 +814,7 @@ kubectl rollout status deployment/housing-price-graph -n "$NS" --timeout=300s
 ```
 
 Send the same request again. Now the answer comes from `ensemble-combiner`
-and is the average of the two predictions from Step 8. The check retries
+and is the average of the same two predictions you saw in Step 7. The check retries
 while the old router Pod is still answering.
 
 ```bash verify retry=12 delay=5

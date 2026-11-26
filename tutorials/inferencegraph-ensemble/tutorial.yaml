@@ -4,7 +4,7 @@ title:
   en: "Two Models, One Answer — InferenceGraph Ensemble and Combiner"
 summary:
   en: Chain XGBoost and LightGBM InferenceServices with an InferenceGraph, first as an Ensemble and then as a Sequence that averages them in a combiner.
-status: draft                   # draft -> stable -> deprecated -> archived
+status: stable                  # draft -> stable -> deprecated -> archived
 group: inferencegraph
 env: kind-kserve/v1
 env_options: {types: [kserve], mode: standard}   # InferenceService + InferenceGraph, RawDeployment
@@ -14,6 +14,6 @@ versions:
   tested: [v0.18.0]
 tags: [inferencegraph, inferenceservice, mlserver, storage, ensemble, intermediate]
 requires: {gpu: false, cpu: 4, memory: 8Gi}
-langs: [en]                 # en is the source; others are translations
+langs: [en, ko]                 # en is the source; others are translations
 timeout_minutes: 60
 owners: [Jooho]

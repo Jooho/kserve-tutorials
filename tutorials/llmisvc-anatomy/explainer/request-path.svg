@@ -20,33 +20,38 @@
   .badge { fill: #e03131; }
   .dot { fill: #e03131; animation: travel 8s infinite; }
   .q { fill: #1c7ed6; opacity: 0; animation: query 8s infinite; }
+  .hl { fill: none; stroke: #e03131; stroke-width: 3; opacity: 0; }
+  .hl2 { animation: hl2 8s infinite; } .hl3 { animation: hl3 8s infinite; }
   @keyframes travel {
     0%   { transform: translate(90px, 95px); opacity: 0 }
-    4%   { opacity: 1 }
-    16%  { transform: translate(300px, 95px) }
-    58%  { transform: translate(300px, 95px) }
-    76%  { transform: translate(585px, 322px) }
-    92%  { transform: translate(585px, 322px); opacity: 1 }
-    100% { transform: translate(585px, 322px); opacity: 0 }
+    3%   { opacity: 1 }
+    12%  { transform: translate(204px, 95px) }
+    16%  { transform: translate(380px, 150px) }
+    60%  { transform: translate(380px, 150px) }
+    76%  { transform: translate(470px, 238px) }
+    92%  { transform: translate(470px, 238px); opacity: 1 }
+    100% { transform: translate(470px, 238px); opacity: 0 }
   }
+  @keyframes hl2 { 0%, 17% { opacity: 0 } 19%, 26% { opacity: 1 } 28%, 100% { opacity: 0 } }
+  @keyframes hl3 { 0%, 27% { opacity: 0 } 29%, 36% { opacity: 1 } 38%, 100% { opacity: 0 } }
   @keyframes query {
-    0%, 18% { transform: translate(270px, 152px); opacity: 0 }
-    20%  { transform: translate(270px, 152px); opacity: 1 }
-    32%  { transform: translate(270px, 248px) }
-    38%  { transform: translate(330px, 248px) }
-    52%  { transform: translate(330px, 152px); opacity: 1 }
-    55%, 100% { transform: translate(330px, 152px); opacity: 0 }
+    0%, 38% { transform: translate(270px, 152px); opacity: 0 }
+    40%  { transform: translate(270px, 152px); opacity: 1 }
+    47%  { transform: translate(270px, 248px) }
+    50%  { transform: translate(330px, 248px) }
+    57%  { transform: translate(330px, 152px); opacity: 1 }
+    59%, 100% { transform: translate(330px, 152px); opacity: 0 }
   }
   @media (prefers-color-scheme: dark) {
     text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; } .n { fill: #ffffff; }
     .gw { fill: #1e2540; stroke: #748ffc; } .rt { fill: #241f3d; stroke: #9775fa; }
     .ep { fill: #132a3d; stroke: #4dabf7; } .wl { fill: #16301d; stroke: #51cf66; }
     .cl, .side { fill: #1b2029; } .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
-    .ask { stroke: #4dabf7; } .ch, .q { fill: #4dabf7; }
+    .ask { stroke: #4dabf7; } .ch, .q { fill: #4dabf7; } .hl { stroke: #ff6b6b; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .dot { animation: none; transform: translate(585px, 322px); }
-    .q { animation: none; opacity: 0; }
+    .dot { animation: none; transform: translate(470px, 238px); }
+    .q, .hl { animation: none; opacity: 0; }
   }
 </style>
 <defs>
@@ -129,7 +134,9 @@
 <g><circle class="badge" cx="445" cy="180" r="10"/><text class="n" x="441" y="185">5</text></g>
 
 <circle class="q" r="6" cx="0" cy="0"/>
-<circle class="dot" r="7" cx="0" cy="0" transform="translate(585 322)"/>
+<rect class="hl hl2" x="418" y="40" width="200" height="110" rx="10"/>
+<rect class="hl hl3" x="640" y="40" width="224" height="110" rx="10"/>
+<circle class="dot" r="7" cx="0" cy="0" transform="translate(470 238)"/>
 
 <text class="s" x="16" y="404">1 Envoy receives it - 2 an HTTPRoute rule matches the path and rewrites it - 3 that rule's backend is the InferencePool</text>
 <text class="s" x="16" y="424">4 Envoy asks the EPP (ExtProc) which Pod, once per pool rule, and keeps the request - 5 Envoy sends it to that vLLM Pod</text>

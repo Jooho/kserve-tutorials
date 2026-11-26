@@ -27,5 +27,6 @@ def isolated_git(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def no_ai_cli_from_the_shell(monkeypatch):
     for var in ("TUT_AI", "TUT_AI_ARGS", "TUT_AI_REVIEW", "TUT_AI_REVIEW_ARGS",
+                "TUT_AI_TRANSLATE", "TUT_AI_TRANSLATE_ARGS",
                 "TUT_TRANSLATOR", "TUT_TRANSLATOR_ARGS"):
         monkeypatch.delenv(var, raising=False)

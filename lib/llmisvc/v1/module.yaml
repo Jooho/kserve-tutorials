@@ -1,6 +1,6 @@
 id: llmisvc/v1
 description: Helpers for tutorials that deploy an LLMInferenceService on a Kind cluster.
-frozen: false          # -> true once a stable tutorial has passed with it
+frozen: true
 requires: [kubectl, docker, curl, python3]
 scripts:
   gateway-url.sh: "Print the Gateway URL of an LLMInferenceService (Kind NodePort)."

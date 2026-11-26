@@ -586,3 +586,42 @@ def test_D015_readme_images_have_a_fixed_width_and_open_full_size(tmp_path, line
     (d / "images" / "x.png").write_bytes(b"\x89PNG")
     (d / "README.md").write_text(GOOD_README + "\n" + line + "\n")
     assert (("D015" in codes(tmp_path)) is not ok)
+
+
+# ------------------------------------------------- pipes that stop early (CI-007)
+def test_early_exit_pipe_detects_readers_that_stop_early():
+    bad = ["kubectl logs x | grep -q ready",
+           "crictl images | grep -qw combiner",
+           "kubectl logs x --tail=-1 | grep -m1 'producer'",
+           "kubectl get pods -o yaml | head -n 5",
+           "curl -s url | grep --quiet ok",
+           "m | grep a | grep -q b"]
+    good = ["kubectl logs x | grep ready >/dev/null",
+            "kubectl logs x | grep 'producer' | tail -n 1",
+            'echo "$formats" | grep -qw xgboost',
+            "printf '%s' \"$x\" | head -c 3",
+            "a || grep -q x file",
+            "grep -q pattern file.txt",
+            "kubectl get pods | grep -E 'Running|Completed'",
+            "kubectl get x | grep . >/dev/null ;;   # not -q (CI-007)",
+            "kubectl get x | grep a >/dev/null && grep -q b file",
+            "kubectl get x | grep '#-q' >/dev/null"]
+    for line in bad:
+        assert lint.early_exit_pipe(line), line
+    for line in good:
+        assert not lint.early_exit_pipe(line), line
+
+
+def test_D017_E004_L006_warn_on_early_exit_pipes(repo):
+    make_tut(repo, "t", with_run("kubectl get cm -A \\\n  | grep -m1 x"))
+    env_sh = repo / "envs" / "kind-x" / "v1" / "setup.sh"
+    env_sh.write_text("#!/bin/sh\nkubectl get cm -o yaml | grep -q x && echo ok\n")
+    mod = make_module(repo)
+    (mod / "hello.sh").write_text("#!/bin/sh\n# | grep -q in a comment is fine\nls | head -1\n")
+    generate.sync(repo)
+    found = {(f.code, f.severity, f.line) for f in lint.Linter(repo).run()
+             if f.code in ("D017", "E004", "L006")}
+    assert ("E004", "warning", 2) in found
+    assert ("L006", "warning", 3) in found
+    assert any(c == "D017" and s == "warning" for c, s, _ in found)
+    assert "D017" not in codes(repo)          # a warning, not an error

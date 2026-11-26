@@ -3,7 +3,7 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** 🚧 draft · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+> **Status:** ✅ stable · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
 >
 > 🌐 [한국어](README.ko.md)
 
@@ -383,7 +383,7 @@ The prefix cache is on, with the block size this tutorial set (see the note in
 Step 7):
 
 ```bash verify retry=3 delay=10
-vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep -q 'enable_prefix_caching="True"'
+vllm_metrics | grep '^vllm:cache_config_info' | grep 'block_size="16"' | grep 'enable_prefix_caching="True"' >/dev/null
 ```
 
 ## Step 5: Inspect the EPP scheduler metrics
