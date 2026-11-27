@@ -47,7 +47,7 @@ jobs:
         name: Resolve commit, version and matrix
         env: {GH_TOKEN: "${{ github.token }}"}
         run: |
-          export TUT_LATEST_VERSION=$(gh api "repos/$(./tut project --get upstream)/releases/latest" --jq .tag_name)   # N (RFC 0002)
+          export TUT_LATEST_VERSION=$(./tut latest)   # N: project.yaml `latest`, else upstream latest (RFC 0002)
           echo "latest=$TUT_LATEST_VERSION" >> "$GITHUB_OUTPUT"
           sha=$(git rev-parse HEAD)
           git fetch --tags origin

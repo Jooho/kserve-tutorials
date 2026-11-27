@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import textwrap
 from pathlib import Path
@@ -46,7 +47,9 @@ def meta(tid, **kw):
     return m
 
 
-PROJECT_YAML = (Path(__file__).resolve().parents[2] / "project.yaml").read_text()
+# The real project.yaml without its `latest` pin: tests set N themselves.
+PROJECT_YAML = re.sub(r"(?m)^latest:.*\n", "",
+                      (Path(__file__).resolve().parents[2] / "project.yaml").read_text())
 
 
 def make_project(root: Path, text: str = PROJECT_YAML):

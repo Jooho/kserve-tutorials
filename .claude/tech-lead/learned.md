@@ -334,3 +334,15 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
 - They said: "a로 하자" ("let's go with a").
 - So: the schedule is committed commented out; it is turned on by a one-line change after a first `make release` dry run passed, and that change goes to them like any other. Their monthly standing approval (2026-11-25) applies only once it is on. Fact for later, not their words: the first tag is `2026.12.0`, not `.1` (release.py counts N from 0); I had it wrong in the question.
 - Applies to: release.yml, docs/release.md, backlog C8/D12, any later request to turn the schedule on.
+
+### 2026-11-26 The repository pins its own newest version (N), not upstream (relayed)
+- Asked / situation: nothing was asked; v0.21.0 is upstream's newest release, all four tutorials test v0.18.0.
+- They said: "이 tutorial에서 사용하는 최신버젼을 우리가 지정하게 만들자 0.21이 현재 가장 최신의 것이지만 0.20으로 테스트를 진행하고 싶거든." then "kserve-tutorial repo에서 사용할 kserve의 최신버젼말이야." ("let us make it so we set the newest version these tutorials use; 0.21 is the newest now, but I want to test with 0.20" / "I mean the newest KServe version this kserve-tutorials repo uses"). The working agent proposed project.yaml `latest: v0.20.0` and `./tut latest`, used for CI N, the canary and the new-release issue, saying the canary/new-release part was its own call; they said "진행해" ("go ahead").
+- So: N is chosen by the maintainer (project.yaml `latest`); upstream's newest release is only the fallback when no pin is set. This narrows "N is the newest KServe release" (2026-11-26, above): that stays true only without a pin. The canary and the new-release issue following the pin is the agent's proposal they did not object to, not their own words; a later word outranks it. One repository-wide pin, consistent with "one N for the whole repository".
+- Applies to: model.latest, `./tut latest`, ci.yml/scheduled.yml/release.yml, RFC 0002 section 8, version-scout/feature-scout default targets, any doc that defines N.
+
+### 2026-11-26 Pin v0.20 even though it skips v0.19
+- Asked / situation: with `latest: v0.20.0` the canary and bot PR make the four tutorials' tested [v0.18.0, v0.20.0], a gap at v0.19 that the `ci-window` issue reports; earlier they had said they would move "0.19, 0.20 in order". (a) keep v0.20.0 and accept the gap report [recommended]; (b) pin v0.19.0 first, then v0.20.0.
+- They said: "a로 하자" ("let's go with a").
+- So: the pin stays at the version they name, even when it jumps a minor; the gap report that follows is expected, not a defect to prevent. "One minor at a time" (2026-11-26 window entry) was a plan, not a rule. What happens to the gap (revision, removal from tested) is still their word per tutorial.
+- Applies to: project.yaml `latest`, canary/bot PR results, `ci-window` issue, `./tut revision keep`.

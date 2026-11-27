@@ -28,7 +28,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | One tutorial = one directory, self-contained; shared things are versioned parts (`envs/`, `lib/`) | RFC §4.1, §4.6, §4.7 |
 | README.md (English) is the source; translations follow it, CI runs only English | RFC §4.8, §4.11 |
 | Versions are per tutorial (`versions.tested`), not per branch; `stable` = last fully verified `main` | RFC §4.4, §4.15, release.md |
-| A change made because of a new KServe version moves the old versions to a frozen revision (`tutorials/<id>/revisions/rN/`, no exceptions); CI runs two versions per tutorial (N = the newest KServe release (upstream), N-1 = the tutorial's newest tested version below N; a tutorial without N runs only that N-1); skipped versions (a gap between tested minors) are reported (`./tut revision todo`, weekly `ci-window` issue) and moved with `./tut revision keep` after the maintainer agrees | RFC 0002, authoring.md section 6 |
+| A change made because of a new KServe version moves the old versions to a frozen revision (`tutorials/<id>/revisions/rN/`, no exceptions); CI runs two versions per tutorial (N = `./tut latest`, project.yaml `latest` or else the newest KServe release (upstream), N-1 = the tutorial's newest tested version below N; a tutorial without N runs only that N-1); skipped versions (a gap between tested minors) are reported (`./tut revision todo`, weekly `ci-window` issue) and moved with `./tut revision keep` after the maintainer agrees | RFC 0002, authoring.md section 6 |
 | `stable` moves once a month by schedule, skipped when `main` did not change (schedule off until a first dry run, 2026-11-26) | RFC 0002 section 8, release.md |
 | No AI in GitHub Actions: every AI step (scouts, drafts, translations, explainers) runs locally | RFC 0002 section 3, AGENTS.md hard rule 13 |
 | One env, `kind-kserve/v1`, with options (`env_options`) instead of one env per feature | RFC §6 (6), envs/kind-kserve/v1/README.md |
@@ -53,7 +53,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | `envs/<name>/vN/` | how to build a cluster: `profile.yaml`, `setup.sh`, `teardown.sh`, `tools.env`, `README.md` | frozen once a stable tutorial uses it → `vN+1` |
 | `lib/<name>/vN/` | helper scripts tutorials call as `"$TUT_LIB/<name>/vN/x.sh"` (`module.yaml`) | same freeze rule |
 | `catalog/` | `tags.yaml`, `groups.yaml`, `collections/<id>.yaml` (learning paths), `maintainers.yaml` | anyone, reviewed by owners |
-| `project.yaml` | product name, title, `version_var`, canary upstream, glossary | rarely |
+| `project.yaml` | product name, title, `version_var`, canary upstream, `latest` (the version CI treats as N; move it to move the repository), glossary | when moving to a new version |
 | `schema/` | JSON schemas for tutorial.yaml, profile.yaml, module.yaml, tags, collections, project | with `tools/` |
 | `tools/tut/` | the engine (Python), see § 3 | needs tests; rules need approval |
 | `tools/tests/` | pytest suite for the engine (no cluster) | with every `tools/` change |
@@ -118,7 +118,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 - The page theme is Auto / Light / Dark; both terminals (main and ⧉) follow it and share their own text size (`static/term-theme.js`).
 - Learning paths open with `?collection=`: covered `run` blocks are hidden, cleanup waits for the end, and the collection `vars` are exported.
 
-**Versions.** A tutorial lists `versions.default` (what readers get) and `versions.tested` (what PR CI, the weekly run and releases run, on N, the newest KServe release, and N-1, the tutorial's newest tested version below it; RFC 0002). Older versions of a changed tutorial live in `revisions/rN/`. An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on the newest upstream release (`project.yaml upstream`) and opens an issue when it fails. The canary only sees a failure after the release and not for `draft` tutorials; the `version-scout` agent reads the upstream changes between two versions and says beforehand which tutorials they touch (AGENTS.md "A new product version").
+**Versions.** A tutorial lists `versions.default` (what readers get) and `versions.tested` (what PR CI, the weekly run and releases run, on N (`./tut latest`: project.yaml `latest`, else the newest KServe release) and N-1, the tutorial's newest tested version below it; RFC 0002). Older versions of a changed tutorial live in `revisions/rN/`. An env declares `versions.min/max` it can install (T005). The canary runs stable tutorials on N (`./tut latest`: `latest` in project.yaml, else the newest upstream release) and opens an issue when it fails. The canary only sees a failure after the release and not for `draft` tutorials; the `version-scout` agent reads the upstream changes between two versions and says beforehand which tutorials they touch (AGENTS.md "A new product version").
 
 ## 5. Commands by task
 

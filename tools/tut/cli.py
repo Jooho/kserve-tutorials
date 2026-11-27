@@ -252,6 +252,27 @@ def cmd_project(a):
     return 0
 
 
+def cmd_latest(a):
+    """./tut latest: the product version N stands for (RFC 0002 section 8)."""
+    from .model import latest_version
+    v = latest_version(REPO_ROOT)
+    if not v:
+        try:
+            up = project.load(REPO_ROOT).upstream
+        except project.ProjectError as e:
+            sys.exit(str(e))
+        if not up:
+            sys.exit("project.yaml has neither `latest` nor `upstream`")
+        r = subprocess.run(["gh", "api", f"repos/{up}/releases/latest", "--jq", ".tag_name"],
+                           capture_output=True, text=True)
+        if r.returncode != 0 or not r.stdout.strip():
+            sys.exit(f"cannot read the latest release of {up}: {r.stderr.strip() or 'no output'} "
+                     "(set `latest` in project.yaml, or TUT_LATEST_VERSION)")
+        v = r.stdout.strip()
+    print(v)
+    return 0
+
+
 def cmd_affected(a):
     m = plan.pr_matrix(a.base)
     print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['version']}" for e in m))
@@ -711,6 +732,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("project", help="what project.yaml says (name, version_var, upstream, ...)")
     s.add_argument("--get", metavar="KEY", help="print one value, e.g. --get upstream (for scripts)")
     s.set_defaults(fn=cmd_project)
+
+    s = sub.add_parser("latest", help="the product version CI treats as newest (N): project.yaml `latest`, else upstream's latest release")
+    s.set_defaults(fn=cmd_latest)
 
     s = sub.add_parser("run", help="execute a tutorial README end to end")
     s.add_argument("id")

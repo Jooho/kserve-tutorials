@@ -5,8 +5,8 @@
 `./tut matrix --canary <ver>`   stable/deprecated tutorials against a new version of the product
 
 Only two minors run per tutorial (RFC 0002): N = the product's newest minor
-(TUT_LATEST_VERSION, set by CI from the upstream's latest release; else the
-newest any tutorial tests) if the tutorial tests it, and N-1 = the newest
+(`./tut latest`: project.yaml `latest`, else the upstream's latest release; CI
+sets TUT_LATEST_VERSION from it; offline without a pin, the newest any tutorial tests) if the tutorial tests it, and N-1 = the newest
 minor it tests below N. A matrix entry names the tutorial and the
 version; `./tut run <id> --version V` picks the revision tested with V.
 

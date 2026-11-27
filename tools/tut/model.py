@@ -239,16 +239,32 @@ def resolve(t: Tutorial, version: str | None) -> Tutorial | None:
 LATEST_ENV = "TUT_LATEST_VERSION"
 
 
-def latest(tutorials: list[Tutorial]) -> tuple[int, int] | None:
-    """N (RFC 0002): the product's newest minor. CI sets TUT_LATEST_VERSION to
-    the upstream's latest release (project.yaml upstream); without it (offline,
-    tests) N is the newest minor any tutorial or revision tests. The newer of
-    the two wins, so no tested version is above N."""
-    ms = {minor(v) for t in tutorials for x in variants(t) for v in x.tested_versions
-          if VERSION_RE.match(str(v))}
+def latest_version(root: Path = REPO_ROOT) -> str | None:
+    """The product version N stands for, without asking the network:
+    TUT_LATEST_VERSION, else `latest` in project.yaml. None: follow the
+    upstream's latest release (`./tut latest` asks GitHub)."""
     env = os.environ.get(LATEST_ENV, "").strip()
     if VERSION_RE.match(env):
-        ms.add(minor(env))
+        return env
+    from . import project
+    try:
+        return project.load(root).latest
+    except project.ProjectError:
+        return None
+
+
+def latest(tutorials: list[Tutorial], root: Path | None = None) -> tuple[int, int] | None:
+    """N (RFC 0002): the newest product minor this repository moves to.
+    `latest_version()` (TUT_LATEST_VERSION, else project.yaml `latest`); CI
+    sets TUT_LATEST_VERSION from `./tut latest`. Without either (offline, no
+    pin) N is the newest minor any tutorial or revision tests. A tested
+    version above N still wins, so nothing tested is left unrun."""
+    ms = {minor(v) for t in tutorials for x in variants(t) for v in x.tested_versions
+          if VERSION_RE.match(str(v))}
+    root = root or (tutorials[0].root if tutorials else REPO_ROOT)
+    pin = latest_version(root)
+    if pin:
+        ms.add(minor(pin))
     return max(ms) if ms else None
 
 
