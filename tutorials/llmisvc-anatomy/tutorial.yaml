@@ -5,15 +5,15 @@ title:
 summary:
   en: Apply one LLMInferenceService and inspect the 10+ resources the controller creates.
   ko: LLMInferenceService 하나를 적용하고 컨트롤러가 만드는 10여 개의 리소스를 살펴봅니다.
-status: stable
+status: draft                     # edited for the new KServe version; a person reviews before stable
 group: llmisvc
 env: kind-kserve/v1
 env_options: {types: [llmisvc]}   # LLMInferenceService + its gateway stack
 uses: [llmisvc/v1]
 namespace: llmisvc-anatomy
 versions:
-  default: v0.18.0
-  tested: [v0.18.0]
+  default: v0.20.0
+  tested: [v0.20.0]
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en, ko]

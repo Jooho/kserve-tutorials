@@ -11,7 +11,7 @@ env_options: {types: [kserve], mode: standard}   # InferenceService + InferenceG
 namespace: kserve-graph-demo    # the manifests (and the combiner serviceUrl) use this namespace
 versions:
   default: v0.18.0              # the author tested v0.17.0; the env needs v0.17.1+
-  tested: [v0.18.0]
+  tested: [v0.18.0, v0.20.0]
 tags: [inferencegraph, inferenceservice, mlserver, storage, ensemble, intermediate]
 requires: {gpu: false, cpu: 4, memory: 8Gi}
 langs: [en, ko]                 # en is the source; others are translations

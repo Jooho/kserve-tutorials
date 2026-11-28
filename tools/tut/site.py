@@ -39,13 +39,17 @@ def _copy_tree(src: Path, dst: Path):
         if p.is_dir():
             continue
         rel = p.relative_to(src)
-        target = dst / rel.parent / LANG_FILES.get(rel.name, rel.name)   # also revisions/rN/README.md
+        target = dst / rel.parent / LANG_FILES.get(rel.name, rel.name)   # also revisions/vX.Y/README.md
         target.parent.mkdir(parents=True, exist_ok=True)
         if p.suffix == ".md":
             text = "\n".join(_site_fence_info(l) for l in p.read_text().split("\n"))
             # The README's "🌐 English / 한국어" line links README*.md for GitHub; the
             # site renames them to index pages and has its own language switcher.
             text = re.sub(r"^>[ \t]*\n> 🌐 .*\n", "", text, flags=re.M)
+            # Links to another README (a revision's header links the current
+            # tutorial and back) follow the same renaming.
+            text = re.sub(r"(\]\([^)\s]*?)README((?:\.[a-z]{2})?)\.md((?:#[^)\s]*)?\))",
+                          lambda m: f"{m.group(1)}index{m.group(2)}.md{m.group(3)}", text)
             target.write_text(text)
         else:
             shutil.copy2(p, target)

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" role="img" aria-labelledby="t d">
 <title id="t">One prompt, two caches</title>
-<desc id="d">vLLM's prefix cache works on blocks of 16 tokens: a 25-token prompt has one full block that can be reused and a partial block that cannot, so 19 of 20 identical prompts reuse 16 tokens each: 304 of 500. The EPP's prefix index is a separate record of which Pod got which prompt; it is looked up three times per request, and in load 1 the hit ratios of 60 lookups add up to 59, in load 2 to 40, while vLLM reused nothing.</desc>
+<desc id="d">vLLM's prefix cache works on blocks of 16 tokens: a 25-token prompt has one full block that can be reused and a partial block that cannot, so 19 of 20 identical prompts reuse 16 tokens each: 304 of 500. The EPP's prefix index is a separate record of which Pod got which prompt; it is looked up 16 times per request, and in load 1 the hit ratios of 320 lookups add up to 319, in load 2 to 300, while vLLM reused nothing.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
   .h { font-size: 15px; font-weight: 650; }
@@ -45,19 +45,19 @@
 <rect class="box" x="452" y="16" width="412" height="400" rx="10"/>
 <text class="h" x="468" y="42">EPP prefix index (inside the scheduler)</text>
 <text class="s" x="468" y="64">its own record: which Pod got which prompt</text>
-<text class="s" x="468" y="82">asked once per InferencePool route rule: 3 x per request</text>
+<text class="s" x="468" y="82">asked once per match of the pool's route rules: 16 x per request</text>
 
 <text class="s" x="468" y="116">a reading of one load-2 request (only sums measured):</text>
 <g class="r"><rect class="miss" x="468" y="126" width="120" height="34" rx="5"/><text class="m" x="480" y="148">1st: miss</text></g>
 <g class="r r2"><rect class="hit" x="596" y="126" width="120" height="34" rx="5"/><text class="m" x="608" y="148">2nd: "hit"</text></g>
-<g class="r r3"><rect class="hit" x="724" y="126" width="120" height="34" rx="5"/><text class="m" x="736" y="148">3rd: "hit"</text></g>
-<text class="s" x="468" y="182">the 1st records the Pod; the next two can find it</text>
+<g class="r r3"><rect class="hit" x="724" y="126" width="120" height="34" rx="5"/><text class="m" x="736" y="148">3rd-16th: "hit"</text></g>
+<text class="s" x="468" y="182">the 1st records the Pod; the other 15 can find it</text>
 
 <text class="h" x="468" y="226">Load 1</text>
-<text class="m" x="468" y="250">lookups +60, hit ratios add up to 59</text>
-<text class="s" x="468" y="270">of a possible 60 (blocks of 64+ tokens)</text>
+<text class="m" x="468" y="250">lookups +320, hit ratios add up to 319</text>
+<text class="s" x="468" y="270">of a possible 320 (blocks of 64+ tokens)</text>
 <text class="h" x="468" y="312">Load 2</text>
-<text class="m" x="468" y="336">lookups +60, hit ratios add up to 40</text>
+<text class="m" x="468" y="336">lookups +320, hit ratios add up to 300</text>
 <text class="s" x="468" y="356">although vLLM reused nothing</text>
 <text class="s" x="468" y="396">Not shown on the dashboard; read from the EPP.</text>
 </svg>

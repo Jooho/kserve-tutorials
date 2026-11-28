@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" role="img" aria-labelledby="t d">
+<title id="t">Where the numbers come from</title>
+<desc id="d">vLLM publishes /metrics on port 8000 without a token. The EPP publishes /metrics on port 9090 behind a token check, and it also reads the vLLM metrics itself to score Pods. The Prometheus operator turns the ServiceMonitor into scrape configuration with the token written in. Prometheus scrapes both every 15 seconds; Grafana reads Prometheus.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #2b3140; }
+  .wl { fill: #ebfbee; stroke: #2f9e44; stroke-width: 1.5; }
+  .ep { fill: #e7f5ff; stroke: #1c7ed6; stroke-width: 1.5; }
+  .pr { fill: #fff4e6; stroke: #e8590c; stroke-width: 1.5; }
+  .gr { fill: #f3f0ff; stroke: #7048e8; stroke-width: 1.5; }
+  .op { fill: #f8f9fa; stroke: #868e96; stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .arrow { stroke: #6b7385; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+  .read { stroke: #1c7ed6; stroke-width: 1.6; fill: none; stroke-dasharray: 6 4; marker-end: url(#b); }
+  .ah { fill: #6b7385; } .bh { fill: #1c7ed6; }
+  .dot { fill: #e8590c; }
+  .d1 { animation: s1 6s infinite linear; } .d2 { animation: s2 6s infinite linear; } .d3 { animation: s3 6s infinite linear; }
+  @keyframes s1 { 0% { transform: translate(250px, 95px); opacity: 0 } 5% { opacity: 1 } 40% { transform: translate(520px, 175px); opacity: 1 } 45%, 100% { opacity: 0; transform: translate(520px, 175px) } }
+  @keyframes s2 { 0% { transform: translate(250px, 300px); opacity: 0 } 5% { opacity: 1 } 40% { transform: translate(520px, 215px); opacity: 1 } 45%, 100% { opacity: 0; transform: translate(520px, 215px) } }
+  @keyframes s3 { 0%, 50% { transform: translate(700px, 195px); opacity: 0 } 55% { opacity: 1 } 90% { transform: translate(700px, 330px); opacity: 1 } 95%, 100% { opacity: 0; transform: translate(700px, 330px) } }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .wl { fill: #16301d; stroke: #51cf66; } .ep { fill: #132a3d; stroke: #4dabf7; }
+    .pr { fill: #3a2414; stroke: #ff922b; } .gr { fill: #241f3d; stroke: #9775fa; }
+    .op { fill: #1b2029; } .arrow { stroke: #8b93a5; } .ah { fill: #8b93a5; }
+    .read { stroke: #4dabf7; } .bh { fill: #4dabf7; } .dot { fill: #ff922b; }
+  }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; opacity: 0; } }
+</style>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="bh" d="M0 0L10 5L0 10z"/></marker>
+</defs>
+
+<rect class="wl" x="20" y="40" width="230" height="110" rx="10"/>
+<text class="h" x="34" y="66">vLLM Pod</text>
+<text class="m" x="34" y="88">/metrics on :8000</text>
+<text class="s" x="34" y="110">no token needed</text>
+<text class="s" x="34" y="130">running, waiting, KV, prefix cache</text>
+
+<rect class="ep" x="20" y="250" width="230" height="110" rx="10"/>
+<text class="h" x="34" y="276">EPP scheduler</text>
+<text class="m" x="34" y="298">/metrics on :9090</text>
+<text class="s" x="34" y="320">needs a token (metrics-reader)</text>
+<text class="s" x="34" y="340">pool view + its own decisions</text>
+
+<path class="read" d="M120 248 V152"/>
+<text class="s" x="128" y="196">EPP reads vLLM's</text>
+<text class="s" x="128" y="212">numbers to score Pods</text>
+
+<rect class="op" x="300" y="22" width="262" height="64" rx="10"/>
+<text class="h" x="314" y="46">Prometheus operator</text>
+<text class="s" x="314" y="68">ServiceMonitor -> scrape config, token in</text>
+
+<rect class="pr" x="520" y="150" width="180" height="90" rx="10"/>
+<text class="h" x="534" y="176">Prometheus</text>
+<text class="s" x="534" y="198">scrapes every 15 s</text>
+<text class="s" x="534" y="218">stores the numbers</text>
+
+<rect class="gr" x="610" y="300" width="200" height="70" rx="10"/>
+<text class="h" x="624" y="326">Grafana</text>
+<text class="s" x="624" y="348">queries Prometheus</text>
+
+<path class="arrow" d="M250 95 L518 180"/>
+<path class="arrow" d="M250 305 L518 215"/>
+<path class="arrow" d="M480 86 L580 148"/>
+<path class="arrow" d="M680 240 L700 298"/>
+
+<circle class="dot d1" r="6" cx="0" cy="0"/>
+<circle class="dot d2" r="6" cx="0" cy="0"/>
+<circle class="dot d3" r="6" cx="0" cy="0"/>
+
+<text class="s" x="20" y="405">Solid: data Prometheus collects. Dashed: the EPP's own reading of vLLM, used for scoring, not for Prometheus.</text>
+</svg>

@@ -1,12 +1,14 @@
-<!-- tut-translation source=README.md sha=6056c9a9667c -->
+<!-- tut-translation source=README.md sha=0825af938700 -->
 # Gateway에서 vLLM까지 요청이 지나가는 경로
 
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.20.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
+>
+> **이전 KServe 버전:** v0.18.0: [v0.18](revisions/v0.18/README.ko.md)
 
 <!-- /tut -->
 
@@ -20,8 +22,9 @@ LLMInferenceService에 `curl`로 요청을 한 번 보내면 클러스터 안에
 
 - 요청 하나가 Envoy Gateway, HTTPRoute, InferencePool, EPP 스케줄러, vLLM Pod를
   거치는 경로와 각 구간에서 다음 목적지를 결정하는 객체를 살펴봅니다.
-- Envoy가 ExtProc로 EPP에 Pod 선택을 요청하는 방법과 InferencePool로 연결되는
-  경로 규칙마다 EPP를 한 번씩 호출하는 이유를 알아봅니다.
+- Envoy가 ExtProc로 EPP에 Pod 선택을 요청하는 방법을 살펴봅니다. 요청 하나에 EPP가
+  여러 번 호출되는 이유도 알아봅니다. InferencePool로 연결되는 경로 규칙의 일치 조건마다
+  EPP를 한 번씩 호출합니다.
 - `x-request-id`로 Envoy 로그, EPP 로그, 응답에서 같은 요청을 찾습니다.
 - EPP가 Pod를 고를 때 쓰는 점수 산정 플러그인과 각 플러그인의 가중치, 참조하는 지표를 살펴봅니다.
 
@@ -51,7 +54,7 @@ KServe LLMInferenceService와 게이트웨이 스택가 포함된 Kind 클러스
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.20.0}"
 export NS="${NS:-llmisvc-request-flow}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
@@ -322,24 +325,55 @@ EPP 로그의 각 줄은 다음 상황을 나타냅니다.
 - `EPP sent response body back to proxy`는 vLLM의 응답이 Envoy로 돌아갔다는 뜻입니다.
 
 같은 요청 ID로 이 로그 세 줄이 여러 번 나타납니다. Envoy의 ExtProc 필터마다 한 묶음씩
-기록되기 때문입니다. HTTPRoute에는 InferencePool로 요청을 보내는 규칙이 세 개
-있습니다(`/v1/completions`, `/v1/chat/completions`, `/v1/responses`).
-Envoy Gateway는 각 규칙에 해당하는 ExtProc 필터를 Gateway 리스너에 하나씩 추가합니다.
-이 경로로 들어오는 요청마다 필터 세 개가 모두 실행되므로 EPP는 규칙당 한 번씩,
-여기서는 총 세 번 호출됩니다. 세 번 모두 같은 Pod 하나를 반환합니다.
-아래 명령은 규칙 수와 로그 묶음 수를 각각 셉니다.
+기록되기 때문입니다. Envoy 설정에서는 HTTPRoute 규칙의 **일치 조건**마다 별도의 경로가 생깁니다.
+Gateway 리스너에는 이 중 InferencePool로 요청을 보내는 경로마다 ExtProc 필터가 하나씩 있습니다.
+규칙을 나열하고 각 규칙의 일치 조건 수를 셉니다.
+
+```bash run
+kubectl get httproute -n "$NS" -o json | python3 -c '
+import json, sys
+for rule in json.load(sys.stdin)["items"][0]["spec"]["rules"]:
+    name, matches = rule.get("name", "-"), len(rule.get("matches", []))
+    kind = rule["backendRefs"][0].get("kind", "Service")
+    print(f"{name:36} {matches:2} match(es) -> {kind}")'
+```
+
+```text
+v1-completions-path                   1 match(es) -> InferencePool
+v1-chat-completions-path              1 match(es) -> InferencePool
+v1-responses-path                     1 match(es) -> InferencePool
+v1-messages-path                      1 match(es) -> InferencePool
+v1-model-routing                      8 match(es) -> InferencePool
+v1-completions-publisher-path         1 match(es) -> InferencePool
+v1-chat-completions-publisher-path    1 match(es) -> InferencePool
+v1-responses-publisher-path           1 match(es) -> InferencePool
+v1-messages-publisher-path            1 match(es) -> InferencePool
+v1-publisher-path-catch-all           1 match(es) -> Service
+v1-catch-all-path                     1 match(es) -> Service
+v1-catch-all-model-routing            1 match(es) -> Service
+```
+
+InferencePool로 요청을 보내는 규칙은 아홉 개입니다. `/<namespace>/demo-model` 아래 경로
+네 개(`/v1/completions`, `/v1/chat/completions`, `/v1/responses`, `/v1/messages`)에 각각 규칙이
+하나씩 있고, `/publishers/<namespace>/models/<model>` 아래의 같은 경로에도 규칙이 하나씩
+있습니다. 나머지 `v1-model-routing` 규칙은 앞에 접두사가 없는 `/v1/...` 경로를
+`X-Gateway-Model-Name` 헤더로 구분하며, 일치 조건이 여덟 개입니다.
+일치 조건은 4 + 4 + 8 = **총 16개이므로 ExtProc 필터도 16개**입니다.
+InferencePool로 향하는 요청은 어느 규칙에 일치하든 리스너의 필터를 모두 차례로 거칩니다.
+따라서 요청 하나에 EPP가 16번 호출되며, 매번 같은 Pod 하나를 반환합니다.
+아래 명령은 일치 조건 수와 로그 묶음 수를 각각 셉니다.
 
 ```bash verify retry=6 delay=5
-RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
+MATCHES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
 import json, sys
-print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
+print(sum(len(rule.get("matches", [])) for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
           if any(b.get("kind") == "InferencePool" for b in rule.get("backendRefs", []))))')
 SETS=$(kubectl logs -n "$NS" \
   -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
   -c main --since=5m --tail=-1 \
   | grep "$REQUEST_ID" | grep -c "EPP received request")
-echo "HTTPRoute rules to the InferencePool: $RULES; EPP sets for this request: $SETS"
-test "$RULES" -gt 0 && test "$SETS" -eq "$RULES"
+echo "Matches of the HTTPRoute rules to the InferencePool: $MATCHES; EPP sets for this request: $SETS"
+test "$MATCHES" -gt 0 && test "$SETS" -eq "$MATCHES"
 ```
 
 각 묶음 끝에는 `Request latency values are invalid for TPOT calculation`이라는
@@ -431,15 +465,19 @@ assert n >= 10' "$POD_IP"
 EPP 스케줄러는 점수 산정 플러그인으로 모든 Pod에 점수를 매긴 뒤, 가중치를 적용한 점수의
 합이 가장 높은 Pod를 고릅니다.
 
-<a href="images/epp-scoring.svg" target="_blank"><img src="images/epp-scoring.svg" width="720" alt="EPP의 Pod 선택 방식. queue-scorer(가중치 2)는 EPP가 보관하는 Pod별 대기 요청 수를 쓰고, prefix-cache-scorer(가중치 3)는 EPP 자체의 접두사 인덱스를 씁니다. max-score-picker는 2xA + 3xB 값이 가장 큰 Pod를 고르고, EPP는 그 Pod의 주소를 Envoy에 반환합니다."></a>
+<a href="images/epp-scoring.svg" target="_blank"><img src="images/epp-scoring.svg" width="720" alt="EPP의 Pod 선택 방식. queue-scorer(가중치 2)와 kv-cache-utilization-scorer(가중치 2)는 EPP가 보관하는 Pod별 vLLM 지표를 씁니다. prefix-cache-scorer(가중치 3)와 no-hit-lru-scorer(가중치 2)는 EPP 자체의 접두사 인덱스를 씁니다. max-score-picker는 가중치를 적용한 점수의 합이 가장 높은 Pod를 고르고, EPP는 그 Pod의 주소를 Envoy에 반환합니다."></a>
 
-두 플러그인은 서로 다른 데이터를 참조합니다. `queue-scorer`는 EPP가 보관하는 Pod별
-`vllm:num_requests_waiting` 값을 사용합니다. `prefix-cache-scorer`는 vLLM의 접두사 캐시를
+점수 산정 플러그인 네 개는 두 종류의 데이터를 참조합니다. `queue-scorer`와
+`kv-cache-utilization-scorer`는 EPP가 보관하는 Pod별 vLLM 지표
+(`vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc`)를 사용합니다.
+대기 중인 요청이 적을수록, KV 캐시 사용률이 낮을수록 점수가 높습니다.
+`prefix-cache-scorer`는 vLLM의 접두사 캐시를
 읽지 않습니다. 대신 어느 Pod에 어떤 프롬프트를 보냈는지 기록한 EPP 자체 인덱스를 사용합니다.
 이 인덱스는 EPP가 자동으로 추가하는 보조 구성 요소 두 개
 (`approx-prefix-cache-producer`, `token-producer`)가 만듭니다. EPP 로그에는
-`auto-created default producer`라고 표시됩니다. 이 구성에서는 KV 캐시 사용률도 읽지만
-점수 계산에는 쓰지 않습니다.
+`auto-created default producer`라고 표시됩니다. `no-hit-lru-scorer`는 어느 Pod에도
+보낸 적 없는 프롬프트에 적용됩니다. 이런 새 프롬프트를 받은 지 가장 오래된 Pod에
+더 높은 점수를 줍니다. 이렇게 하면 새 프롬프트가 한 Pod에 몰리지 않고 여러 Pod에 분산됩니다.
 
 ```bash verify
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -c main --tail=-1 \
@@ -514,7 +552,7 @@ epp_metrics
 
 | 지표 | 점수 산정 플러그인 | 설명 |
 |--------|--------|-------------|
-| `inference_pool_average_kv_cache_utilization` | 해당 없음(이 구성에서는 점수 계산에 사용하지 않습니다) | Pod의 평균 KV 캐시 사용률입니다. |
+| `inference_pool_average_kv_cache_utilization` | kv-cache-utilization-scorer | Pod의 평균 KV 캐시 사용률입니다. |
 | `inference_pool_average_queue_size` | queue-scorer | Pod의 평균 대기열 크기입니다. |
 | `inference_pool_ready_pods` | — | 요청을 처리할 준비가 된 Pod 수입니다. |
 | `inference_extension_prefix_indexer_hit_ratio` | prefix-cache-scorer | 접두사 캐시 적중률입니다(0.0~1.0). 비슷한 프롬프트를 반복해서 보내면 높아집니다. |

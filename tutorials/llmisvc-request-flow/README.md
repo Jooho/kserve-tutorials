@@ -3,9 +3,11 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** ✅ stable · **Tested with KServe:** v0.18.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+> **Status:** 🚧 draft · **Tested with KServe:** v0.20.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
 >
 > 🌐 [한국어](README.ko.md)
+>
+> **Older KServe versions:** v0.18.0: [v0.18](revisions/v0.18/README.md)
 
 <!-- /tut -->
 
@@ -21,8 +23,8 @@ What you will learn:
 
 - The path of one request: Envoy Gateway, HTTPRoute, InferencePool, EPP
   scheduler, vLLM Pod, and which object decides each hop.
-- How Envoy asks the EPP for a Pod (ExtProc), and why the EPP is asked once
-  per InferencePool route rule.
+- How Envoy asks the EPP for a Pod (ExtProc), and why the EPP is asked many
+  times for one request: once per match of the InferencePool route rules.
 - How to follow one request through the Envoy log, the EPP log and the answer
   with its `x-request-id`.
 - How the EPP chooses a Pod: its scorers, their weights and the metrics they
@@ -56,7 +58,7 @@ is safe to run again.
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.20.0}"
 export NS="${NS:-llmisvc-request-flow}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
@@ -331,24 +333,57 @@ What the EPP log lines mean:
 - `EPP sent response body back to proxy`: the vLLM answer went back to Envoy
 
 The same request id shows up in several complete sets of these lines, one set
-per ExtProc filter in Envoy. The HTTPRoute has three rules that send to the
-InferencePool (`/v1/completions`, `/v1/chat/completions`, `/v1/responses`), and
-Envoy Gateway adds one ExtProc filter for each of them to the Gateway's
-listener. All of them run for every request to these paths, so the EPP is asked
-once per rule: three times here, with the same single Pod as the answer. The
-check counts both:
+per ExtProc filter in Envoy. In Envoy's configuration every **match** of an HTTPRoute rule is a route of
+its own, and the Gateway's listener has one ExtProc filter for each of those
+routes that sends to the InferencePool.
+List the rules and count their matches:
+
+```bash run
+kubectl get httproute -n "$NS" -o json | python3 -c '
+import json, sys
+for rule in json.load(sys.stdin)["items"][0]["spec"]["rules"]:
+    name, matches = rule.get("name", "-"), len(rule.get("matches", []))
+    kind = rule["backendRefs"][0].get("kind", "Service")
+    print(f"{name:36} {matches:2} match(es) -> {kind}")'
+```
+
+```text
+v1-completions-path                   1 match(es) -> InferencePool
+v1-chat-completions-path              1 match(es) -> InferencePool
+v1-responses-path                     1 match(es) -> InferencePool
+v1-messages-path                      1 match(es) -> InferencePool
+v1-model-routing                      8 match(es) -> InferencePool
+v1-completions-publisher-path         1 match(es) -> InferencePool
+v1-chat-completions-publisher-path    1 match(es) -> InferencePool
+v1-responses-publisher-path           1 match(es) -> InferencePool
+v1-messages-publisher-path            1 match(es) -> InferencePool
+v1-publisher-path-catch-all           1 match(es) -> Service
+v1-catch-all-path                     1 match(es) -> Service
+v1-catch-all-model-routing            1 match(es) -> Service
+```
+
+Nine rules send to the InferencePool: four for the paths under
+`/<namespace>/demo-model` (`/v1/completions`, `/v1/chat/completions`,
+`/v1/responses`, `/v1/messages`), four for the same paths under
+`/publishers/<namespace>/models/<model>`, and `v1-model-routing`, which
+matches the bare `/v1/...` paths by the header `X-Gateway-Model-Name` and has
+eight matches. That makes 4 + 4 + 8 = **16 matches, so 16 ExtProc filters**.
+The filters of a listener form a chain that every request to the pool passes
+through, whichever rule it matched, so the EPP is asked 16 times for one
+request, with the same single Pod as the answer each time. The check counts
+both:
 
 ```bash verify retry=6 delay=5
-RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
+MATCHES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
 import json, sys
-print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
+print(sum(len(rule.get("matches", [])) for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
           if any(b.get("kind") == "InferencePool" for b in rule.get("backendRefs", []))))')
 SETS=$(kubectl logs -n "$NS" \
   -l app.kubernetes.io/component=llminferenceservice-router-scheduler \
   -c main --since=5m --tail=-1 \
   | grep "$REQUEST_ID" | grep -c "EPP received request")
-echo "HTTPRoute rules to the InferencePool: $RULES; EPP sets for this request: $SETS"
-test "$RULES" -gt 0 && test "$SETS" -eq "$RULES"
+echo "Matches of the HTTPRoute rules to the InferencePool: $MATCHES; EPP sets for this request: $SETS"
+test "$MATCHES" -gt 0 && test "$SETS" -eq "$MATCHES"
 ```
 
 Each set also ends with an error-level line, `Request latency values are
@@ -441,15 +476,18 @@ assert n >= 10' "$POD_IP"
 The EPP scheduler scores every Pod with its scorer plugins and picks the Pod
 with the highest weighted sum:
 
-<a href="images/epp-scoring.svg" target="_blank"><img src="images/epp-scoring.svg" width="720" alt="How the EPP picks a Pod: queue-scorer (weight 2) uses the EPP's copy of each Pod's waiting requests, prefix-cache-scorer (weight 3) uses the EPP's own prefix index, max-score-picker takes the highest 2xA + 3xB and the EPP returns that Pod's address to Envoy"></a>
+<a href="images/epp-scoring.svg" target="_blank"><img src="images/epp-scoring.svg" width="720" alt="How the EPP picks a Pod: queue-scorer (weight 2) and kv-cache-utilization-scorer (weight 2) use the EPP's copy of each Pod's vLLM numbers, prefix-cache-scorer (weight 3) and no-hit-lru-scorer (weight 2) use the EPP's own prefix index, max-score-picker takes the highest weighted sum and the EPP returns that Pod's address to Envoy"></a>
 
-The two scorers read different things. `queue-scorer` uses the EPP's copy of
-each Pod's `vllm:num_requests_waiting`. `prefix-cache-scorer` does not read
-vLLM's prefix cache at all: it uses the EPP's own index of which Pod got which
-prompt, built by two helpers the EPP adds on its own
+The four scorers read two different things. `queue-scorer` and
+`kv-cache-utilization-scorer` use the EPP's copy of each Pod's vLLM numbers
+(`vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc`): fewer waiting
+requests and a less full KV cache score higher. `prefix-cache-scorer` does not
+read vLLM's prefix cache at all: it uses the EPP's own index of which Pod got
+which prompt, built by two helpers the EPP adds on its own
 (`approx-prefix-cache-producer`, `token-producer`; the EPP log says
-"auto-created default producer"). The KV cache utilization is read but not
-scored in this configuration.
+"auto-created default producer"). `no-hit-lru-scorer` acts on prompts that no
+Pod has seen: it prefers the Pod that got such a new prompt least recently, so
+new prompts spread over the Pods instead of piling up on one.
 
 ```bash verify
 kubectl logs -n "$NS" -l app.kubernetes.io/component=llminferenceservice-router-scheduler -c main --tail=-1 \
@@ -525,7 +563,7 @@ Key metrics:
 
 | Metric | Scorer | Description |
 |--------|--------|-------------|
-| `inference_pool_average_kv_cache_utilization` | — (no scorer uses it here) | Average KV-cache utilization of the Pods |
+| `inference_pool_average_kv_cache_utilization` | kv-cache-utilization-scorer | Average KV-cache utilization of the Pods |
 | `inference_pool_average_queue_size` | queue-scorer | Average queue size of the Pods |
 | `inference_pool_ready_pods` | — | Pods ready to serve |
 | `inference_extension_prefix_indexer_hit_ratio` | prefix-cache-scorer | Prefix-cache match ratio (0.0 to 1.0); grows when similar prompts repeat |

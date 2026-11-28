@@ -1,0 +1,22 @@
+id: llmisvc-anatomy
+title:
+  en: "One Apply, Ten Resources — LLMInferenceService Anatomy"
+  ko: "하나의 Apply, 열 개의 리소스 — LLMInferenceService 해부"
+summary:
+  en: Apply one LLMInferenceService and inspect the 10+ resources the controller creates.
+  ko: LLMInferenceService 하나를 적용하고 컨트롤러가 만드는 10여 개의 리소스를 살펴봅니다.
+status: stable
+group: llmisvc
+env: kind-kserve/v1
+env_options: {types: [llmisvc]}   # LLMInferenceService + its gateway stack
+uses: [llmisvc/v1]
+namespace: llmisvc-anatomy
+versions:
+  default: v0.18.0
+  tested: [v0.18.0]
+tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
+requires: {gpu: false, cpu: 4, memory: 16Gi}
+langs: [en, ko]
+timeout_minutes: 60
+owners: [Jooho]
+frozen: true                    # revision v0.18 (docs/rfc/0002-tutorial-revisions.md): never edited

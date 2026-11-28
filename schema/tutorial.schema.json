@@ -170,7 +170,7 @@
     },
     "frozen": {
       "type": "boolean",
-      "description": "Only in tutorials/<id>/revisions/rN/tutorial.yaml: a revision is a frozen copy for older versions (docs/rfc/0002-tutorial-revisions.md); lint R001/R002"
+      "description": "Only in tutorials/<id>/revisions/vX.Y/tutorial.yaml: a revision is a frozen copy for older versions (docs/rfc/0002-tutorial-revisions.md); lint R001/R002"
     }
   },
   "$defs": {

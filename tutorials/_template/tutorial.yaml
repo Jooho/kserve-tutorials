@@ -15,7 +15,7 @@ env_options: {types: [kserve], mode: standard}   # what to install: envs/kind-ks
 namespace: my-tutorial          # defaults to the id
 versions:
   default: v0.18.0              # what readers get
-  tested: [v0.18.0]             # what CI runs (PR, weekly, release; inside the CI window); must include default
+  tested: [v0.18.0]             # what CI runs (PR, release; N and N-1); must include default
 tags: [llmisvc, beginner]       # from catalog/tags.yaml; add a tag there if none fits
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en, ko]                 # en is the source; others are translations

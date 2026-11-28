@@ -1,12 +1,14 @@
-<!-- tut-translation source=README.md sha=ee43b991536d -->
+<!-- tut-translation source=README.md sha=739fde139bdf -->
 # 스케줄러의 관점에서 메트릭 살펴보기
 
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.20.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
+>
+> **이전 KServe 버전:** v0.18.0: [v0.18](revisions/v0.18/README.ko.md)
 
 <!-- /tut -->
 
@@ -30,7 +32,7 @@ vLLM Pod 목록과 EPP 이름을 지정해 둘을 연결합니다. 두 종류의
 - 접두사 캐시가 무엇이며 메트릭으로 어떻게 확인하는지 살펴봅니다. 프롬프트 앞부분이
   같을 때 어떤 카운터가 오르고, 다를 때 어떤 카운터가 그대로인지 확인합니다.
 - vLLM의 접두사 캐시와 EPP의 접두사 인덱스가 어떻게 다른지, 이 구성에서 EPP가
-  요청 하나를 왜 세 번 집계하는지 살펴봅니다.
+  요청 하나를 왜 16번 집계하는지 살펴봅니다.
 - 대시보드를 읽는 법을 익힙니다. 이름이나 위치만 보면 헷갈리기 쉬운 패널도 살펴봅니다.
 
 ## 0단계. 환경 준비
@@ -43,7 +45,7 @@ Kind 클러스터에 KServe LLMInferenceService와 게이트웨이 스택를 준
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.20.0}"
 export NS="${NS:-llmisvc-monitoring}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
@@ -259,7 +261,7 @@ EPP 수집 대상이 `up`을 유지하는 것을 확인했습니다. 이 차트�
 네임스페이스에서 `release: prometheus` 레이블이 붙은 ServiceMonitor를 사용합니다.
 ServiceMonitor는 레이블로 LLMInferenceService의 두 Service를 선택합니다. 각 엔드포인트
 설정은 해당 포트 이름을 가진 Service에 적용됩니다. EPP Service의 포트 이름은 `metrics`,
-vLLM Service의 포트 이름은 `https`입니다.
+vLLM Service의 포트 이름은 `http`입니다.
 
 ```bash run
 kubectl apply -f manifests/servicemonitor.yaml -n "$NS"
@@ -273,8 +275,9 @@ kubectl apply -f manifests/servicemonitor.yaml -n "$NS"
 ```yaml
 # Scrapes both Services of the LLMInferenceService in this namespace:
 # the EPP scheduler (port "metrics", 9090, bearer token required) and
-# vLLM (port "https", 8000; the port is named https but serves plain HTTP
-# unless TLS is enabled for LLMInferenceServices).
+# vLLM (port "http", 8000: plain HTTP. With TLS enabled for
+# LLMInferenceServices the port is named "https" instead, and this endpoint
+# would need that name and scheme).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -292,7 +295,7 @@ spec:
     bearerTokenSecret:
       name: metrics-reader-token
       key: token
-  - port: https
+  - port: http
     path: /metrics
     interval: 15s
     scheme: http
@@ -431,20 +434,23 @@ kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
   | python3 -c 'import json, sys; a = json.load(sys.stdin); print(a[a.index("--config-text") + 1])'
 ```
 
-설정에는 점수를 매기는 플러그인 2개와 각각의 가중치, 그리고 선택기 1개가 있습니다.
+설정에는 점수를 매기는 플러그인 4개와 각각의 가중치, 그리고 선택기 1개가 있습니다.
 
 ```bash verify
 kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
   -o jsonpath='{.spec.template.spec.containers[?(@.name=="main")].args}' \
   | python3 -c 'import json, re, sys
 a = json.load(sys.stdin); c = a[a.index("--config-text") + 1]
-assert re.search(r"pluginRef: queue-scorer\s+weight: 2", c) and re.search(r"pluginRef: prefix-cache-scorer\s+weight: 3", c), c'
+want = {"queue-scorer": 2, "kv-cache-utilization-scorer": 2, "prefix-cache-scorer": 3, "no-hit-lru-scorer": 2}
+assert all(re.search(rf"pluginRef: {p}\s+weight: {w}\b", c) for p, w in want.items()), c'
 ```
 
 | 플러그인 | 점수 산정 또는 선택 기준 | 가중치 |
 |--------|---------------------|--------|
 | `queue-scorer` | EPP가 각 Pod에서 마지막으로 읽은 `vllm:num_requests_waiting`을 사용합니다. 대기 요청이 적을수록 점수가 높습니다. | 2 |
+| `kv-cache-utilization-scorer` | EPP가 각 Pod에서 마지막으로 읽은 `vllm:kv_cache_usage_perc`를 사용합니다. KV 캐시 사용률이 낮을수록 점수가 높습니다. | 2 |
 | `prefix-cache-scorer` | **EPP 자체** 접두사 인덱스를 사용합니다. EPP가 프롬프트 앞부분을 각 Pod에 얼마나 보냈는지 확인합니다. | 3 |
+| `no-hit-lru-scorer` | 인덱스에서 프롬프트를 찾지 못하면, 이런 새 프롬프트를 마지막으로 받은 지 가장 오래된 Pod에 높은 점수를 줍니다. | 2 |
 | `max-score-picker` | 가중치를 적용한 점수 합계가 가장 높은 Pod를 선택합니다. | |
 
 `prefix-cache-scorer`는 vLLM의 접두사 캐시 메트릭을 읽지 않습니다. EPP가 자체적으로
@@ -452,7 +458,7 @@ assert re.search(r"pluginRef: queue-scorer\s+weight: 2", c) and re.search(r"plug
 해시합니다. 스케줄링 전에 어느 Pod에 어떤 프롬프트를 보냈는지 기록한 인덱스를 조회하고,
 선택이 끝나면 해당 Pod를 기록합니다. 이 플러그인은 위 설정에 없지만 EPP의 플러그인
 메트릭에는 이름이 나옵니다. 7단계에서 이 플러그인의 수치가 vLLM과 어떻게 다른지
-확인합니다. 이 구성에서 EPP는 KV 캐시 사용률을 읽지만 점수 계산에는 사용하지 않습니다.
+확인합니다.
 
 ## 6단계. Grafana 대시보드 가져오기
 
@@ -500,10 +506,10 @@ curl -sf -u "admin:${GRAFANA_PASS}" "http://${NODE_IP}:30090/api/dashboards/uid/
 - **vLLM KV Cache Hit Rate**는 옆에 있는 KV 캐시 사용률과 다른 지표입니다.
   *접두사* 캐시의 `prefix_cache_*` 카운터로 계산합니다.
 - **Scheduler Attempts**와 **Request Throughput**은 EPP 스케줄링 호출을 집계합니다.
-  이 구성에서는 요청 하나당 EPP를 세 번 호출합니다(7단계). Scheduler Attempts는
+  이 구성에서는 요청 하나당 EPP를 16번 호출합니다(7단계). Scheduler Attempts는
   성공한 시도를 표시하며, 실패한 시도가 있으면 두 번째 값으로 표시합니다.
-  Request Throughput은 5분 동안의 초당 호출 수입니다. 300초에 걸쳐 호출이 60번 발생하면
-  순간적으로 치솟는 대신 몇 분 동안 초당 0.2회로 표시됩니다.
+  Request Throughput은 5분 동안의 초당 호출 수입니다. 300초에 걸쳐 호출이 320번 발생하면
+  순간적으로 치솟는 대신 몇 분 동안 초당 약 1.1회로 표시됩니다.
 
 학습 경로를 따라왔다면 이전 튜토리얼에서 보낸 요청도 카운터에 포함되므로 패널의
 수치가 아래 그림과 다를 수 있습니다. 7단계의 확인 명령은 각 부하에서 생긴 변화만
@@ -538,7 +544,7 @@ vLLM의 응답에는 몇 초가 걸리므로 여기서 EPP가 차지하는 시�
 
 | 패널 | 쿼리 |
 |-------|-------|
-| Request Throughput (RPS) | 모델별 초당 `inference_objective_request_total` 증가량(EPP, 이 구성에서는 요청당 3회 집계) |
+| Request Throughput (RPS) | 모델별 초당 `inference_objective_request_total` 증가량(EPP, 이 구성에서는 요청당 16회 집계) |
 
 **4. vLLM Engine Status**  
 vLLM Pod에서 직접 수집한 값을 보여 줍니다.
@@ -580,10 +586,10 @@ epp_counts() {
   epp_metrics '^inference_extension_(scheduler_attempts_total|prefix_indexer_hit_ratio_(sum|count))' \
     | awk '$1 ~ /^inference_extension_scheduler_attempts_total/ {a += $NF} $1 ~ /hit_ratio_count/ {c += $NF} $1 ~ /hit_ratio_sum/ {s += $NF} END {print a + 0, c + 0, s + 0}'
 }
-# InferencePool로 보내는 HTTPRoute 규칙을 셉니다(Envoy는 규칙마다 EPP에 한 번 문의합니다).
-RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
+# InferencePool로 보내는 HTTPRoute 규칙의 일치 조건을 셉니다(Envoy는 조건마다 EPP에 한 번 문의합니다).
+MATCHES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
 import json, sys
-print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
+print(sum(len(rule.get("matches", [])) for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
           if any(b.get("kind") == "InferencePool" for b in rule.get("backendRefs", []))))')
 read -r HITS0 QUERIES0 < <(prefix_cache)
 read -r ATT0 LOOK0 RATIO0 < <(epp_counts)
@@ -619,17 +625,20 @@ echo 'KV Cache Hit Test Complete'
 19 x 16 = 304개 늘어 적중률은 61%입니다. 실행할 때마다 프롬프트 토큰 500개 중
 정확히 304개를 캐시에서 찾았습니다. 이 프롬프트에서는 그 이상 적중할 수 없습니다.
 
-**EPP의 동작.** 요청 20건에 스케줄링을 60번 시도했습니다. Envoy는 *ExtProc*(외부
-처리)로 EPP와 통신합니다. Envoy 필터가 외부 서비스에 요청을 넘기고 응답을 기다리는
-방식입니다. Envoy Gateway는 InferencePool로 요청을 보내는 HTTPRoute 규칙마다
-Gateway 리스너에 이런 필터를 하나씩 추가합니다. 이 HTTPRoute에는 `/v1/completions`,
-`/v1/chat/completions`, `/v1/responses`에 해당하는 규칙이 세 개 있습니다. 리스너의
-필터는 모든 요청이 통과하는 체인을 이루며, 다른 규칙에 해당하지 않는 요청을 받는
-기본 규칙만 이 필터를 끕니다. 따라서 `/v1/completions`로 보낸 요청은 필터 3개를
-모두 거치면서 EPP에 세 번 문의합니다. llmisvc-request-flow 튜토리얼에서는 EPP
-로그에서 이 호출 3건을 확인할 수 있습니다.
+**EPP의 동작.** 요청 20건에 스케줄링을 320번 시도했습니다. 요청마다 16번씩
+시도한 셈입니다. Envoy는 *ExtProc*(외부 처리)로 EPP와 통신합니다. Envoy 필터가
+외부 서비스에 요청을 넘기고 응답을 기다리는 방식입니다. Envoy 설정에서는 HTTPRoute
+규칙의 **일치 조건** 하나가 개별 경로 하나에 해당합니다. Gateway 리스너에는
+InferencePool로 요청을 보내는 경로마다 이런 필터가 하나씩 있습니다. 이 HTTPRoute에서
+InferencePool로 보내는 규칙은 9개이며, 일치 조건은 모두 16개입니다.
+`/<namespace>/demo-model` 아래 경로에 규칙 4개, `/publishers/...` 아래의 같은 경로에
+규칙 4개가 있습니다. 나머지 `v1-model-routing` 규칙에는 헤더로 선택하는 접두사 없는
+`/v1/...` 경로의 일치 조건이 8개 있습니다. 풀로 가는 모든 요청은 리스너의 필터 체인을
+거칩니다. 따라서 `/v1/completions`로 보낸 요청도 필터 16개를 모두 거치면서 EPP에
+16번 문의합니다. llmisvc-request-flow 튜토리얼에는 규칙 목록이 있으며, EPP 로그에서
+이 호출 16건을 확인할 수 있습니다.
 
-EPP는 접두사 인덱스를 60번 조회했고, 그중 59번 프롬프트를 찾았습니다. 첫 조회에서
+EPP는 접두사 인덱스를 320번 조회했고, 그중 319번 프롬프트를 찾았습니다. 첫 조회에서
 Pod를 기록했기 때문에 이후에는 같은 요청이든 다음 요청이든 모두 해당 기록을 찾았습니다.
 EPP는 vLLM의 토크나이저를 사용하지 않고 토큰을 추정하며 자체 블록 크기를 사용합니다
 (llm-d-router 소스 참고). 따라서 EPP의 수치를 vLLM의 토큰 수와 직접 비교할 수
@@ -640,10 +649,10 @@ EPP는 vLLM의 토크나이저를 사용하지 않고 토큰을 추정하며 자
 read -r HITS1 QUERIES1 < <(prefix_cache)
 read -r ATT1 LOOK1 RATIO1 < <(epp_counts)
 awk -v h=$((HITS1 - HITS0)) -v q=$((QUERIES1 - QUERIES0)) -v a=$((ATT1 - ATT0)) -v l=$((LOOK1 - LOOK0)) \
-    -v r0="$RATIO0" -v r1="$RATIO1" -v rules="$RULES" 'BEGIN {
+    -v r0="$RATIO0" -v r1="$RATIO1" -v matches="$MATCHES" 'BEGIN {
   printf "vLLM prefix cache: %d of %d prompt tokens were hits\n", h, q
-  printf "EPP: %d scheduling attempts for 20 requests (%d route rules), %d prefix index lookups, hit ratios add up to %.0f\n", a, rules, l, r1 - r0
-  exit !(q > 0 && h / q >= 0.5 && a == 20 * rules)
+  printf "EPP: %d scheduling attempts for 20 requests (%d route matches), %d prefix index lookups, hit ratios add up to %.0f\n", a, matches, l, r1 - r0
+  exit !(q > 0 && h / q >= 0.5 && a == 20 * matches)
 }'
 ```
 
@@ -651,16 +660,17 @@ awk -v h=$((HITS1 - HITS0)) -v q=$((QUERIES1 - QUERIES0)) -v a=$((ATT1 - ATT0)) 
 
 ```text
 vLLM prefix cache: 304 of 500 prompt tokens were hits
-EPP: 60 scheduling attempts for 20 requests (3 route rules), 60 prefix index lookups, hit ratios add up to 59
+EPP: 320 scheduling attempts for 20 requests (16 route matches), 320 prefix index lookups, hit ratios add up to 319
 ```
 
-이 부하를 준 뒤 대시보드에서는 **Scheduler Attempts**가 60회, 두 적중률 패널의 값은
-60.8%, **vLLM에서 처리 중인 요청**은 15~20건으로 표시됐습니다. Prometheus는 15초마다
+이 부하를 준 뒤 대시보드에서는 **Scheduler Attempts**가 320회, 두 적중률 패널의 값은
+60.8%로 표시됐습니다. **vLLM Running**에 표시되는 처리 중인 요청의 최댓값은 20건까지
+나올 수 있으며, 이 그림에서는 7건입니다. Prometheus는 15초마다
 수집하므로 배치가 처리되는 도중의 값을 포착합니다. 요청 20건이 모두 배치 하나에
 들어가므로 **대기 중인 요청**과 대기열 패널은 0을 유지합니다. 요청 처리가 끝나면
 KV 캐시 사용률은 다시 0%가 됩니다.
 
-<a href="images/panels-after-prefix.png" target="_blank"><img src="images/panels-after-prefix.png" width="720" alt="첫 번째 부하 이후 Scheduler Attempts는 60회이고, Avg Cache Hit Rate와 vLLM KV Cache Hit Rate는 각각 60.8%입니다. 처리 중인 요청은 최대 약 17건이며 대기 중인 요청은 0건입니다."></a>
+<a href="images/panels-after-prefix.png" target="_blank"><img src="images/panels-after-prefix.png" width="720" alt="첫 번째 부하 이후 Scheduler Attempts는 320회이고, Avg Cache Hit Rate와 vLLM KV Cache Hit Rate는 각각 60.8%입니다. 처리 중인 요청은 최대 7건이며 대기 중인 요청은 0건입니다."></a>
 
 > **참고**  
 > CPU에서 실행하는 vLLM의 기본값은 `block_size=128`입니다. 이때는 프롬프트의 시작 토큰
@@ -697,11 +707,11 @@ echo 'Varied Prompts Test Complete'
 26개씩 들어 있었습니다. `prefix_cache_hits_total`은 그대로였습니다. 조회한 프롬프트
 토큰 520개 중 캐시에서 찾은 토큰은 0개였습니다.
 
-**EPP**에서는 스케줄링 시도와 접두사 인덱스 조회가 각각 60회 더 늘었습니다. vLLM이
-재사용한 토큰은 없었지만 EPP에서 조회별 적중률을 합하면 40입니다. 각 요청의 첫 조회는
+**EPP**에서는 스케줄링 시도와 접두사 인덱스 조회가 각각 320회 더 늘었습니다. vLLM이
+재사용한 토큰은 없었지만 EPP에서 조회별 적중률을 합하면 300입니다. 각 요청의 첫 조회는
 프롬프트를 찾지 못해 Pod를 기록합니다. 뒤따르는 ExtProc 필터가 잠시 후 같은 요청으로
-두 번째와 세 번째 조회를 하면 해당 기록을 찾습니다. 요청당 세 번 호출하는 효과가
-이번에는 EPP의 적중 수치에 나타납니다.
+나머지 15번의 조회를 하면 해당 기록을 찾습니다. 모두 20번 찾지 못했고 300번
+찾았습니다. 요청당 16번 호출하는 효과가 이번에는 EPP의 적중 수치에 나타납니다.
 
 ```bash verify retry=3 delay=5
 read -r HITS1 QUERIES1 < <(prefix_cache)
@@ -718,14 +728,14 @@ awk -v h=$((HITS1 - HITS0)) -v q=$((QUERIES1 - QUERIES0)) -v a=$((ATT1 - ATT0)) 
 
 ```text
 vLLM prefix cache: 0 of 520 prompt tokens were hits
-EPP: 60 scheduling attempts, 60 prefix index lookups, hit ratios add up to 40
+EPP: 320 scheduling attempts, 320 prefix index lookups, hit ratios add up to 300
 ```
 
 두 적중률 패널에는 0% 대신 **29.8%**가 표시됩니다. 각 패널은 집계 구간에 포함된
 전체 적중 토큰 수를 전체 조회 토큰 수로 나눕니다. 두 부하를 합하면 조회한 토큰
-1,020개 중 304개를 캐시에서 찾았습니다. **Scheduler Attempts**는 120회입니다.
+1,020개 중 304개를 캐시에서 찾았습니다. **Scheduler Attempts**는 640회입니다.
 
-<a href="images/panels-after-varied.png" target="_blank"><img src="images/panels-after-varied.png" width="720" alt="두 번째 부하 이후 Scheduler Attempts는 120회이고, Avg Cache Hit Rate와 vLLM KV Cache Hit Rate는 각각 29.8%입니다."></a>
+<a href="images/panels-after-varied.png" target="_blank"><img src="images/panels-after-varied.png" width="720" alt="두 번째 부하 이후 Scheduler Attempts는 640회이고, Avg Cache Hit Rate와 vLLM KV Cache Hit Rate는 각각 29.8%입니다."></a>
 
 ### 두 적중률 패널의 값이 달라지는 시점
 
@@ -799,7 +809,8 @@ kubectl delete namespace monitoring --ignore-not-found
 - vLLM의 접두사 캐시와 EPP의 접두사 인덱스는 서로 다릅니다. EPP는 이전에 어느 Pod로
   요청을 보냈는지 기록한 정보를 바탕으로 자체 블록 단위로 일치하는 접두사를 추정합니다.
   vLLM의 캐시 메트릭은 읽지 않습니다.
-- 기본 HTTPRoute에서는 Envoy가 요청마다 EPP에 세 번 문의합니다. 따라서 EPP의
-  스케줄링 시도, 요청, 인덱스 조회 카운터는 각각 실제 요청 수의 세 배입니다.
+- 기본 HTTPRoute에서는 Envoy가 InferencePool로 보내는 규칙의 일치 조건마다 EPP에
+  한 번씩, 요청당 총 16번 문의합니다. 따라서 EPP의 스케줄링 시도, 요청, 인덱스 조회
+  카운터는 각각 실제 요청 수의 16배입니다.
 - 두 적중률 패널은 같은 vLLM 카운터를 사용하지만 집계 구간이 다릅니다. 한 패널은
   Pod가 시작한 이후부터, 다른 패널은 최근 5분만 집계합니다.

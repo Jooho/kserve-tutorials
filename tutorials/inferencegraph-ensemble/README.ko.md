@@ -4,7 +4,7 @@
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0, v0.20.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
 

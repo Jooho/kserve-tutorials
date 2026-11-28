@@ -1,12 +1,14 @@
-<!-- tut-translation source=README.md sha=8559b134b951 -->
+<!-- tut-translation source=README.md sha=b757bba6b7ec -->
 # 한 번 적용하면 리소스 10개가 생깁니다 — LLMInferenceService의 구조
 
 <!-- tut:header -->
 
 <!-- tutorial.yaml에서 `./tut sync`로 생성됨 — 직접 수정하지 마세요. -->
-> **상태:** ✅ 안정 · **검증된 KServe:** v0.18.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
+> **상태:** 🚧 작성 중 · **검증된 KServe:** v0.20.0 · **환경:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** 불필요
 >
 > 🌐 [English](README.md)
+>
+> **이전 KServe 버전:** v0.18.0: [v0.18](revisions/v0.18/README.ko.md)
 
 <!-- /tut -->
 
@@ -34,7 +36,7 @@ KServe의 LLMInferenceService를 사용할 수 있는 Kind 클러스터를 준�
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.20.0}"
 export NS="${NS:-llmisvc-anatomy}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
@@ -145,7 +147,8 @@ KServe는 클러스터에 **KServe가 기본으로 제공하는 LLMInferenceServ
 | 설정 | 역할 |
 |--------|------|
 | `kserve-config-llm-template` | vLLM 컨테이너 템플릿(실행 명령, 상태 검사, 보안 설정) |
-| `kserve-config-llm-scheduler` | EPP 스케줄러와 토크나이저 사이드카 |
+| `kserve-config-llm-scheduler` | EPP 스케줄러 |
+| `kserve-config-llm-router-route` | 어떤 경로의 요청을 InferencePool로 보낼지 정하는 HTTPRoute 규칙 |
 
 LLMInferenceService를 생성하면 컨트롤러가 이 설정들을 자동으로 **병합합니다**.
 `baseRefs`를 생략해도 실행 명령, 상태 검사, EPP 스케줄러 설정이 들어갑니다.
@@ -185,7 +188,7 @@ kubectl apply -f llmisvc-cpu.yaml
 │     └── ServiceAccount                                        │
 │                                                               │
 │  3. Scheduler (request routing)                               │
-│     ├── Deployment (EPP scheduler + tokenizer sidecar)        │
+│     ├── Deployment (EPP scheduler)                            │
 │     ├── Service (*-epp-service, gRPC 9002 etc.)               │
 │     ├── Role + RoleBinding (RBAC)                             │
 │     └── ServiceAccount                                        │
@@ -235,16 +238,12 @@ kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-rout
 │      (tokenizer.json, vocab.json, etc.)     │
 │      Does NOT download model weights        │
 │                                             │
-│  ┌─────────────┐            ┌────────────┐  │
-│  │  scheduler  │            │ tokenizer  │  │
-│  │  (main)     │   (idle)   │ (sidecar)  │  │
-│  │  gRPC:9002  │            │ HTTP:8082  │  │
-│  │  health:9003│            │ (health)   │  │
-│  │  metrics:   │            │ Idle in    │  │
-│  │   9090      │            │ default    │  │
-│  │  Scoring,   │            │ config     │  │
-│  │  Pod select │            │            │  │
-│  └─────────────┘            └────────────┘  │
+│  ┌─────────────────────────────────────┐    │
+│  │  scheduler (main)                   │    │
+│  │  gRPC: 9002   health: 9003          │    │
+│  │  metrics: 9090                      │    │
+│  │  Scoring, Pod selection             │    │
+│  └─────────────────────────────────────┘    │
 └─────────────────────────────────────────────┘
          ▲
          │ gRPC (ExtProc)
@@ -253,16 +252,15 @@ kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-rout
 
 | 컨테이너 | 이미지 | 역할 |
 |-----------|-------|------|
-| `storage-initializer` (초기화) | `kserve/storage-initializer` | `STORAGE_ALLOW_PATTERNS`로 걸러낸 토크나이저 파일만 다운로드합니다. |
-| `main` (스케줄러) | `llm-d/llm-d-inference-scheduler` | EPP 스케줄러입니다. ExtProc gRPC로 Envoy와 통신하고 점수를 계산한 뒤 Pod를 선택합니다. |
-| `tokenizer` (사이드카) | `llm-d/llm-d-uds-tokenizer` | 기본 설정에서는 **대기 상태**입니다. `precise-prefix-cache-scorer`가 Unix 소켓으로 이 컨테이너를 사용합니다. |
+| `storage-initializer` (초기화) | `kserve/storage-initializer` | `STORAGE_ALLOW_PATTERNS`로 걸러낸 토크나이저 파일만 다운로드합니다. 모델 가중치는 다운로드하지 않습니다. 이 파일은 선택 사항인 토크나이저 컨테이너에서 사용합니다. 기본 플러그인은 이 컨테이너를 사용하지 않으므로 컨테이너가 시작되지 않습니다. |
+| `main` (스케줄러) | `llm-d/llm-d-router-endpoint-picker` | EPP 스케줄러입니다. ExtProc gRPC로 Envoy와 통신하고 점수를 계산한 뒤 Pod를 선택합니다. |
 
-스케줄러 Pod에는 위 컨테이너 3개만 있어야 합니다.
+스케줄러 Pod에는 위 컨테이너 2개만 있어야 합니다. 하나는 초기화 컨테이너이고, 다른 하나는 계속 실행되는 컨테이너입니다.
 
 ```bash verify
 POD=$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")
 test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.initContainers[*].name}')" = "storage-initializer"
-test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.containers[*].name}' | wc -w)" -eq 2
+test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.containers[*].name}')" = "main"
 ```
 
 #### 스케줄링 플러그인(KServe가 기본으로 제공하는 설정에서 가져옴)
@@ -272,43 +270,18 @@ kubectl describe pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice
   | grep -A 15 "config-text" || true
 ```
 
-기본 설정은 다음과 같습니다.
+기본 설정에는 각각 가중치가 있는 점수 계산 플러그인 4개와 Pod 선택 플러그인 1개가 있습니다.
+각 점수 계산 플러그인은 vLLM Pod마다 0에서 1 사이의 점수를 매깁니다.
+Pod 선택 플러그인은 각 점수에 해당 가중치를 곱해 더한 뒤 합산 점수가 가장 높은 Pod를 선택합니다.
 
 - `queue-scorer`(가중치 2)는 대기 중인 요청이 적은 Pod에 더 높은 점수를 줍니다.
-- `prefix-cache-scorer`(가중치 3)는 vLLM 지표를 기준으로 접두사 캐시 적중률이 높은 Pod에 더 높은 점수를 줍니다.
+- `kv-cache-utilization-scorer`(가중치 2)는 KV 캐시 사용률이 낮은 Pod에 더 높은 점수를 줍니다.
+- `prefix-cache-scorer`(가중치 3)는 요청의 프롬프트 접두사가 캐시에 있을 가능성이 가장 높은 Pod에 더 높은 점수를 줍니다.
+- `no-hit-lru-scorer`(가중치 2)는 어느 Pod의 캐시에도 없는 프롬프트가 들어오면, 그런 프롬프트를 받은 지 가장 오래된 Pod에 더 높은 점수를 줍니다. 이렇게 하면 새 접두사가 여러 Pod에 분산됩니다.
 - `max-score-picker`는 합산 점수가 가장 높은 Pod를 선택합니다.
 
-#### 토크나이저 사이드카가 대기 상태인 이유
-
-KServe가 기본으로 제공하는 설정인 `kserve-config-llm-scheduler`는 토크나이저를 항상 주입합니다.
-기본 플러그인인 `prefix-cache-scorer`는 vLLM 지표만 읽습니다.
-토크나이저는 `precise-prefix-cache-scorer`로 바꿨을 때만 사용합니다.
-
-<details>
-<summary>precise-prefix-cache-scorer에서 토크나이저를 사용하는 방식</summary>
-
-`precise-prefix-cache-scorer`를 사용하면 토크나이저가 다음과 같이 동작합니다.
-
-1. 토크나이저가 프롬프트를 토큰으로 나누고 블록 해시를 계산합니다.
-2. vLLM이 ZMQ로 캐시 이벤트를 발행합니다.
-3. 스케줄러가 블록 해시를 캐시 이벤트와 대조해 정확히 일치하는 Pod를 선택합니다.
-
-| | `prefix-cache-scorer` (기본값) | `precise-prefix-cache-scorer` |
-|---|---|---|
-| 데이터 출처 | vLLM 지표(`prefix_cache_hit_rate`) | vLLM의 실시간 ZMQ 이벤트 스트림 |
-| 방식 | vLLM이 보고한 적중률을 사용합니다. | 스케줄러가 토큰화하고 블록 해시를 계산한 뒤 정확히 일치하는 항목을 찾습니다. |
-| 토크나이저 | **사용하지 않습니다.** 주입 후 대기 상태로 있습니다. | **사용합니다.** Unix 도메인 소켓으로 통신합니다. |
-| 추가 vLLM 설정 | 없음 | `--enable-kvcache`, `--block-size`, ZMQ 이벤트 발행 |
-
-토크나이저와 스케줄러는 같은 Pod 안의 **Unix 도메인 소켓**
-(`/tmp/tokenizer/tokenizer-uds.socket`)으로 통신하므로 커널 네트워크 스택을 거치지 않습니다.
-
-```bash skip
-kubectl exec -n "$NS" "$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")" -c main -- ls -la /tmp/tokenizer/
-```
-
-[정밀 접두사 KV 캐시 라우팅 설정 예시](https://github.com/kserve/kserve/tree/master/docs/samples/llmisvc/precise-prefix-kv-cache-routing)
-</details>
+이 예제처럼 vLLM Pod가 하나뿐이면 점수와 관계없이 모든 요청이 그 Pod로 갑니다.
+점수는 이 시리즈의 요청 흐름 튜토리얼에서 확인할 수 있습니다.
 
 ### 3. InferencePool — 스케줄러와 워크로드 연결
 
@@ -335,17 +308,17 @@ kubectl get svc -n "$NS"
 
 | Service | 용도 | 포트 |
 |---------|---------|-------|
-| `*-workload-svc` | vLLM Pod에 이름을 부여합니다. 추론 요청에는 사용하지 않습니다(아래 설명 참조). | 8000 (HTTPS) |
+| `*-workload-svc` | vLLM Pod에 이름을 부여합니다. 추론 요청에는 사용하지 않습니다(아래 설명 참조). | 8000 (`http`, 워크로드에 TLS를 활성화한 경우에만 `https`) |
 | `*-epp-service` | EPP 스케줄러를 노출합니다. | 9002 (gRPC), 9003 (상태 확인), 9090 (지표), 5557 (ZMQ) |
 
 > 지표 포트(9090)는 일반 HTTP를 사용하며 베어러 토큰이 필요합니다
 > (`metrics-endpoint-auth: true`). 지표를 읽는 방법은 이 시리즈의 요청 흐름 튜토리얼에서 다룹니다.
 
 > **추론 요청은 `*-workload-svc`를 거치지 않습니다.**
-> `/v1/completions`, `/v1/chat/completions`, `/v1/responses`에 대한 HTTPRoute의
+> `/v1/completions`, `/v1/chat/completions`, `/v1/responses`, `/v1/messages`에 대한 HTTPRoute의
 > 백엔드는 InferencePool입니다. EPP가 Pod를 선택하면 Envoy가 해당 Pod의 IP에 직접 연결합니다.
-> 워크로드 Service는 나머지 용도에 쓰입니다. HTTPRoute의 마지막 규칙은
-> `/<namespace>/demo-model` 아래의 다른 경로를 이 Service로 보냅니다.
+> 워크로드 Service는 나머지 용도에 쓰입니다. HTTPRoute에서 나머지 경로를 처리하는 규칙은
+> `/<namespace>/demo-model` 아래의 다른 경로로 들어온 요청을 이 Service로 보냅니다.
 > 모니터링 시스템은 이 Service로 vLLM Pod를 찾고, 클러스터 내부 클라이언트는 이 Service 이름으로
 > vLLM을 호출할 수 있습니다. 요청 흐름 튜토리얼에서 Envoy 로그에 찍힌 Pod IP를 확인할 수 있습니다.
 
@@ -466,6 +439,6 @@ kubectl delete namespace "$NS" --ignore-not-found
 
 - LLMInferenceService YAML 파일 하나를 적용하면 리소스가 10개 이상 생성됩니다.
 - **KServe가 기본으로 제공하는 LLMInferenceServiceConfig**를 자동으로 주입하므로 별도로 설정을 작성할 필요가 없습니다.
-- 스케줄러 Pod에는 컨테이너가 3개 있습니다. 초기화 컨테이너가 토크나이저 파일을 다운로드하고, 스케줄러와 토크나이저가 실행됩니다. 토크나이저는 기본 설정에서 대기 상태입니다.
+- 스케줄러 Pod에는 컨테이너가 2개 있습니다. 초기화 컨테이너는 토크나이저 파일을 다운로드하고, 스케줄러는 플러그인 4개로 Pod의 점수를 계산합니다.
 - 핵심 연결 구조는 **Deployment(워크로드)** ↔ **InferencePool** ↔ **스케줄러** ↔ **HTTPRoute** ↔ **Gateway**입니다.
 - 리소스를 정리할 때는 OwnerReference를 따라 연쇄 삭제가 이뤄집니다.

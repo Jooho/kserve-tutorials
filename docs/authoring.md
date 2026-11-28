@@ -24,8 +24,8 @@ The toolkit (`tools/`, `schema/`) names no product. What it shows or writes abou
 | `name` | labels: "Tested with KServe v0.18.0", the UI's version picker, release notes, D003 |
 | `title`, `intro` | the site's home page, the UI's title, release names |
 | `version_var` | the shell variable a tutorial reads its version from (`$KSERVE_VERSION`); the setup step exports it, `./tut run --version` sets it |
-| `upstream` | the GitHub repo whose latest release `./tut latest` falls back to when `latest` is not set |
-| `latest` | the newest version this repository moves to (`./tut latest`): N of the CI window, the weekly canary and the `new-release` issue. Not set: the upstream's latest release. A tested version above it still runs as N |
+| `upstream` | the GitHub repo whose releases `./tut kserve-version <ver>` checks a version against |
+| `version` | the newest KServe version the tutorials move to, always pinned here (required): N in CI. Show or set it with `./tut kserve-version [<ver>]` (the command is `<id>-version`); nothing follows the upstream's newest release by itself. A tested version above it is an error [T009] |
 | `example` | the finished tutorial `./tut draft` shows the AI |
 | `glossary` | product terms translations keep in English |
 
@@ -104,10 +104,13 @@ Line breaks: in `docs/` write one line per paragraph and do not wrap by hand; a 
 
 ### A new product version changes a tutorial: keep the old one as a revision
 
-When a tutorial has to change because of a new version (an API, a default, a component), readers on the older versions keep the tutorial as it was: a frozen copy in `tutorials/<id>/revisions/rN/` (docs/rfc/0002-tutorial-revisions.md). Always, without trying to keep one README true for both.
+When a tutorial has to change because of a new version (an API, a default, a component), readers on the older versions keep the tutorial as it was: a frozen copy in `tutorials/<id>/revisions/vX.Y/` (docs/rfc/0002-tutorial-revisions.md). Always, without trying to keep one README true for both.
 
 ```bash skip
-./tut revision start <id> --to v0.20.0   # copies tutorials/<id>/ from origin/main to revisions/rN (frozen),
+./tut kserve-version v0.20.0             # pin the new version (checks the upstream has that release)
+./tut tested add v0.20.0 --all           # then ./tut sync; CI of the PR runs every tutorial on v0.20.0 and on v0.18.0
+# for each tutorial that fails or is no longer true on v0.20.0:
+./tut revision start <id> --to v0.20.0   # copies tutorials/<id>/ from origin/main to revisions/vX.Y (frozen),
                                          # sets versions.tested/default of the current tutorial to v0.20.0
 # edit the tutorial for v0.20.0, ./tut sync, ./tut run <id>, make precommit
 ./tut revision list                      # every tutorial and revision with its tested versions
@@ -115,6 +118,9 @@ When a tutorial has to change because of a new version (an API, a default, a com
 ./tut revision keep <id> [v0.18.0 ...]   # skipped versions: move them to a revision without a new version
 ```
 
+- The maintainer starts the move (AGENTS.md "A new product version"); `revision start` also works after the new version was added to `tested` on the branch. A tutorial edited for the new version is `status: draft` until a person reviewed it.
+- The revision's directory is named after the newest minor it keeps: `revisions/v0.18/` is the tutorial for v0.18 [R001].
+- The current tutorial shows its own version only. Do not compare with older versions ("removed", "no longer", "in older versions") and do not keep a ghost of what is gone in text, tables, checks or pictures: delete it. Readers of the older version have the revision. Something that looks odd in the current version gets its reason in present terms.
 - Freeze first, then edit; the revision and the change go into one commit. The copy is taken from the base branch, so it is what was verified.
 - The copy runs from its new place: its setup step `cd`s into the revision and links that leave the tutorial are re-pointed. `./tut sync` never writes into `revisions/`; the current README's header links each revision.
 - A revision is never edited [R002], uses only frozen env and lib parts [R003], and one version belongs to one variant [R005]. A version removed from `versions.tested` must be in a revision [R004].
@@ -122,7 +128,7 @@ When a tutorial has to change because of a new version (an API, a default, a com
 - `./tut run <id> --version v0.19.0`, `./tut ui` ("My KServe" version) and the site pick the revision tested with that version, by tag, then by minor (v0.19.2 uses what was tested as v0.19.x).
 - The copy includes translations and the explainer as they were: copying them is the one exception to "explainer changes go in their own PR".
 - A change that is not about a version (a typo, more explanation) needs no revision.
-- CI runs two versions of a tutorial: N (`./tut latest`: `latest` in project.yaml, else the newest KServe release) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` and the weekly `ci-window` issue. Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
+- CI runs two versions of a tutorial: N (`version` in project.yaml, `./tut kserve-version`) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` (`make precommit` prints it). Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
 
 ## 7. Translations
 
@@ -147,6 +153,29 @@ The AI only returns text; a program checks it before anything is written: code b
 `./tut translation` shows every translation's state and the next step. A translation has the same shell blocks in the same order [D011]. When README.md changes later, lint warns that the translation is behind [D010] and the UI shows it to readers. Translation lag never blocks English changes or releases.
 
 Nothing translates on its own: `./tut sync` stays deterministic and offline, and plain `make precommit` only lists what is missing (`./tut translation todo`). Translate when the English is done, so the AI does not chase a moving text.
+
+### Updating a translation after the English changed
+
+`./tut translation draft` translates the whole README again. That takes 5 to 10 minutes per file and the AI rewords sentences a person already reviewed (it once turned the Grafana panel name "Scheduler Attempts", which stays English because the screen shows it in English, into Korean). When a translation exists and only parts of the English changed, update instead of redoing. The helpers are in `tools/contrib/translation/` (not part of `./tut` yet, backlog B23); they use the same AI CLI as `./tut translation draft` (`TUT_AI_TRANSLATE`, else `TUT_AI`):
+
+```bash skip
+# 1. Finish the English first: README, explainer, the review rounds. Translate once, at the end.
+# 2. A tutorial whose English changed in many places: the AI gets the previous English, the reviewed
+#    previous translation (from the base branch) and the new English; it keeps the translation of
+#    every unchanged paragraph and translates only what changed. The usual checks run on the result.
+.venv/bin/python tools/contrib/translation/update_readme.py <id>            # README.ko.md
+.venv/bin/python tools/contrib/translation/update_explainer.py <id>         # explainer/index.ko.md
+# 3. A few sentences changed after that (a review finding, a typo): send only those blocks.
+#    A block is the text between two blank lines; name each changed block by a piece of its new English.
+.venv/bin/python tools/contrib/translation/patch_blocks.py tutorials/<id>/explainer/index.md \
+    tutorials/<id>/explainer/index.ko.md "a few words of the new sentence" "another changed block"
+# 4. Compare what changed with the English (git diff of the .ko.md file), then ./tut translation mark <id> ko.
+```
+
+- Step 2 still makes the AI write the whole file (5 to 10 minutes); step 3 took about a minute for eight blocks in three files. Use step 3 whenever you can name the changed blocks.
+- Step 3 needs the English and the translation to have the same number of blocks in the same order; the helper refuses otherwise. A translation made by the tools has that shape.
+- Unchanged text must stay byte for byte: check with `git diff` that only the blocks you expected moved.
+- An explainer's translation is never marked by an agent (`./tut explain mark` is the reader's).
 
 ## 8. New tutorial from tested work: `./tut draft`
 
@@ -198,7 +227,7 @@ Each entry: what happened → the rule → evidence. Add one whenever you fix a 
 
 ### CI-004 Upstream images disappear
 - **What happened:** the LLMInferenceService never became Ready because the EPP scheduler image from KServe's own default config, `ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1`, stopped being publicly pullable (ghcr.io 403 on the anonymous token). llm-d renamed it to `llm-d-router-endpoint-picker`. Every KServe release up to v0.19.0 was affected for every user, not only CI.
-- **Rule:** a published release can break without any change on our side; that is what the weekly run is for. Work around platform breakage in the environment profile (documented as a known issue with the upstream fix to watch), never in individual tutorials. Diagnostics must show image pull errors (they did: `ImagePullBackOff` + the 403 in events).
+- **Rule:** a published release can break without any change on our side (there is no scheduled run any more: the next PR or release run shows it). Work around platform breakage in the environment profile (documented as a known issue with the upstream fix to watch), never in individual tutorials. Diagnostics must show image pull errors (they did: `ImagePullBackOff` + the 403 in events).
 - **Evidence:** [PR #1, third e2e run](https://github.com/Jooho/kserve-tutorials/actions/runs/44406969077).
 
 ### CI-005 Do no work before the first prompt

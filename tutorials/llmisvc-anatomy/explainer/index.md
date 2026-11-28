@@ -1,4 +1,4 @@
-<!-- tut-explainer source=README.md sha=8559b134b951 by=claude reviewed=yes -->
+<!-- tut-explainer source=README.md sha=b757bba6b7ec by=claude reviewed=yes -->
 # One Apply, Ten Resources: how it works
 
 ## In one picture
@@ -17,8 +17,7 @@ to a shared Gateway. The tutorial is about that one step from "one object" to
   ten objects (README steps 2-5, 13-14).
 - How a request finds its way: Gateway -> HTTPRoute -> InferencePool -> EPP
   scheduler -> vLLM Pod (steps 10-11, 15-16).
-- What runs inside the scheduler Pod and which of its parts the default
-  configuration actually uses (steps 6-9).
+- What runs inside the scheduler Pod and how it scores the Pods (steps 6-9).
 - Why deleting the LLMInferenceService is enough to clean up (cleanup).
 
 ## The pieces
@@ -27,25 +26,26 @@ to a shared Gateway. The tutorial is about that one step from "one object" to
 
 ![kubectl apply creates the LLMInferenceService; the llmisvc controller creates ten objects in four groups](one-apply-ten-resources.svg)
 
-The namespace is empty before the apply (step 2). Within about six seconds of
-`kubectl apply` (step 3) all ten objects exist; the Pods then need a few
+The namespace is empty before the apply (step 2). After `kubectl apply`
+(step 3) the controller creates the ten objects; the Pods then need a few
 minutes until they are Ready (step 4). Think of the LLMInferenceService as an order form: you fill in the
 model, the image and the resources; the controller does the paperwork. That
-controller is `llmisvc-controller-manager` in the `kserve` namespace; the
-`kserve-controller-manager` next to it handles the predictive InferenceService,
-not this object.
+controller is `llmisvc-controller-manager` in the `kserve` namespace. (KServe's
+predictive InferenceService has a controller of its own,
+`kserve-controller-manager`; this environment does not install it.)
 
 | Group | Objects | What for |
 |---|---|---|
 | Workload | Deployment `demo-model-kserve`, Service `...-workload-svc` (port 8000) | runs vLLM, which serves the model from `/mnt/models` |
-| TLS | Secret `...-self-signed-certs` | certificates the controller generates; used only when TLS is switched on (see below) |
+| TLS | Secret `...-self-signed-certs` (type `kubernetes.io/tls`) | certificates; both Pods mount a volume at `/var/run/kserve/tls` |
 | Scheduler | Deployment `...-router-scheduler`, Service `demo-model-epp-service`, ServiceAccount `demo-model-epp-sa`, Role, RoleBinding | the endpoint picker (EPP), with its own identity and permissions (its log shows it watching Pods and the InferencePool) |
 | Traffic wiring | InferencePool `...-inference-pool`, HTTPRoute `...-kserve-route` | connect the shared Gateway to the scheduler and the vLLM Pods |
 
 Where do the command, the probes and the scheduler come from if the YAML does
 not mention them? KServe installs **well-known LLMInferenceServiceConfigs** in
-the `kserve` namespace (eight of them in this run, e.g.
-`kserve-config-llm-template` and `kserve-config-llm-scheduler`), and the
+the `kserve` namespace (ten of them in this run, e.g.
+`kserve-config-llm-template`, `kserve-config-llm-scheduler` and
+`kserve-config-llm-router-route`), and the
 controller merges them into your object. Your YAML sets only what differs for
 this model: the image, the environment, the resources, a non-root
 securityContext and its own probe timings.
@@ -61,9 +61,9 @@ Look at the first picture again, step by step:
 1. The client sends `POST /<namespace>/demo-model/v1/completions` to the
    **Gateway** `kserve/kserve-ingress-gateway`, an Envoy proxy that is not part
    of the model (in this run it is the only Gateway). It has a LoadBalancer
-   address (e.g. 172.18.0.5, from cloud-provider-kind), but the tutorial's
+   address (from cloud-provider-kind), but the tutorial's
    helper `gateway-url.sh` sends the request to the worker node IP and the
-   NodePort of the Envoy Service (e.g. `172.18.0.3:31084`, step 15). Both reach
+   NodePort of the Envoy Service (e.g. `172.18.0.2:30857`, step 15). Both reach
    the same Envoy.
 2. The **HTTPRoute** matches the path and rewrites it to `/v1/completions`,
    which is the path vLLM understands.
@@ -74,10 +74,11 @@ Look at the first picture again, step by step:
    Pods and returns one address. The request itself does not pass through the
    EPP: Envoy keeps it while it waits for the answer. (This comes from the
    configuration; the walk did not log the EPP's choice, and with one Pod there
-   is only one answer.) Envoy in fact asks three times: Envoy Gateway adds one
-   ExtProc filter per HTTPRoute rule that points at the InferencePool, and there
-   are three such rules (below). This was seen in Envoy's configuration on a
-   later run, not in this walk; llmisvc-request-flow shows it in the EPP log.
+   is only one answer.) Envoy in fact asks 16 times: its configuration has one
+   ExtProc filter for every match of the HTTPRoute rules that point at the
+   InferencePool, and those rules have 16 matches together (below). This was
+   seen in Envoy's configuration and in the EPP log of llmisvc-request-flow,
+   not in this walk.
 5. Envoy sends the request to that **vLLM Pod**, to its IP, with no Service in
    between: the EPP's answer carries the Pod's address (header
    `x-gateway-destination-endpoint`), and Envoy's cluster for these rules
@@ -86,14 +87,18 @@ Look at the first picture again, step by step:
    in this walk.) The answer comes back the same way (step 16 got a 20-token
    completion).
 
-The HTTPRoute has four rules, not one: `/v1/completions`,
-`/v1/chat/completions` and `/v1/responses` go to the InferencePool (so through
-the EPP); everything else under `/<namespace>/demo-model` goes straight to the
-workload Service and skips the EPP (dashed in the picture).
+The HTTPRoute has twelve rules, not one (step 11 prints it as YAML; the
+llmisvc-request-flow tutorial prints the rules as a short list). Nine go to the
+InferencePool, so through the EPP: `/v1/completions`, `/v1/chat/completions`,
+`/v1/responses` and `/v1/messages` under `/<namespace>/demo-model`, the same
+four under `/publishers/<namespace>/models/<model>`, and `v1-model-routing`,
+which matches the bare `/v1/...` paths when the request carries the header
+`X-Gateway-Model-Name` (eight matches). Three catch-all rules send everything
+else straight to the workload Service and skip the EPP (dashed in the
+picture).
 
 So the workload Service does not carry inference requests. It is the name and
-the list of vLLM Pods for everything else: the catch-all rule (Envoy takes the
-Pods from the Service's endpoints and connects to them), Prometheus in
+the list of vLLM Pods for everything else: the catch-all rules, Prometheus in
 llmisvc-monitoring, and clients inside the cluster that call
 `...-workload-svc:8000`.
 
@@ -102,34 +107,30 @@ sends requests to a Pod instead of failing them.
 
 ### Inside the scheduler Pod
 
-![The scheduler Pod: the endpoint picker with its ports and plugins, and an unused tokenizer sidecar fed by an init container that downloads only tokenizer files](scheduler-pod.svg)
+![The scheduler Pod: the endpoint picker with its ports and plugins, and an init container that downloads only tokenizer files](scheduler-pod.svg)
 
-The Pod has two containers and one init container (step 8 checks exactly
-this):
+The Pod has one running container and one init container (step 8 checks
+exactly this):
 
 - **main**, the endpoint picker. Ports: 9002 (gRPC, the ExtProc calls from
   Envoy), 9003 (gRPC health), 9090 (metrics). Its configuration (step 9) lists
-  four plugins. `single-profile-handler` means there is one scheduling profile,
-  `default`, and that profile uses the other three: `queue-scorer` (weight 2),
-  `prefix-cache-scorer` (weight 3) and `max-score-picker`, which takes the Pod
-  with the highest weighted score.
-- **tokenizer**, a sidecar. None of the configured plugins uses it: in the
-  KServe v0.18.0 source (`scheduler.go`, `WithUdsTokenizerConfig`) the
-  controller connects only the `precise-prefix-cache-scorer` plugin to the
-  tokenizer's Unix socket, and that plugin is not in this configuration.
+  six plugins. `single-profile-handler` means there is one scheduling profile,
+  `default`, and that profile uses the other five: four scorers,
+  `queue-scorer` (weight 2), `kv-cache-utilization-scorer` (weight 2),
+  `prefix-cache-scorer` (weight 3) and `no-hit-lru-scorer` (weight 2), and
+  `max-score-picker`, which takes the Pod with the highest weighted score.
 - **storage-initializer** (init). It looks odd on a scheduler, which serves no
-  model. It is there only because of the tokenizer sidecar: when the scheduler
-  template has a `tokenizer` container, the llmisvc controller adds the same
-  init container the vLLM Pod has, but limited by `STORAGE_ALLOW_PATTERNS` to
-  the tokenizer files (`tokenizer.json`, `vocab.json`, `config.json`, ...), no
-  weights. The sidecar reads them from `/mnt/models`. So with the default
-  plugins this download is done for a container nobody calls. (The reason is
-  in the KServe v0.18.0 source, `pkg/controller/v1alpha2/llmisvc/scheduler.go`
-  and `workload_storage.go`, not in the cluster output.)
+  model. It downloads only the tokenizer files (`STORAGE_ALLOW_PATTERNS`:
+  `tokenizer.json`, `vocab.json`, `config.json`, ...), no weights. They are
+  for a tokenizer container that the llmisvc controller starts only when a
+  configured plugin needs it. Only `precise-prefix-cache-scorer` does, and it
+  is not in the configuration above, so this Pod has no tokenizer container.
+  (The reason is in the KServe v0.20.0 source,
+  `pkg/controller/v1alpha2/llmisvc/scheduler.go`, not in the cluster output.)
 
 With one replica the choice is easy, but the same machinery decides between
-many Pods: prefer short queues, and prefer Pods that already have the start of
-your prompt in their cache.
+many Pods: prefer short queues and a KV cache with room, prefer Pods that
+already have the start of your prompt, and spread prompts nobody has seen.
 
 ### Cleaning up
 
@@ -143,36 +144,26 @@ Deployments.
 | README step | What happens in the cluster | What to look at |
 |---|---|---|
 | 1 setup | Kind cluster with KServe, Envoy Gateway, Gateway API Inference Extension; namespace created | `kubectl get gateway -A`: one Gateway, `Programmed` |
-| 2 snapshot | nothing in the namespace yet | "No resources found" |
-| 3 apply | the controller creates the ten objects within seconds | Pods in `Init:0/1` |
+| 2 snapshot | nothing in the namespace yet | nothing is listed after `=== Before Apply ===` |
+| 3 apply | the LLMInferenceService is created; the controller then creates the ten objects | `demo-model created`; a moment later the namespace still lists no Pods (probe after step 3) |
 | 4 wait | storage-initializer downloads, vLLM starts, readiness on `/health` | `Ready` after a few minutes |
 | 5 LWS | none: a single-node model uses a Deployment | "No resources found" |
-| 6-9 scheduler | the EPP is running; its log shows controllers for InferencePool and Pods and `gRPC server listening` on 9002 | images and the plugin list |
-| 10-12 pool, route, services | the wiring of the picture above | `endpointPickerRef`, the four route rules, service ports |
+| 6-9 scheduler | the EPP is running; its log shows controllers for InferencePool and Pods and `gRPC server listening` on 9002 | images and the plugin list: four scorers and a picker |
+| 10-12 pool, route, services | the wiring of the picture above | `endpointPickerRef`, the twelve route rules, service ports |
 | 13-14 counts | 2 Deployments, 2 Services, 1 InferencePool, 1 HTTPRoute | the verify checks these numbers |
 | 15-16 request | a completion through the Gateway | `"finish_reason": "length"` after 20 tokens |
 
 ## What we saw that the README does not say
 
-- The README's table calls port 8000 HTTPS, and the workload Service port is
-  named `https`. In this run vLLM spoke plain HTTP: the readiness probe uses
-  HTTP and the vLLM command line has no TLS options. That is a setting, not a
-  README error: in the KServe v0.18.0 well-known configs, vLLM's `--ssl-*`
-  options, the probe scheme and the EPP's `--secure-serving` all depend on
-  TLS being switched on (`enableLLMInferenceServiceTLS` in the ingress
-  config). The same configs mount the `...-self-signed-certs` Secret into
-  both Pods either way (`/var/run/kserve/tls`); this run did not look at the
-  mounts.
 - In this run the only ServiceAccount the controller created is the EPP's; the
   vLLM Pod runs as the namespace's `default` ServiceAccount. The README's
   resource map lists a ServiceAccount under the workload. (In the KServe
   source the controller creates a workload ServiceAccount for multi-node
   LeaderWorkerSet deployments; this tutorial is single-node.)
-- The scheduler image in this environment is `llm-d-router-endpoint-picker`.
-  The environment replaces the image KServe's config names; its README
-  (`envs/kind-kserve/v1/README.md`) says the old image now returns 403. The
-  tutorial README's table shows the old name.
-- The HTTPRoute has a catch-all rule that bypasses the EPP.
+- The scheduler Pod has three volumes for the tokenizer (`tokenizer-uds`,
+  `tokenizer-tmp`, `tokenizer-cache`) although no tokenizer container is
+  started, and the well-known config `kserve-config-llm-scheduler` lists a
+  `tokenizer` container next to `main`.
 
 ## Check yourself
 
@@ -187,8 +178,9 @@ automatically, and the EPP now has three candidates to score.
 <details>
 <summary>2. A request to <code>/&lt;namespace&gt;/demo-model/health</code>: does the EPP see it?</summary>
 
-No. Only the three OpenAI-style API paths go to the InferencePool; the
-catch-all rule sends other paths straight to the workload Service.
+No. Only the API paths (`/v1/completions`, `/v1/chat/completions`,
+`/v1/responses`, `/v1/messages`) go to the InferencePool; a catch-all rule
+sends other paths straight to the workload Service.
 </details>
 
 <details>
@@ -205,4 +197,4 @@ The LLMInferenceService. Its ten objects are owned by it and are deleted with
 it.
 </details>
 
-Based on a run of llmisvc-anatomy with KServe v0.18.0 on 2026-11-21.
+Based on a run of llmisvc-anatomy with KServe v0.20.0 on 2026-11-27.

@@ -10,6 +10,7 @@ Tutorial metadata
   T006 deprecated/archived tutorials need a `deprecation` block
   T007 stable tutorials must use a frozen env profile
   T008 env_options must be options the env declares, with allowed values
+  T009 a tested version is newer than the pinned product version (project.yaml `version`)
 
 Documents (README.md and translations)
   D001 shell code blocks need exactly one role: run | verify | cleanup | skip
@@ -45,8 +46,9 @@ Explainers (tutorials/<id>/explainer/, AI-written, never executed; tut/explain.p
   X004 unsafe SVG: <script>, on*= handlers, foreignObject, external href / url()
   X005 AI explainer not reviewed yet, or README.md changed since (warning)
 
-Revisions (tutorials/<id>/revisions/rN/, docs/rfc/0002-tutorial-revisions.md)
-  R001 a revision's tutorial.yaml: valid, `frozen: true`, same id, default in tested;
+Revisions (tutorials/<id>/revisions/vX.Y/, docs/rfc/0002-tutorial-revisions.md)
+  R001 a revision's tutorial.yaml: valid, `frozen: true`, same id, default in tested,
+       directory named after the newest minor it keeps (revisions/v0.18/);
        `frozen` only in revisions
   R002 a frozen revision was modified (compare with --base)
   R003 a revision may only use frozen env and lib parts
@@ -99,8 +101,8 @@ import jsonschema
 import yaml
 
 from . import catalog, generate, markdown, project, shared
-from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, REVISIONS_DIR, Tutorial, load_envs,
-                    load_modules, load_revisions, load_schema, load_tutorials)
+from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, REVISIONS_DIR, VERSION_RE, Tutorial, load_envs,
+                    load_modules, load_revisions, load_schema, load_tutorials, minor, revision_name)
 
 TRANSLATION_RE = re.compile(
     r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)((?:\s+[a-z]+=\S+)*)\s*-->")
@@ -285,6 +287,13 @@ class Linter:
             self.err("T003", f, f"env {t.env_ref!r} does not exist under envs/")
         if t.default_version and t.default_version not in t.tested_versions:
             self.err("T004", f, f"versions.default {t.default_version} is not in versions.tested")
+        pin = getattr(self.project, "version", None)
+        if pin and VERSION_RE.match(pin):
+            for ver in t.tested_versions:
+                if VERSION_RE.match(str(ver)) and minor(ver) > minor(pin):
+                    self.err("T009", f, f"{ver} is newer than the pinned {self.project.name} version {pin} "
+                             f"(project.yaml); CI would never run it. Move the pin first: "
+                             f"./tut {self.project.id}-version {ver}")
         if env:
             for ver in t.tested_versions:
                 if not env.supports(ver):
@@ -613,7 +622,7 @@ class Linter:
     def lint_revisions(self, t: Tutorial, schema: dict):
         if t.meta.get("frozen"):
             self.err("R001", t.path / "tutorial.yaml", "`frozen` is only for revisions "
-                     "(tutorials/<id>/revisions/rN/); the current tutorial keeps changing")
+                     "(tutorials/<id>/revisions/vX.Y/); the current tutorial keeps changing")
         seen: dict[str, str] = {v: "current" for v in t.tested_versions}
         for r in load_revisions(t):
             f = r.path / "tutorial.yaml"
@@ -630,6 +639,9 @@ class Linter:
                 self.err("R001", f, f"id {r.meta.get('id')!r} != {t.id!r}")
             if r.default_version and r.default_version not in r.tested_versions:
                 self.err("R001", f, f"versions.default {r.default_version} is not in versions.tested")
+            if revision_name(r.tested_versions) != r.revision:
+                self.err("R001", f, f"revisions/{r.revision}/ keeps {', '.join(r.tested_versions) or 'no version'}: "
+                         f"a revision is named after the newest minor it keeps ({revision_name(r.tested_versions)})")
             env = self.envs.get(r.env_ref) if r.env_ref else None
             if r.env_ref and (env is None or not env.frozen):
                 self.err("R003", f, f"env {r.env_ref} is {'missing' if env is None else 'not frozen'}; "

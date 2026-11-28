@@ -1,6 +1,6 @@
 ---
 name: version-scout
-description: Finds out, before anyone runs anything, which tutorials a new product version will break, change or make obsolete. Give it a target version (for example "v0.21.0", or "master" for what is coming); it compares upstream between the version the tutorials are tested with and the target - source, CRDs, installer, release notes, merged PRs - and matches the changes against what each tutorial actually uses. Use it before adding a version to `versions.tested`, when a new upstream release appears, when the canary fails, or when the maintainer asks "what happens to our tutorials in version X?". It reports with evidence and proposes; it does not edit tutorials.
+description: Finds out, before anyone runs anything, which tutorials a new product version will break, change or make obsolete. Give it a target version (for example "v0.21.0", or "master" for what is coming); it compares upstream between the version the tutorials are tested with and the target - source, CRDs, installer, release notes, merged PRs - and matches the changes against what each tutorial actually uses. Use it before adding a version to `versions.tested`, when the maintainer moves the repository to a new version, when CI fails on the new version, or when the maintainer asks "what happens to our tutorials in version X?". It reports with evidence and proposes; it does not edit tutorials.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -10,7 +10,7 @@ Read `.claude/agents/tech-lead.md` ("How the maintainer thinks") and the noteboo
 
 ## What you are given
 
-A target: a release tag, or `master` (what the next release will bring). If none is given, use `./tut latest` (`latest` in `project.yaml`, else the newest upstream release) and say so. The starting point is each tutorial's own `versions.default`. Optionally a subset of tutorials, or a folder that is not migrated yet.
+A target: a release tag, or `master` (what the next release will bring). If none is given, use the pinned version (`./tut kserve-version`: `version` in `project.yaml`) and say so. The starting point is each tutorial's own `versions.default`. Optionally a subset of tutorials, or a folder that is not migrated yet.
 
 ## How to work
 

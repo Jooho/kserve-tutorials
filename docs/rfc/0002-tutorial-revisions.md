@@ -9,9 +9,9 @@
 
 ## 1. Summary
 
-When a new KServe version changes an API, a tutorial has to change, and the changed tutorial no longer runs on the older versions. Readers on those versions must still be able to read and run the tutorial as it was. So the old content stays in the tutorial's own directory as a frozen **revision** (`tutorials/<id>/revisions/rN/`), and the current tutorial moves to the new version. The UI, the site and `./tut run --version` pick the revision that was tested with the reader's version.
+When a new KServe version changes an API, a tutorial has to change, and the changed tutorial no longer runs on the older versions. Readers on those versions must still be able to read and run the tutorial as it was. So the old content stays in the tutorial's own directory as a frozen **revision** (`tutorials/<id>/revisions/vX.Y/`), and the current tutorial moves to the new version. The UI, the site and `./tut run --version` pick the revision that was tested with the reader's version.
 
-CI runs two versions per tutorial (N, the newest KServe version this repository moves to, and N-1, its newest tested version below N). New KServe releases reach `versions.tested` through a bot PR that a person merges; tutorial ideas for new features become GitHub issues. `stable` moves once a month (the schedule is off until a first dry run). No AI runs in GitHub Actions.
+CI runs two versions per tutorial (N, the KServe version pinned in project.yaml, and N-1, its newest tested version below N). The maintainer starts the move to a new KServe version; nothing runs on a schedule; tutorial ideas for new features become GitHub issues. `stable` moves once a month (the schedule is off until a first dry run). No AI runs in GitHub Actions.
 
 ## 2. Motivation
 
@@ -26,9 +26,9 @@ CI runs two versions per tutorial (N, the newest KServe version this repository 
 | How does one tutorial carry content that differs per version? | Per-tutorial revisions. Not per-version blocks inside a README, not release branches per KServe version (RFC 0001 section 4.4 stays: no release branches) |
 | Keep one README true for old and new versions when possible? | No. A change made because of a new KServe version always moves the old versions to a revision |
 | May a frozen revision be fixed (typo, broken link)? | No exceptions, like frozen envs and lib parts. Revisit if a fix is ever needed |
-| Which versions does CI run? | Two per tutorial: N = the newest KServe release (upstream), or the version the maintainer pins as `latest` in project.yaml (2026-11-26: v0.20.0 while v0.21.0 is out). N-1 = the newest version in that tutorial's `tested` (its revisions included) below N: tested [v0.17, v0.18, v0.20] with N = v0.20 runs v0.18 and v0.20. A tutorial without N runs only that N-1 (2026-11-26) |
+| Which versions does CI run? | Two per tutorial: N = the KServe version pinned in project.yaml (`version`; never the upstream's newest release by itself, 2026-11-27). N-1 = the newest version in that tutorial's `tested` (its revisions included) below N: tested [v0.17, v0.18, v0.20] with N = v0.20 runs v0.18 and v0.20. A tutorial without N runs only that N-1 (2026-11-26) |
 | A tutorial that skipped versions (tested v0.18 and v0.21, nothing for v0.19/v0.20)? | Tell the maintainer; with their permission the old versions go to a revision and leave the current `tested` (`./tut revision keep`). Until then CI runs it on N and the version before the gap. The maintainer moves tutorials one version at a time (2026-11-26) |
-| Who adds a new KServe version to `versions.tested`? | A bot PR when the canary passes; a local agent adds the version-scout report; the maintainer merges |
+| Who adds a new KServe version to `versions.tested`? | The maintainer starts it locally: pin the version, add it to `tested`, open a PR; CI shows what fails; failing tutorials get a revision and a fix as `status: draft`; a person reviews (2026-11-27, replaces the weekly canary and the bot PR of 2026-11-25) |
 | AI in GitHub Actions? | Never (there is no API key). Every AI step runs locally |
 | Tutorials for new features of a release? | A new `feature-scout` agent (local) files one GitHub issue per candidate, label `tutorial-proposal`; the maintainer approves on the issue |
 | The `stable` branch? | Kept. The release workflow runs once a month (off until a first dry run, 2026-11-26), skips when `main` has no new commit, opens an issue when verification fails |
@@ -44,19 +44,19 @@ tutorials/<id>/
   tutorial.yaml          versions.tested [v0.20.0], default v0.20.0
   README.md, README.ko.md, explainer/, manifests/, ...      current content
   revisions/
-    r1/                  frozen copy of the tutorial as it was before the v0.20 change
-      tutorial.yaml      versions.tested [v0.18.0, v0.19.0], default v0.19.0, env/uses as they were, frozen: true
+    v0.18/               frozen copy of the tutorial as it was before the v0.20 change
+      tutorial.yaml      versions.tested [v0.18.0], default v0.18.0, env/uses as they were, frozen: true
       README.md, README.ko.md, explainer/, manifests/, ...
 ```
 
 - A revision is inside `tutorials/<id>/`, so hard rule 1 (self-contained) holds.
-- `r1`, `r2`, ... in order; a revision never changes after it is created.
+- A revision is named after the newest KServe minor it keeps (`v0.18` for tested [v0.17.0, v0.18.0]): the name says which version it is for (2026-11-27; it was `r1`, `r2`, ... before). Lint R001 checks the name. A revision never changes after it is created.
 - The copy includes translations and the explainer as they were. This is the one case where explainer files change in the same PR as a tutorial; AGENTS.md ("Explainer changes go in their own PR") names the exception.
 
 ## 5. A version-driven change
 
 ```bash skip
-./tut revision start <id>   # copy the tutorial as it is on the base branch to revisions/rN,
+./tut revision start <id>   # copy the tutorial as it is on the base branch to revisions/vX.Y,
                             # set the current tested/default to the new version
 # edit the tutorial for the new version, ./tut run <id>, make precommit
 # one commit: the new revision and the change together
@@ -75,7 +75,7 @@ A `tut:define` in one tutorial is copied into others by `./tut sync` (`llmisvc-a
 
 ### Generated regions
 
-`tut:setup`, `tut:header` and `tut:catalog` are regenerated by sync. Revisions are skipped by sync, so their generated regions stay as they were and the frozen check does not fire when `generate.py` or the catalog changes. The current README's `tut:header` gets one generated line per revision ("KServe v0.18-v0.19: revisions/r1/"), so a reader on GitHub can find it.
+`tut:setup`, `tut:header` and `tut:catalog` are regenerated by sync. Revisions are skipped by sync, so their generated regions stay as they were and the frozen check does not fire when `generate.py` or the catalog changes. The current README's `tut:header` gets one generated line per revision ("KServe v0.18-v0.19: revisions/v0.18/"), so a reader on GitHub can find it.
 
 ## 6. Version resolution
 
@@ -104,25 +104,28 @@ The same rule everywhere: `./tut run <id> --version v`, `./tut ui`, the static s
 ### Window
 
 - PR CI: a changed tutorial runs on each in-window version in its `tested`, and a new or touched revision on its own versions.
-- Weekly: every current tutorial and revision, on its in-window versions.
+- No scheduled run (removed 2026-11-27).
 - Release: the same set. Out-of-window versions stay in `tested`; they are not run and are shown as "last verified <date>, <commit>" once results are recorded (backlog D6); `./tut matrix --out-of-window` lists them.
-- N is `./tut latest`: `latest` in project.yaml when the maintainer pins it, else the newest release of the upstream (`project.yaml upstream`, `gh api repos/<upstream>/releases/latest`). CI sets `TUT_LATEST_VERSION` from it; the weekly canary and the `new-release` issue use the same version. A tested version above the pin still counts as N, so it keeps running. Offline without a pin (tests) N is the newest version any tutorial tests. N-1 is per tutorial: the newest minor in its `tested` (revisions included) below N. A tutorial that does not test N yet runs only that one. Older versions stay in `tested` ("last verified"). A current tutorial that skipped versions (a gap between its tested minors, like v0.18.0 and v0.20.0) is listed by `./tut revision todo` (also printed by `make precommit`), and the weekly run keeps one issue (label `ci-window`) with that list, closed when it is empty. The maintainer decides, then a local agent runs `./tut revision keep <id>`: the copy from the base branch becomes `revisions/rN/` with the versions before the gap, and the current tutorial drops them.
+- N is `version` in project.yaml, always pinned and required (`./tut kserve-version` shows it, `./tut kserve-version <ver>` sets it after checking that the upstream has that release). Nothing reads the upstream's newest release by itself. A tested version above the pin is a lint error [T009]. N-1 is per tutorial: the newest minor in its `tested` (revisions included) below N. A tutorial that does not test N yet runs only that one. Older versions stay in `tested` ("last verified"). A current tutorial that skipped versions (a gap between its tested minors, like v0.18.0 and v0.20.0) is listed by `./tut revision todo` (also printed by `make precommit`). The maintainer decides, then a local agent runs `./tut revision keep <id>`: the copy from the base branch becomes `revisions/vX.Y/` with the versions before the gap, and the current tutorial drops them.
 
-### A new KServe release
+### A new KServe version
+
+The maintainer starts it; there is no scheduled workflow, no canary and no bot (decided 2026-11-27: the automation of 2026-11-25 was more than this repository needs now).
 
 ```text
-weekly scheduled run (no AI)
-  canary pass -> bot PR: add the version to tested  -> local agent adds the version-scout report -> maintainer merges
-  canary fail -> issue per tutorial                 -> local agent: fix, with `revision start` when the change is version-driven
-  first sight of the version -> issue "new release vX"  -> local agent runs feature-scout -> tutorial-proposal issues
+local   ./tut kserve-version v0.21.0      the upstream has that release? -> project.yaml version
+        ./tut tested add v0.21.0 --all    every stable tutorial
+        version-scout v0.21.0             what breaks or changes, from the upstream source -> PR text
+PR      CI runs every tutorial on N (v0.21.0) and N-1 (its previous tested version)
+local   per failing tutorial: ./tut revision start <id> --to v0.21.0, find the cause, fix, status: draft
+PR      more commits, new title, CI again
+review  a person reads the changed tutorials -> status: stable; an unexplained failure goes to the maintainer
 ```
 
-The version is N (`./tut latest`): a pinned `latest` holds the canary at that version until the maintainer moves the pin.
+- `revision start` works after the version was added to `tested` on the branch: it compares with the base branch.
+- New features of a release: the maintainer asks for the `feature-scout` agent; it drafts `tutorial-proposal` issues, filed only with the maintainer's word.
+- Every git and GitHub step is asked for (AGENTS.md "How to work" step 4).
 
-- The bot PR needs a token that triggers CI (a PAT or a GitHub App; a PR opened with `GITHUB_TOKEN` does not run workflows). The maintainer sets it up as a repository secret.
-- The handbook decision "version-scout before a version is added to tested" holds: the report is on the PR before it is merged.
-- The canary runs stable and deprecated tutorials only; drafts get new versions from their author.
-- Filing issues and commenting are GitHub writes: a local agent asks the maintainer each time (AGENTS.md "How to work" step 4).
 
 ### Tutorial proposals
 
@@ -156,8 +159,8 @@ Done in one change (the maintainer asked for one commit), except where noted.
 2. Schema (`revisions/`, `frozen`) and the lint rules of section 7, with tests.
 3. `./tut revision start`, `keep` and `todo`, version resolution (section 6) in run, catalog, matrix, affected and release; sync skips `revisions/`; header link; the window in `plan.py` and docs/release.md; the explainer exception in AGENTS.md.
 4. Pilot: move `llmisvc-anatomy` to the next KServe version with its first revision (backlog C2). Not done yet: it needs a version-scout report and a run on a cluster.
-5. Bot PR workflow (`scheduled.yml` job `new-version`); it opens PRs once the repository secret `TUT_BOT_TOKEN` exists (until then it prints a notice).
-6. UI and site: a "my KServe version" selector; the sidebar lists what is available for it, revisions labelled; content, run and explainer follow it; the matrix shows current or rN per cell.
+5. Removed 2026-11-27: the weekly workflow (`scheduled.yml`: full run, canary, bot PR, `new-release` and `ci-window` issues). Added instead: `version` in project.yaml, `./tut kserve-version`, `./tut tested add --all`, lint T009.
+6. UI and site: a "my KServe version" selector; the sidebar lists what is available for it, revisions labelled; content, run and explainer follow it; the matrix shows current or vX.Y per cell.
 
 Also: the monthly release schedule (`release.yml`), the `feature-scout` agent (`.claude/agents/feature-scout.md`) and the issue template (`.github/ISSUE_TEMPLATE/tutorial-proposal.yml`). "Last verified <date>, <commit>" for out-of-window versions needs recorded results (backlog D6); until then release notes mark them "not run".
 

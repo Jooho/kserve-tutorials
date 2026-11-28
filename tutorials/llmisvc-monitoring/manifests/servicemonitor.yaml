@@ -1,7 +1,8 @@
 # Scrapes both Services of the LLMInferenceService in this namespace:
 # the EPP scheduler (port "metrics", 9090, bearer token required) and
-# vLLM (port "https", 8000; the port is named https but serves plain HTTP
-# unless TLS is enabled for LLMInferenceServices).
+# vLLM (port "http", 8000: plain HTTP. With TLS enabled for
+# LLMInferenceServices the port is named "https" instead, and this endpoint
+# would need that name and scheme).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -19,7 +20,7 @@ spec:
     bearerTokenSecret:
       name: metrics-reader-token
       key: token
-  - port: https
+  - port: http
     path: /metrics
     interval: 15s
     scheme: http

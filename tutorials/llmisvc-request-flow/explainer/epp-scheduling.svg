@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 450" role="img" aria-labelledby="t d">
 <title id="t">How the EPP picks a Pod in this run</title>
-<desc id="d">Envoy asks the EPP which Pod. The EPP parses the request, the scheduling profile default scores every ready Pod with queue-scorer at weight 2 and prefix-cache-scorer at weight 3, and max-score-picker takes the highest weighted sum. The answer, one Pod address, goes back to Envoy, which sends the request there. queue-scorer reads per-Pod queue numbers from metrics-data-source; prefix-cache-scorer reads the EPP's own prefix index. The EPP exports what it sees on port 9090.</desc>
+<desc id="d">Envoy asks the EPP which Pod. The EPP parses the request, the scheduling profile default scores every ready Pod with four scorers, queue-scorer at weight 2, kv-cache-utilization-scorer at weight 2, prefix-cache-scorer at weight 3 and no-hit-lru-scorer at weight 2, and max-score-picker takes the highest weighted sum. The answer, one Pod address, goes back to Envoy, which sends the request there. queue-scorer and kv-cache-utilization-scorer read the EPP's copy of each Pod's vLLM numbers from metrics-data-source; prefix-cache-scorer and no-hit-lru-scorer use the EPP's own prefix index. The EPP exports what it sees on port 9090.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
   .h { font-size: 15px; font-weight: 650; }
@@ -57,17 +57,17 @@
 
 <rect class="ep" x="168" y="96" width="140" height="80" rx="10"/>
 <text class="h" x="180" y="120">parsers</text>
-<text class="m" x="180" y="140">openai-parser  (used)</text>
+<text class="m" x="180" y="140">openai-parser</text>
 <text class="m" x="180" y="154">anthropic-parser</text>
 <text class="m" x="180" y="168">vllmhttp-parser</text>
 
-<rect class="sc" x="332" y="52" width="196" height="64" rx="10"/>
-<text class="h" x="344" y="76">queue-scorer</text>
-<text class="s" x="344" y="98">weight 2: shorter queue wins</text>
+<rect class="sc" x="326" y="52" width="208" height="64" rx="10"/>
+<text class="h" x="338" y="76">queue-scorer (2)</text>
+<text class="h" x="338" y="100">kv-cache-utilization-scorer (2)</text>
 
-<rect class="sc" x="332" y="152" width="196" height="64" rx="10"/>
-<text class="h" x="344" y="176">prefix-cache-scorer</text>
-<text class="s" x="344" y="198">weight 3: prompt was sent here</text>
+<rect class="sc" x="326" y="152" width="208" height="64" rx="10"/>
+<text class="h" x="338" y="176">prefix-cache-scorer (3)</text>
+<text class="h" x="338" y="200">no-hit-lru-scorer (2)</text>
 
 <rect class="ep" x="556" y="104" width="154" height="64" rx="10"/>
 <text class="h" x="568" y="128">max-score-picker</text>
@@ -78,22 +78,22 @@
 <text class="m" x="764" y="148">Pod ip:8000</text>
 
 <path class="arrow" d="M132 136 H166"/>
-<path class="arrow" d="M308 128 C 320 110, 318 90, 330 86"/>
-<path class="arrow" d="M308 146 C 320 166, 318 180, 330 184"/>
-<path class="arrow" d="M528 86 C 540 90, 542 120, 554 128"/>
-<path class="arrow" d="M528 184 C 540 180, 542 152, 554 146"/>
+<path class="arrow" d="M308 128 C 318 110, 314 90, 324 86"/>
+<path class="arrow" d="M308 146 C 318 166, 314 180, 324 184"/>
+<path class="arrow" d="M534 86 C 544 90, 544 120, 554 128"/>
+<path class="arrow" d="M534 184 C 544 180, 544 152, 554 146"/>
 <path class="arrow" d="M710 136 H750"/>
 <path class="back" d="M808 168 V278 H74 V172"/>
 <text class="s" x="300" y="292">answer back to Envoy, which then sends the request to that Pod</text>
 
 <text class="s" x="168" y="236">profile "default" (single-profile-handler);</text>
-<text class="s" x="168" y="252">no kv-cache-utilization-scorer in this config</text>
+<text class="s" x="168" y="252">four scorers, weights in brackets</text>
 
 <rect class="side" x="16" y="306" width="404" height="134" rx="10"/>
 <text class="h" x="30" y="330">What the scorers read</text>
-<text class="m" x="30" y="352">queue-scorer: metrics-data-source</text>
-<text class="s" x="30" y="370">per-Pod queue, e.g. demo-model-kserve-...-rank-0</text>
-<text class="m" x="30" y="394">prefix-cache-scorer: approx-prefix-</text>
+<text class="m" x="30" y="352">queue, kv-cache-utilization: metrics-data-source</text>
+<text class="s" x="30" y="370">the EPP's copy of each Pod's vLLM numbers</text>
+<text class="m" x="30" y="394">prefix-cache, no-hit-lru: approx-prefix-</text>
 <text class="m" x="30" y="410">  cache-producer + token-producer</text>
 <text class="s" x="30" y="428">the EPP's own index, not vLLM's prefix cache</text>
 

@@ -35,7 +35,6 @@ jobs:
       sha: ${{ steps.p.outputs.sha }}
       version: ${{ steps.p.outputs.version }}
       matrix: ${{ steps.p.outputs.matrix }}
-      latest: ${{ steps.p.outputs.latest }}
       skip: ${{ steps.p.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
@@ -45,10 +44,7 @@ jobs:
       - run: make setup
       - id: p
         name: Resolve commit, version and matrix
-        env: {GH_TOKEN: "${{ github.token }}"}
         run: |
-          export TUT_LATEST_VERSION=$(./tut latest)   # N: project.yaml `latest`, else upstream latest (RFC 0002)
-          echo "latest=$TUT_LATEST_VERSION" >> "$GITHUB_OUTPUT"
           sha=$(git rev-parse HEAD)
           git fetch --tags origin
           git fetch origin main
@@ -66,11 +62,11 @@ jobs:
           version=$(./tut release next-version)
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "matrix=$(./tut matrix --scheduled --json)" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(./tut matrix --json)" >> "$GITHUB_OUTPUT"
           {
             echo "### Release plan"
             echo "- version: \`$version\`  · commit: \`${sha:0:7}\`  · dry run: \`$DRY_RUN\`"
-            echo "- matrix:"; ./tut matrix --scheduled | sed 's/^/  - /'
+            echo "- matrix:"; ./tut matrix | sed 's/^/  - /'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Rules, tests and site at this commit
         if: steps.p.outputs.skip != 'true'
@@ -108,7 +104,6 @@ jobs:
           echo '${{ needs.plan.outputs.matrix }}' > expected.json
           ./tut release check --reports reports --expected expected.json
       - name: Release notes
-        env: {TUT_LATEST_VERSION: "${{ needs.plan.outputs.latest }}"}
         run: |
           ./tut release notes "${{ needs.plan.outputs.version }}" "${{ needs.plan.outputs.sha }}" \
             --reports reports --repo "${{ github.repository }}" > notes.md

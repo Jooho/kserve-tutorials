@@ -3,7 +3,7 @@
   "title": "project.yaml",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "title", "version_var"],
+  "required": ["id", "name", "title", "version_var", "version"],
   "properties": {
     "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
     "name": {"description": "Product name, e.g. KServe.", "type": "string", "minLength": 1},
@@ -15,12 +15,12 @@
       "pattern": "^[A-Z][A-Z0-9_]*$"
     },
     "upstream": {
-      "description": "GitHub owner/repo whose latest release the weekly canary uses.",
+      "description": "GitHub owner/repo whose releases `./tut <id>-version <ver>` checks a version against.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
     },
-    "latest": {
-      "description": "The newest product version this repository moves to (N of the CI window, the weekly canary). Empty: the upstream's latest release.",
+    "version": {
+      "description": "The newest product version the tutorials move to: N in CI (a tutorial runs N and its newest tested version below N). Always pinned here; set with `./tut <id>-version <ver>`.",
       "type": "string",
       "pattern": "^v\\d+\\.\\d+\\.\\d+$"
     },

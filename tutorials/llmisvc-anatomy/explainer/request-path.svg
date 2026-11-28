@@ -78,7 +78,7 @@
 <text class="h" x="432" y="66">HTTPRoute</text>
 <text class="m" x="432" y="86">match .../v1/completions</text>
 <text class="m" x="432" y="102">(+ chat/completions,</text>
-<text class="m" x="432" y="118">   responses)</text>
+<text class="m" x="432" y="118">   responses, messages)</text>
 <text class="s" x="432" y="140">rewrite, backend: pool</text>
 
 <rect class="rt" x="640" y="40" width="224" height="110" rx="10"/>
@@ -95,7 +95,7 @@
 <!-- 4: Envoy asks the EPP; the request itself stays in Envoy -->
 <path class="ask" d="M270 150 V238"/>
 <path class="ask" d="M330 240 V152"/>
-<text class="s" x="262" y="200" text-anchor="end">which Pod? (3 times)</text>
+<text class="s" x="262" y="200" text-anchor="end">which Pod? (16 times)</text>
 <text class="s" x="338" y="200">this Pod</text>
 
 <!-- 5: Envoy sends the request to the chosen Pod -->
@@ -105,10 +105,10 @@
 <rect class="ep" x="206" y="240" width="190" height="124" rx="10"/>
 <text class="h" x="220" y="266">EPP scheduler</text>
 <text class="m" x="220" y="286">ExtProc gRPC :9002</text>
-<text class="s" x="220" y="304">scorers (weight):</text>
-<text class="m" x="220" y="320">queue-scorer 2</text>
-<text class="m" x="220" y="336">prefix-cache-scorer 3</text>
-<text class="m" x="220" y="352">max-score-picker</text>
+<text class="s" x="220" y="304">scorers (weight): queue 2,</text>
+<text class="s" x="220" y="320">kv-cache-utilization 2,</text>
+<text class="s" x="220" y="336">prefix-cache 3, no-hit-lru 2</text>
+<text class="s" x="220" y="352">then max-score-picker</text>
 
 <rect class="wl" x="418" y="240" width="200" height="124" rx="10"/>
 <text class="h" x="432" y="266">vLLM Pod</text>
@@ -139,6 +139,6 @@
 <circle class="dot" r="7" cx="0" cy="0" transform="translate(470 238)"/>
 
 <text class="s" x="16" y="404">1 Envoy receives it - 2 an HTTPRoute rule matches the path and rewrites it - 3 that rule's backend is the InferencePool</text>
-<text class="s" x="16" y="424">4 Envoy asks the EPP (ExtProc) which Pod, once per pool rule, and keeps the request - 5 Envoy sends it to that vLLM Pod</text>
-<text class="s" x="16" y="448">Dashed: the route's catch-all rule sends other paths straight to the workload Service, which skips the EPP.</text>
+<text class="s" x="16" y="424">4 Envoy asks the EPP (ExtProc) which Pod, once per match of the pool rules, and keeps the request - 5 Envoy sends it to that vLLM Pod</text>
+<text class="s" x="16" y="448">Dashed: the route's catch-all rules send other paths straight to the workload Service, which skips the EPP.</text>
 </svg>

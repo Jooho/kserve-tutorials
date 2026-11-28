@@ -1,6 +1,6 @@
 # CI playbook: when a tutorial run fails
 
-Read this when a PR check, the weekly run or a canary fails. Goal: find the root cause, fix it in the right place, and leave a lesson behind.
+Read this when a PR check or a release run fails. Goal: find the root cause, fix it in the right place, and leave a lesson behind.
 
 ## 1. Locate the failure
 
@@ -21,7 +21,7 @@ CI runs every tutorial twice in the same shell and cluster (`--twice`); a failur
 | block 1 (`tut:setup`), lines prefixed `[env <name>/vN]` | the environment | `envs/<name>/vN/` (new version if frozen) |
 | a block calling `$TUT_LIB/<module>/...` and the script itself errors | the module | `lib/<module>/` (new version if frozen) |
 | any other block | the tutorial | `tutorials/<id>/` |
-| only on a canary (new KServe version) | KServe changed | update the tutorial, or record that it does not support that version |
+| only on the new KServe version (a PR that moves the pin) | KServe changed | `./tut revision start <id> --to <version>`, then update the tutorial as `status: draft`; or leave the version out of its `tested` |
 
 ## 3. Read the diagnostics
 
@@ -43,6 +43,6 @@ On failure CI keeps the resources and runs `.github/scripts/diagnose.sh` (step "
 4. Push; CI re-runs only what your change affects (`./tut affected --base origin/main` shows it; docs/handbook.md § 7 has the rules).
 5. Add a lesson to docs/authoring.md § Rules learned from CI, and a lint rule if it can be checked mechanically.
 
-## 5. Scheduled and canary issues
+## 5. A new KServe version
 
-The weekly workflow opens one issue per failing tutorial and version (`tutorial-ci` label, plus `canary` for new KServe versions). Comment the root cause on the issue, link the fixing PR, and close it when the next run passes. If a KServe feature was removed, propose either an update or `status: archived` with a `deprecation` block, and explain the choice. An update made because of the new version keeps the old versions as a frozen revision first (`./tut revision start <id> --to <version>`, docs/authoring.md "A new product version changes a tutorial"). When the canary passes, the weekly run opens a bot PR adding the version to `versions.tested` (it needs the repository secret `TUT_BOT_TOKEN`); a local agent adds the version-scout report and the maintainer merges. The first canary of a release also opens a `new-release` issue for the `feature-scout` agent. The `ci-window` issue lists tutorials that skipped versions, a gap in `versions.tested` (`./tut revision todo`): put it to the maintainer; with their word, `./tut revision keep <id>`.
+There is no scheduled run and no canary: the maintainer starts the move (AGENTS.md "A new product version"). The PR that pins the new version (`./tut kserve-version <ver>`, `./tut tested add <ver> --all`) runs every tutorial on N and N-1. A failure on N-1 is a regression of what worked: treat it like any PR failure. A failure on N means KServe changed: keep the old versions as a frozen revision first (`./tut revision start <id> --to <version>`, docs/authoring.md "A new product version changes a tutorial"), fix the current tutorial, set `status: draft`, push to the same PR; a person reviews before `stable`. If a KServe feature was removed, propose either an update or `status: archived` with a `deprecation` block, and explain the choice. `./tut revision todo` lists tutorials that skipped versions (a gap in `versions.tested`): put it to the maintainer; with their word, `./tut revision keep <id>`.

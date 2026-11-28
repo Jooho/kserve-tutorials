@@ -4,14 +4,13 @@ Everything the tooling knows about a tutorial comes from two places:
   tutorials/<id>/tutorial.yaml   metadata (status, versions, env, ...)
   tutorials/<id>/README*.md      the document, which is also the test
 
-Older versions of a tutorial live in tutorials/<id>/revisions/rN/ (RFC 0002): a
+Older versions of a tutorial live in tutorials/<id>/revisions/vX.Y/ (RFC 0002): a
 frozen copy with its own tutorial.yaml. `resolve(t, version)` picks the current
 tutorial or the revision tested with that version.
 """
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,7 +25,7 @@ LANGS = ("en", "ko")
 EXPLAINER_DIR = "explainer"
 VERSION_RE = re.compile(r"^v\d+\.\d+\.\d+$")
 REVISIONS_DIR = "revisions"
-REVISION_RE = re.compile(r"^r([1-9][0-9]*)$")
+REVISION_RE = re.compile(r"^v(\d+)\.(\d+)$")   # revisions/v0.18/: named after the newest minor it keeps
 
 
 def readme_name(lang: str) -> str:
@@ -87,11 +86,11 @@ class Tutorial:
     path: Path
     meta: dict
     errors: list[str] = field(default_factory=list)  # load-time problems
-    revision: str | None = None   # "r1", ... for tutorials/<id>/revisions/rN; None = current
+    revision: str | None = None   # "v0.18", ... for tutorials/<id>/revisions/vX.Y; None = current
 
     @property
     def key(self) -> str:
-        """Unique name of this variant: "<id>" or "<id>@r1"."""
+        """Unique name of this variant: "<id>" or "<id>@v0.18"."""
         return f"{self.id}@{self.revision}" if self.revision else self.id
 
     @property
@@ -101,7 +100,7 @@ class Tutorial:
 
     @property
     def rel(self) -> str:
-        """Directory relative to the repository root, e.g. tutorials/a/revisions/r1."""
+        """Directory relative to the repository root, e.g. tutorials/a/revisions/v0.18."""
         return self.path.relative_to(self.root).as_posix()
 
     @property
@@ -190,8 +189,14 @@ def load_tutorials(root: Path = REPO_ROOT, include_template: bool = False) -> li
     return out
 
 
+def revision_name(tested: list[str]) -> str | None:
+    """The directory name of a revision: the newest minor it keeps (v0.18)."""
+    ms = [minor(v) for v in tested if VERSION_RE.match(str(v))]
+    return "v{}.{}".format(*max(ms)) if ms else None
+
+
 def load_revisions(t: Tutorial) -> list[Tutorial]:
-    """tutorials/<id>/revisions/rN/ of a current tutorial, r1 first."""
+    """tutorials/<id>/revisions/vX.Y/ of a current tutorial, oldest first."""
     if t.revision:
         return []
     d = t.path / REVISIONS_DIR
@@ -199,7 +204,7 @@ def load_revisions(t: Tutorial) -> list[Tutorial]:
         return []
     out = []
     for p in sorted((p for p in d.iterdir() if p.is_dir() and REVISION_RE.match(p.name)),
-                    key=lambda p: int(REVISION_RE.match(p.name).group(1))):
+                    key=lambda p: tuple(int(x) for x in REVISION_RE.match(p.name).groups())):
         r = Tutorial(id=t.id, path=p, meta={}, revision=p.name)
         f = p / "tutorial.yaml"
         if not f.exists():
@@ -236,36 +241,21 @@ def resolve(t: Tutorial, version: str | None) -> Tutorial | None:
     return None
 
 
-LATEST_ENV = "TUT_LATEST_VERSION"
-
-
-def latest_version(root: Path = REPO_ROOT) -> str | None:
-    """The product version N stands for, without asking the network:
-    TUT_LATEST_VERSION, else `latest` in project.yaml. None: follow the
-    upstream's latest release (`./tut latest` asks GitHub)."""
-    env = os.environ.get(LATEST_ENV, "").strip()
-    if VERSION_RE.match(env):
-        return env
+def pinned_version(root: Path = REPO_ROOT) -> str | None:
+    """`version` in project.yaml: the newest product version the tutorials
+    move to. Always pinned by the maintainer, never read from the network."""
     from . import project
     try:
-        return project.load(root).latest
+        return project.load(root).version
     except project.ProjectError:
         return None
 
 
-def latest(tutorials: list[Tutorial], root: Path | None = None) -> tuple[int, int] | None:
-    """N (RFC 0002): the newest product minor this repository moves to.
-    `latest_version()` (TUT_LATEST_VERSION, else project.yaml `latest`); CI
-    sets TUT_LATEST_VERSION from `./tut latest`. Without either (offline, no
-    pin) N is the newest minor any tutorial or revision tests. A tested
-    version above N still wins, so nothing tested is left unrun."""
-    ms = {minor(v) for t in tutorials for x in variants(t) for v in x.tested_versions
-          if VERSION_RE.match(str(v))}
+def pinned_minor(tutorials: list[Tutorial], root: Path | None = None) -> tuple[int, int] | None:
+    """N (RFC 0002): the minor of the pinned version."""
     root = root or (tutorials[0].root if tutorials else REPO_ROOT)
-    pin = latest_version(root)
-    if pin:
-        ms.add(minor(pin))
-    return max(ms) if ms else None
+    v = pinned_version(root)
+    return minor(v) if v and VERSION_RE.match(v) else None
 
 
 def ci_minors(t: Tutorial, n: tuple[int, int] | None) -> set[tuple[int, int]]:
@@ -276,7 +266,7 @@ def ci_minors(t: Tutorial, n: tuple[int, int] | None) -> set[tuple[int, int]]:
                  if VERSION_RE.match(str(v))})
     if not ms:
         return set()
-    if n is None:
+    if n is None:                          # no project.yaml (lint P001 reports it)
         n = ms[-1]
     below = [m for m in ms if m < n]
     if n in ms:

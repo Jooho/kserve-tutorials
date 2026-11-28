@@ -125,7 +125,7 @@ function item(t, { n = null, note = "", dim = false, extra = "", col = "" } = {}
   const on = t.id === S.current && (col || null) === (S.group || null);
   return `<li data-id="${t.id}" ${col ? `data-col="${col}"` : ""} class="${on ? "on" : ""} ${dim ? "untested" : ""} ${extra}">
     <div class="t">${n ? `<span class="num">${n}</span>` : ""}${title}</div>
-    <div class="meta"><span>${statusLabel(t.status)}</span><span>${x.versions.tested.join(", ")}</span>
+    <div class="meta"><span>${statusLabel(x.status)}</span><span>${x.versions.tested.join(", ")}</span>
       ${t.gpu ? "<span>GPU</span>" : ""}${note ? `<span class="note">${note}</span>` : ""}</div>
     ${tags ? `<div class="tags">${tags}</div>` : ""}</li>`;
 }
@@ -191,7 +191,7 @@ function renderMatrix() {
       : x.rev ? `<td class="yes" title="older revision ${x.rev} (tutorials/${t.id}/revisions/${x.rev}/)">${x.rev}</td>`
       : `<td class="yes ${ver === t.versions.default ? "default" : ""}" title="${ver === t.versions.default ? "default version" : "tested"}">✓</td>`; }).join("")}</tr>`).join("");
   $("#matrix").innerHTML = `<h2>${S.lang === "ko" ? `${P()} 버전별 튜토리얼` : `Tutorials by ${P()} version`}</h2>
-    <p class="muted">✓ = run and verified in CI on that version; outlined = the tutorial's default version; r1, r2 = an older revision of the tutorial is used for that version.</p>
+    <p class="muted">✓ = run and verified in CI on that version; outlined = the tutorial's default version; a version name in a cell (v0.18) = the older revision of the tutorial used for that version.</p>
     <table><thead><tr><th>Tutorial</th>${vs.map((v) => `<th>${v}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
   $("#matrix").hidden = false; $("#doc-wrap").hidden = true; $("#empty").hidden = true;
 }
