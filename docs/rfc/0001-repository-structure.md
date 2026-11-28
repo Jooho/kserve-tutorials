@@ -120,7 +120,7 @@ Release branches (one per KServe version) were rejected because they tie every t
 
 Readers use `versions.default` unless they set `KSERVE_VERSION` themselves; the generated setup block does `export KSERVE_VERSION="${KSERVE_VERSION:-<default>}"`.
 
-Content that differs per version: older versions keep a frozen copy of the tutorial in `tutorials/<id>/revisions/rN/`, and CI runs only the window N, N-1 (RFC 0002).
+Content that differs per version: older versions keep a frozen copy of the tutorial in `tutorials/<id>/revisions/vX.Y/`, and CI runs only the window N, N-1 (RFC 0002).
 
 ### 4.5 Lifecycle
 

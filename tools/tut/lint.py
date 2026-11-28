@@ -46,8 +46,9 @@ Explainers (tutorials/<id>/explainer/, AI-written, never executed; tut/explain.p
   X004 unsafe SVG: <script>, on*= handlers, foreignObject, external href / url()
   X005 AI explainer not reviewed yet, or README.md changed since (warning)
 
-Revisions (tutorials/<id>/revisions/rN/, docs/rfc/0002-tutorial-revisions.md)
-  R001 a revision's tutorial.yaml: valid, `frozen: true`, same id, default in tested;
+Revisions (tutorials/<id>/revisions/vX.Y/, docs/rfc/0002-tutorial-revisions.md)
+  R001 a revision's tutorial.yaml: valid, `frozen: true`, same id, default in tested,
+       directory named after the newest minor it keeps (revisions/v0.18/);
        `frozen` only in revisions
   R002 a frozen revision was modified (compare with --base)
   R003 a revision may only use frozen env and lib parts
@@ -101,7 +102,7 @@ import yaml
 
 from . import catalog, generate, markdown, project, shared
 from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, REVISIONS_DIR, VERSION_RE, Tutorial, load_envs,
-                    load_modules, load_revisions, load_schema, load_tutorials, minor)
+                    load_modules, load_revisions, load_schema, load_tutorials, minor, revision_name)
 
 TRANSLATION_RE = re.compile(
     r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)((?:\s+[a-z]+=\S+)*)\s*-->")
@@ -621,7 +622,7 @@ class Linter:
     def lint_revisions(self, t: Tutorial, schema: dict):
         if t.meta.get("frozen"):
             self.err("R001", t.path / "tutorial.yaml", "`frozen` is only for revisions "
-                     "(tutorials/<id>/revisions/rN/); the current tutorial keeps changing")
+                     "(tutorials/<id>/revisions/vX.Y/); the current tutorial keeps changing")
         seen: dict[str, str] = {v: "current" for v in t.tested_versions}
         for r in load_revisions(t):
             f = r.path / "tutorial.yaml"
@@ -638,6 +639,9 @@ class Linter:
                 self.err("R001", f, f"id {r.meta.get('id')!r} != {t.id!r}")
             if r.default_version and r.default_version not in r.tested_versions:
                 self.err("R001", f, f"versions.default {r.default_version} is not in versions.tested")
+            if revision_name(r.tested_versions) != r.revision:
+                self.err("R001", f, f"revisions/{r.revision}/ keeps {', '.join(r.tested_versions) or 'no version'}: "
+                         f"a revision is named after the newest minor it keeps ({revision_name(r.tested_versions)})")
             env = self.envs.get(r.env_ref) if r.env_ref else None
             if r.env_ref and (env is None or not env.frozen):
                 self.err("R003", f, f"env {r.env_ref} is {'missing' if env is None else 'not frozen'}; "

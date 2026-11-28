@@ -6,15 +6,15 @@ title:
 summary:
   en: Trace one completion request through Envoy Gateway and the EPP scheduler to the vLLM Pod, and read the metrics the scheduler scores with.
   ko: 하나의 completion 요청이 Envoy Gateway와 EPP 스케줄러를 거쳐 vLLM Pod에 도달하는 경로를 추적하고, 스케줄러가 점수 계산에 쓰는 메트릭을 확인합니다.
-status: stable                  # draft -> stable -> deprecated -> archived
+status: draft                     # edited for the new KServe version; a person reviews before stable
 group: llmisvc   # from catalog/groups.yaml: what kind of tutorial (the UI's Groups view)
 env: kind-kserve/v1             # a FROZEN profile under envs/ (required for stable)
 env_options: {types: [llmisvc]}   # LLMInferenceService + its gateway stack
 uses: [llmisvc/v1]              # gateway-url.sh, completion.sh
 namespace: llmisvc-request-flow          # defaults to the id
 versions:
-  default: v0.18.0              # what readers and PR CI use
-  tested: [v0.18.0, v0.20.0]             # what CI runs; must include default
+  default: v0.20.0              # what readers and PR CI use
+  tested: [v0.20.0]             # what CI runs; must include default
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, envoy-gateway, vllm, request-flow, observability, intermediate]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en, ko]                 # en is the source; others are translations

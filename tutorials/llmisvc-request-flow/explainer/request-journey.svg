@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 470" role="img" aria-labelledby="t d">
 <title id="t">The journey of one completion request</title>
-<desc id="d">curl sends the request to the worker node IP and NodePort 31084. The Envoy proxy Pod receives it on port 10080 and gives it an x-request-id. The HTTPRoute rule matches and rewrites the path; its backend is the InferencePool. Envoy asks the EPP over ExtProc gRPC which Pod to use, then forwards the request to the vLLM Pod. The answer goes back through Envoy, and its id contains the x-request-id.</desc>
+<desc id="d">curl sends the request to the worker node IP and NodePort 30857. The Envoy proxy Pod receives it on port 10080 and gives it an x-request-id. The HTTPRoute rule matches and rewrites the path; its backend is the InferencePool. Envoy asks the EPP over ExtProc gRPC which Pod to use, then forwards the request to the vLLM Pod. The answer goes back through Envoy, and its id contains the x-request-id.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
   .h { font-size: 15px; font-weight: 650; }
@@ -50,14 +50,14 @@
 <rect class="cl" x="16" y="46" width="148" height="108" rx="10"/>
 <text class="h" x="28" y="70">Client (curl)</text>
 <text class="m" x="28" y="92">POST</text>
-<text class="m" x="28" y="108">node IP:31084</text>
+<text class="m" x="28" y="108">node IP:30857</text>
 <text class="m" x="28" y="124">/&lt;ns&gt;/demo-model</text>
 <text class="m" x="28" y="140">/v1/completions</text>
 
 <rect class="gw" x="186" y="46" width="208" height="108" rx="10"/>
 <text class="h" x="198" y="70">Envoy proxy Pod</text>
 <text class="m" x="198" y="90">envoy-gateway-system</text>
-<text class="m" x="198" y="106">:10080 &lt;- svc 80 &lt;- 31084</text>
+<text class="m" x="198" y="106">:10080 &lt;- svc 80 &lt;- 30857</text>
 <text class="s" x="198" y="128">gives the request an</text>
 <text class="s" x="198" y="144">x-request-id; access log</text>
 
@@ -85,11 +85,11 @@
 <text class="m" x="658" y="290">ExtProc gRPC :9002</text>
 <text class="s" x="658" y="312">scores the Pods, returns one</text>
 <text class="s" x="658" y="328">logs the x-request-id</text>
-<text class="s" x="658" y="344">(3 sets of lines in this run)</text>
+<text class="s" x="658" y="344">(16 sets of lines in this run)</text>
 
 <rect class="wl" x="416" y="246" width="208" height="108" rx="10"/>
 <text class="h" x="428" y="270">vLLM Pod</text>
-<text class="m" x="428" y="290">e.g. 10.244.1.16:8000</text>
+<text class="m" x="428" y="290">e.g. 10.244.1.77:8000</text>
 <text class="s" x="428" y="312">answer "id":</text>
 <text class="m" x="428" y="330">cmpl-&lt;x-request-id&gt;</text>
 
@@ -107,10 +107,10 @@
 <circle class="dot" r="7" cx="0" cy="0" transform="translate(516 300)"/>
 
 <rect class="tag" x="16" y="372" width="250" height="24" rx="12"/>
-<text class="tagt" x="28" y="388">x-request-id: e.g. fb75d8dc-...</text>
+<text class="tagt" x="28" y="388">x-request-id: e.g. 7ef3fabc-...</text>
 <text class="s" x="280" y="388">one id ties the answer, the Envoy log and the EPP log together</text>
 
 <text class="s" x="16" y="420">1 Envoy receives it - 2 the route matches and strips the prefix - 3 its backend is the InferencePool</text>
 <text class="s" x="16" y="440">4 Envoy asks the EPP which Pod (ExtProc) - 5 Envoy forwards to that Pod; upstream_host in its log</text>
-<text class="s" x="16" y="460">names the Pod (e.g. 10.244.1.16:8000)</text>
+<text class="s" x="16" y="460">names the Pod (e.g. 10.244.1.77:8000)</text>
 </svg>

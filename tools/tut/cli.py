@@ -785,7 +785,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("revision", help="older versions of a tutorial: list, todo, keep, start",
                        description="A change made because of a new product version keeps the old "
-                                   "tutorial as a frozen revision (tutorials/<id>/revisions/rN/). "
+                                   "tutorial as a frozen revision (tutorials/<id>/revisions/vX.Y/). "
                                    "See docs/rfc/0002-tutorial-revisions.md.")
     vsub = s.add_subparsers(dest="rcmd")
     r = vsub.add_parser("list", help="every tutorial and revision with its tested versions (default)")
@@ -793,7 +793,7 @@ def build_parser() -> argparse.ArgumentParser:
     r = vsub.add_parser("todo", help="tutorials that skipped versions (a gap in versions.tested)")
     r.add_argument("--json", action="store_true")
     r = vsub.add_parser("keep", help="move tested versions to a frozen revision, without a new version",
-                        description="Copies tutorials/<id>/ as it is on --base to revisions/rN/ "
+                        description="Copies tutorials/<id>/ as it is on --base to revisions/vX.Y/ "
                                     "(frozen) with versions.tested = VERSION..., and removes them from "
                                     "the current tutorial. Without VERSION: the versions before a gap "
                                     "in versions.tested (./tut revision todo). For a tutorial that skipped a "
@@ -802,7 +802,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("versions", nargs="*", metavar="VERSION")
     r.add_argument("--base", default="origin/main", help="branch whose verified state is kept (default origin/main)")
     r = vsub.add_parser("start", help="keep the tutorial as a revision, move it to a new version",
-                        description="Copies tutorials/<id>/ as it is on --base to revisions/rN/ "
+                        description="Copies tutorials/<id>/ as it is on --base to revisions/vX.Y/ "
                                     "(frozen), then sets versions.tested and versions.default of the "
                                     "current tutorial to --to. Edit the tutorial after this.")
     r.add_argument("id")

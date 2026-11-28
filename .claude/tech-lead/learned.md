@@ -367,3 +367,33 @@ Entry format: what was asked or what happened, what the maintainer said, the rul
   - About my own advice: I answered a failing canary with a new flag and two more questions about machinery they had never asked for; none of it was wanted. Before proposing a fix for a piece of automation, ask whether the automation itself is wanted, in one line. When they ask "what is this setting?", the thing behind it is in question, not its configuration.
   - Known consequence, told to them by the agent, not decided by them: without a weekly run, breakage from outside (a vanished image, CI-004) shows at the next PR that runs the tutorial or at a release run.
 - Applies to: project.yaml `version`, model.pinned_minor, lint T009, `./tut kserve-version`, `./tut tested add`, AGENTS.md "A new product version", RFC 0002 section 8, version-scout and feature-scout (called on request only), every proposal that adds a workflow, a bot or a schedule. A rule for everyone: it is in AGENTS.md (that section, rule 13) and the handbook Decisions in the same change.
+
+### 2026-11-27 A revision is named after its KServe version, not r1
+- Asked / situation: the first revisions were about to be created as `tutorials/<id>/revisions/r1/`. Nothing was asked; they reacted to the name. The working agent then proposed `revisions/v0.18/` (named after the newest minor the revision keeps), marked as recommended.
+- They said: "그런데 r1이 뭐지? 이름이 너무 쌩뚱맞은데" then, to the proposal, "KServe 버전 (추천)이 좋아 보이는데"
+- So: a revision's folder name is the KServe minor it is for (`v0.18`), not a counter. More general: a name a reader sees must say what the thing is for; a counter that needs the RFC to be understood is "out of place". Check new names (folders, keys, commands, labels) from the reader's seat before they ship.
+- Applies to: model.REVISION_RE, revision_name(), lint R001, RFC 0002, header links, the site and UI matrix; any new name.
+
+### 2026-11-27 Explainers go in the same PR as the version move ("b")
+- Asked / situation: the three tutorials changed for v0.20.0; the agent asked whether their explainers are updated (a) in their own later PR (the AGENTS.md rule) or (b) in this same PR.
+- They said: "b로 해도 될거 같아. 나 어디 다녀올테니 세심하게 다 진행해줘"
+- So: for a version move, the explainer may travel with the tutorial change in one PR; and "do all of it carefully while I am away" = the whole chain unattended (walk, write, check, AI review, decide findings), git still asked. One case: AGENTS.md "Explainer changes go in their own PR" is not changed by this; a second exception (next to `revision start`) would be a rule change they have to confirm.
+- Applies to: PR scope when a tutorial moves to a new KServe version; do not flag "explainer in the tutorial PR" as a must-fix in that case.
+
+### 2026-11-27 A tutorial shows its own version only; no comparison with older versions
+- Asked / situation: the edited v0.20.0 tutorials described differences from v0.18 (a "removed" container, what used to be there).
+- They said: "removed가 뭐야? tutorial에서는 어떤게 기준인게 아니라 해당 버젼을 보여주면 되는거야" / "없어졌으면 그냥 삭제하면 되는거지" / "다시 말하지만 예전과 비교는 필요없어 해당 버젼에 맞게만 보여주면 되느거야"
+- So: a current tutorial (README, translations, explainer, pictures, dashboard texts) describes the version it is tested with as if no other existed. What is gone in that version is deleted from the text, not explained as "removed" or "no longer". The old behaviour lives in the revision. They said it three times: treat a leftover comparison as a must-fix, and grep for it (removed, no longer, used to, previous, earlier, older, v0.<old>) in every gate of a version move. The generated header link to older revisions is not a comparison.
+- Applies to: every tutorial edit for a new KServe version, explainers, SVG and bitmap text, version-scout findings turned into edits.
+
+### 2026-11-27 Translations: update only the changed blocks, and write the way down
+- Asked / situation: `./tut translation draft` re-translated whole READMEs with codex; it took long. Options put to them, (a) = send only the changed blocks.
+- They said: "이거을 완전히 처음부터 번역을 하니깐 시간이 오래걸리는구나... 차라리 현재 존재하는 번역본과 update된 영문 readme를 비교하는방식은 어때?" / "번역이 생각보다 엄청 오래걸려서 token도 많이 들거 같아서" / "a로 하자. 그리고 이거 md에 적어서 차후에 그대로 사용할수있게 하자"
+- So: after an English change, the existing reviewed translation is kept and only the changed blocks are translated; a full re-translation is the exception. Time and tokens are a cost they watch. The procedure has to be in an md file so it can be used again as it is (docs/authoring.md "Updating a translation after the English changed"). They asked for the written procedure; they did not ask for a new `./tut` command (that is backlog B23, not decided).
+- Applies to: every README or explainer change that has translations; reviews of translation diffs (unchanged blocks must not move).
+
+### 2026-11-27 CI images: one pull per workflow, later
+- Asked / situation: the agent proposed sharing container images between CI jobs (pull once per workflow, `docker save`, the jobs load it), CI only.
+- They said: "이거 저장해둬 지금하던거 다끝나면 그때하게"
+- So: wanted, but after the current work (PR #58) is finished; it is not part of this PR. Record it (backlog) and bring it up in the next "what next", not before. Image mirroring itself stays on hold (2026-11-25).
+- Applies to: ci.yml, backlog; scope of PR #58.

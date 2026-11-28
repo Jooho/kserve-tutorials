@@ -10,7 +10,7 @@ picks the revision tested with V.
 
 Blast radius rules (the reason envs are versioned):
   tutorials/<id>/explainer/** -> nothing (an AI explainer is read, never executed)
-  tutorials/<id>/revisions/rN/** -> <id> on rN's versions (a new revision proves itself)
+  tutorials/<id>/revisions/vX.Y/** -> <id> on vX.Y's versions (a new revision proves itself)
   tutorials/<id>/**           -> <id>
   envs/<name>/<ver>/**        -> tutorials whose `env` is <name>/<ver>
   lib/<name>/<ver>/**         -> tutorials that list <name>/<ver> in `uses`
@@ -78,7 +78,7 @@ def _runs(v: Tutorial, minors) -> list[dict]:
 
 
 def changed_revisions(paths: list[str], tid: str) -> set[str]:
-    """rN directories of tutorial `tid` that a change touches."""
+    """vX.Y directories of tutorial `tid` that a change touches."""
     out = set()
     for p in paths:
         parts = Path(p).parts

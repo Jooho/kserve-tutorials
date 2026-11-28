@@ -189,7 +189,7 @@
         ],
         "title": "Scheduler Attempts (Success/Fail)",
         "type": "stat",
-        "description": "EPP scheduling calls, not requests. With the default HTTPRoute Envoy calls the EPP once per route rule that points at the InferencePool (three rules), so one request counts three times."
+        "description": "EPP scheduling calls, not requests. With the default HTTPRoute Envoy calls the EPP once per match of the route rules that point at the InferencePool (16 matches), so one request counts 16 times."
       },
       {
         "datasource": {
@@ -439,7 +439,7 @@
         ],
         "title": "Request Throughput (RPS)",
         "type": "timeseries",
-        "description": "Counted by the EPP per scheduling call, so with the default HTTPRoute one request counts three times (see Scheduler Attempts)."
+        "description": "Counted by the EPP per scheduling call, so with the default HTTPRoute one request counts 16 times (see Scheduler Attempts)."
       },
       {
         "collapsed": false,

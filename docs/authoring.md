@@ -104,13 +104,13 @@ Line breaks: in `docs/` write one line per paragraph and do not wrap by hand; a 
 
 ### A new product version changes a tutorial: keep the old one as a revision
 
-When a tutorial has to change because of a new version (an API, a default, a component), readers on the older versions keep the tutorial as it was: a frozen copy in `tutorials/<id>/revisions/rN/` (docs/rfc/0002-tutorial-revisions.md). Always, without trying to keep one README true for both.
+When a tutorial has to change because of a new version (an API, a default, a component), readers on the older versions keep the tutorial as it was: a frozen copy in `tutorials/<id>/revisions/vX.Y/` (docs/rfc/0002-tutorial-revisions.md). Always, without trying to keep one README true for both.
 
 ```bash skip
 ./tut kserve-version v0.20.0             # pin the new version (checks the upstream has that release)
 ./tut tested add v0.20.0 --all           # then ./tut sync; CI of the PR runs every tutorial on v0.20.0 and on v0.18.0
 # for each tutorial that fails or is no longer true on v0.20.0:
-./tut revision start <id> --to v0.20.0   # copies tutorials/<id>/ from origin/main to revisions/rN (frozen),
+./tut revision start <id> --to v0.20.0   # copies tutorials/<id>/ from origin/main to revisions/vX.Y (frozen),
                                          # sets versions.tested/default of the current tutorial to v0.20.0
 # edit the tutorial for v0.20.0, ./tut sync, ./tut run <id>, make precommit
 ./tut revision list                      # every tutorial and revision with its tested versions
@@ -119,6 +119,8 @@ When a tutorial has to change because of a new version (an API, a default, a com
 ```
 
 - The maintainer starts the move (AGENTS.md "A new product version"); `revision start` also works after the new version was added to `tested` on the branch. A tutorial edited for the new version is `status: draft` until a person reviewed it.
+- The revision's directory is named after the newest minor it keeps: `revisions/v0.18/` is the tutorial for v0.18 [R001].
+- The current tutorial shows its own version only. Do not compare with older versions ("removed", "no longer", "in older versions") and do not keep a ghost of what is gone in text, tables, checks or pictures: delete it. Readers of the older version have the revision. Something that looks odd in the current version gets its reason in present terms.
 - Freeze first, then edit; the revision and the change go into one commit. The copy is taken from the base branch, so it is what was verified.
 - The copy runs from its new place: its setup step `cd`s into the revision and links that leave the tutorial are re-pointed. `./tut sync` never writes into `revisions/`; the current README's header links each revision.
 - A revision is never edited [R002], uses only frozen env and lib parts [R003], and one version belongs to one variant [R005]. A version removed from `versions.tested` must be in a revision [R004].
@@ -151,6 +153,29 @@ The AI only returns text; a program checks it before anything is written: code b
 `./tut translation` shows every translation's state and the next step. A translation has the same shell blocks in the same order [D011]. When README.md changes later, lint warns that the translation is behind [D010] and the UI shows it to readers. Translation lag never blocks English changes or releases.
 
 Nothing translates on its own: `./tut sync` stays deterministic and offline, and plain `make precommit` only lists what is missing (`./tut translation todo`). Translate when the English is done, so the AI does not chase a moving text.
+
+### Updating a translation after the English changed
+
+`./tut translation draft` translates the whole README again. That takes 5 to 10 minutes per file and the AI rewords sentences a person already reviewed (it once turned the Grafana panel name "Scheduler Attempts", which stays English because the screen shows it in English, into Korean). When a translation exists and only parts of the English changed, update instead of redoing. The helpers are in `tools/contrib/translation/` (not part of `./tut` yet, backlog B23); they use the same AI CLI as `./tut translation draft` (`TUT_AI_TRANSLATE`, else `TUT_AI`):
+
+```bash skip
+# 1. Finish the English first: README, explainer, the review rounds. Translate once, at the end.
+# 2. A tutorial whose English changed in many places: the AI gets the previous English, the reviewed
+#    previous translation (from the base branch) and the new English; it keeps the translation of
+#    every unchanged paragraph and translates only what changed. The usual checks run on the result.
+.venv/bin/python tools/contrib/translation/update_readme.py <id>            # README.ko.md
+.venv/bin/python tools/contrib/translation/update_explainer.py <id>         # explainer/index.ko.md
+# 3. A few sentences changed after that (a review finding, a typo): send only those blocks.
+#    A block is the text between two blank lines; name each changed block by a piece of its new English.
+.venv/bin/python tools/contrib/translation/patch_blocks.py tutorials/<id>/explainer/index.md \
+    tutorials/<id>/explainer/index.ko.md "a few words of the new sentence" "another changed block"
+# 4. Compare what changed with the English (git diff of the .ko.md file), then ./tut translation mark <id> ko.
+```
+
+- Step 2 still makes the AI write the whole file (5 to 10 minutes); step 3 took about a minute for eight blocks in three files. Use step 3 whenever you can name the changed blocks.
+- Step 3 needs the English and the translation to have the same number of blocks in the same order; the helper refuses otherwise. A translation made by the tools has that shape.
+- Unchanged text must stay byte for byte: check with `git diff` that only the blocks you expected moved.
+- An explainer's translation is never marked by an agent (`./tut explain mark` is the reader's).
 
 ## 8. New tutorial from tested work: `./tut draft`
 

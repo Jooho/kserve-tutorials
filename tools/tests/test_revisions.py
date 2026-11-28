@@ -48,29 +48,29 @@ def errors(root, base=None):
 # ------------------------------------------------------------- resolution
 def test_resolve_picks_current_then_revision_by_tag_then_minor(repo):
     make_tut(repo, "t", versions={"default": "v0.20.0", "tested": ["v0.20.0"]})
-    make_revision(repo, "t", "r1", ["v0.18.0", "v0.19.0"])
+    make_revision(repo, "t", "v0.19", ["v0.18.0", "v0.19.0"])
     t = model.load_tutorials(repo)[0]
     assert model.resolve(t, None).revision is None
     assert model.resolve(t, "v0.20.0").revision is None
-    assert model.resolve(t, "v0.19.0").revision == "r1"
-    assert model.resolve(t, "v0.19.2").revision == "r1"          # same minor
+    assert model.resolve(t, "v0.19.0").revision == "v0.19"
+    assert model.resolve(t, "v0.19.2").revision == "v0.19"          # same minor
     assert model.resolve(t, "v0.20.1").revision is None
     assert model.resolve(t, "v0.17.0") is None
     r = model.resolve(t, "v0.18.0")
-    assert r.key == "t@r1" and r.rel == "tutorials/t/revisions/r1" and r.root == repo
+    assert r.key == "t@v0.19" and r.rel == "tutorials/t/revisions/v0.19" and r.root == repo
 
 
 def test_ci_runs_N_and_the_newest_tested_minor_below_it(repo):
     make_tut(repo, "a", versions={"default": "v0.20.0", "tested": ["v0.20.0"]})
-    make_revision(repo, "a", "r1", ["v0.17.0", "v0.18.0"])          # a jumped 0.18 -> 0.20
+    make_revision(repo, "a", "v0.18", ["v0.17.0", "v0.18.0"])          # a jumped 0.18 -> 0.20
     make_tut(repo, "b", versions={"default": "v0.19.1", "tested": ["v0.18.0", "v0.19.1"]})
     pin(repo, "v0.20.0")
     ts = model.load_tutorials(repo)
     assert model.pinned_version(repo) == "v0.20.0" and model.pinned_minor(ts) == (0, 20)
     m = plan.full_matrix(repo)
-    # a: N=0.20 and N-1 = its newest tested minor below N (0.18, in r1); b has no N: only 0.19
+    # a: N=0.20 and N-1 = its newest tested minor below N (0.18, in v0.18); b has no N: only 0.19
     assert {(e["tutorial"], e["version"], e["revision"]) for e in m} == {
-        ("a", "v0.20.0", ""), ("a", "v0.18.0", "r1"), ("b", "v0.19.1", "")}
+        ("a", "v0.20.0", ""), ("a", "v0.18.0", "v0.18"), ("b", "v0.19.1", "")}
     assert sorted((e["tutorial"], e["version"]) for e in plan.out_of_window(repo)) == [
         ("a", "v0.17.0"), ("b", "v0.18.0")]
     # the pin moves to 0.21 and nobody tests it yet: everyone runs only its newest version
@@ -121,11 +121,11 @@ def test_pr_matrix_runs_a_new_revision_and_not_an_old_one(repo):
     make_tut(repo, "a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
     commit_all(repo)
     base = git(repo, "rev-parse", "HEAD").strip()
-    make_revision(repo, "a", "r1", ["v0.18.0"])
+    make_revision(repo, "a", "v0.18", ["v0.18.0"])
     (repo / "tutorials" / "a" / "tutorial.yaml").write_text(yaml.safe_dump(
         meta("a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})))
     commit_all(repo, "rev")
-    assert {(e["version"], e["revision"]) for e in plan.pr_matrix(base, repo)} == {("v0.19.0", ""), ("v0.18.0", "r1")}
+    assert {(e["version"], e["revision"]) for e in plan.pr_matrix(base, repo)} == {("v0.19.0", ""), ("v0.18.0", "v0.18")}
     base2 = git(repo, "rev-parse", "HEAD").strip()
     (repo / "tutorials" / "a" / "README.md").write_text(GOOD_README + "\nMore text.\n")
     commit_all(repo, "edit")
@@ -145,25 +145,25 @@ def test_revision_start_keeps_the_base_state_and_moves_the_tutorial(repo):
     (d / "README.md").write_text((d / "README.md").read_text() + "\nUncommitted edit.\n")
     t = model.load_tutorials(repo)[0]
     dst = revision.start(t, "v0.19.0", base="HEAD")
-    assert dst == d / "revisions" / "r1"
+    assert dst == d / "revisions" / "v0.18"
     r = model.load_revisions(model.load_tutorials(repo)[0])[0]
     assert r.frozen and r.tested_versions == ["v0.18.0"] and r.default_version == "v0.18.0"
     text = r.readme("en").read_text()
     assert "Uncommitted edit" not in text                       # the base branch, not the working tree
-    assert 'cd "$REPO_ROOT/tutorials/a/revisions/r1"' in text   # setup runs inside the revision
+    assert 'cd "$REPO_ROOT/tutorials/a/revisions/v0.18"' in text   # setup runs inside the revision
     assert "](../../../../envs/kind-x/v1/)" in text and "](manifests/cm.yaml)" in text
-    assert "Older revision (r1)" in text
+    assert "Older revision (v0.18)" in text
     cur = (d / "tutorial.yaml").read_text()
     assert "default: v0.19.0   # readers" in cur and yaml.safe_load(cur)["versions"]["tested"] == ["v0.19.0"]
     # sync never writes into revisions/; the current header links the revision
     before = text
     generate.sync(repo)
     assert r.readme("en").read_text() == before
-    assert "[r1](revisions/r1/README.md)" in (d / "README.md").read_text()
+    assert "[v0.18](revisions/v0.18/README.md)" in (d / "README.md").read_text()
     script, _ = runner.build_script(model.resolve(model.load_tutorials(repo)[0], "v0.18.0"), "v0.18.0", False)
-    assert "tutorials/a/revisions/r1/README.md:" in script
+    assert "tutorials/a/revisions/v0.18/README.md:" in script
     assert errors(repo) == []
-    with pytest.raises(revision.RevisionError, match="already kept as r1"):     # not a second copy
+    with pytest.raises(revision.RevisionError, match="already kept as v0.18"):     # not a second copy
         revision.start(model.load_tutorials(repo)[0], "v0.19.0", base="HEAD")
 
 
@@ -182,7 +182,7 @@ def test_revision_start_after_the_new_version_was_added_to_tested(repo):
     t = model.load_tutorials(repo)[0]
     assert t.tested_versions == ["v0.20.0"] and t.default_version == "v0.20.0"
     assert model.load_revisions(t)[0].tested_versions == ["v0.18.0"]
-    assert {(e["version"], e["revision"]) for e in plan.full_matrix(repo)} == {("v0.20.0", ""), ("v0.18.0", "r1")}
+    assert {(e["version"], e["revision"]) for e in plan.full_matrix(repo)} == {("v0.20.0", ""), ("v0.18.0", "v0.18")}
     assert errors(repo, base="HEAD") == []
     with pytest.raises(revision.RevisionError, match="already tested with v0.18.0 on HEAD"):
         revision.start(model.load_tutorials(repo)[0], "v0.18.0", base="HEAD")
@@ -207,10 +207,10 @@ def test_skipped_lists_a_gap_in_tested_and_keep_moves_the_versions_before_it(rep
     t = model.load_tutorials(repo)[0]
     assert t.tested_versions == ["v0.21.0"] and t.default_version == "v0.21.0"
     r = model.load_revisions(t)[0]
-    assert r.revision == "r1" and r.frozen and r.tested_versions == ["v0.17.0", "v0.18.0"]
+    assert r.revision == "v0.18" and r.frozen and r.tested_versions == ["v0.17.0", "v0.18.0"]
     assert r.default_version == "v0.18.0"
-    assert 'cd "$REPO_ROOT/tutorials/a/revisions/r1"' in r.readme("en").read_text()
-    assert model.resolve(t, "v0.18.0").revision == "r1"
+    assert 'cd "$REPO_ROOT/tutorials/a/revisions/v0.18"' in r.readme("en").read_text()
+    assert model.resolve(t, "v0.18.0").revision == "v0.18"
     assert plan.skipped(repo) == []
     assert ("a", "v0.18.0") in {(e["tutorial"], e["version"]) for e in plan.full_matrix(repo)}
     assert errors(repo, base="HEAD") == []                      # R004: the revision keeps them
@@ -235,14 +235,19 @@ def test_revision_start_names_the_users_of_shared_steps(repo):
 # ------------------------------------------------------------------- lint
 def test_R001_R003_R005_revision_metadata(repo):
     make_tut(repo, "a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
-    make_revision(repo, "a", "r1", ["v0.18.0"], frozen=False)
-    make_revision(repo, "a", "r2", ["v0.19.0"], env="kind-x/v2")
+    make_revision(repo, "a", "v0.18", ["v0.18.0"], frozen=False)
+    make_revision(repo, "a", "v0.19", ["v0.19.0"], env="kind-x/v2")
     found = errors(repo)
-    assert ("R001", "tutorials/a/revisions/r1/tutorial.yaml") in found
-    assert ("R003", "tutorials/a/revisions/r2/tutorial.yaml") in found
-    assert ("R005", "tutorials/a/revisions/r2/tutorial.yaml") in found
+    assert ("R001", "tutorials/a/revisions/v0.18/tutorial.yaml") in found
+    assert ("R003", "tutorials/a/revisions/v0.19/tutorial.yaml") in found
+    assert ("R005", "tutorials/a/revisions/v0.19/tutorial.yaml") in found
     make_tut(repo, "c", frozen=True)
     assert ("R001", "tutorials/c/tutorial.yaml") in errors(repo)
+    # the directory name says which version the revision is for
+    pin(repo, "v0.20.0")
+    make_tut(repo, "d", versions={"default": "v0.20.0", "tested": ["v0.20.0"]})
+    make_revision(repo, "d", "v0.17", ["v0.17.0", "v0.18.0"])
+    assert ("R001", "tutorials/d/revisions/v0.17/tutorial.yaml") in errors(repo)
 
 
 def test_R002_R004_frozen_revision_and_removed_versions(repo):
@@ -254,32 +259,32 @@ def test_R002_R004_frozen_revision_and_removed_versions(repo):
         meta("a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})))
     commit_all(repo, "drop v0.18")
     assert ("R004", "tutorials/a/tutorial.yaml") in errors(repo, base)
-    make_revision(repo, "a", "r1", ["v0.18.0"])
+    make_revision(repo, "a", "v0.18", ["v0.18.0"])
     commit_all(repo, "keep it")
     assert errors(repo, base) == []
     base2 = git(repo, "rev-parse", "HEAD").strip()
-    (repo / "tutorials" / "a" / "revisions" / "r1" / "README.md").write_text(GOOD_README + "\nfix\n")
+    (repo / "tutorials" / "a" / "revisions" / "v0.18" / "README.md").write_text(GOOD_README + "\nfix\n")
     commit_all(repo, "touch the revision")
-    assert ("R002", "tutorials/a/revisions/r1") in errors(repo, base2)
+    assert ("R002", "tutorials/a/revisions/v0.18") in errors(repo, base2)
 
 
 # ------------------------------------------------------- catalog, site, CLI
 def test_catalog_site_and_release_see_revisions(repo, tmp_path):
     make_tut(repo, "a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
-    make_revision(repo, "a", "r1", ["v0.18.0"])
+    make_revision(repo, "a", "v0.18", ["v0.18.0"])
     (repo / "catalog" / "collections").mkdir(parents=True)
     (repo / "catalog" / "collections" / "p.yaml").write_text(yaml.safe_dump(
         {"id": "p", "title": {"en": "P"}, "description": {"en": "d"}, "owners": ["x"], "members": ["a"]}))
     col = catalog.load_collections(repo)[0]
     by_id = {t.id: t for t in model.load_tutorials(repo)}
     item = catalog.resolve(col, by_id, "v0.18.0")[0]
-    assert item["state"] == "ok" and item["revision"] == "r1"
+    assert item["state"] == "ok" and item["revision"] == "v0.18"
     assert catalog.resolve(col, by_id, "v0.17.0")[0]["state"] == "unavailable"
     generate.sync(repo)
     out = site.build_source(tmp_path / "site", repo)
-    assert (out / "tutorials" / "a" / "revisions" / "r1" / "index.md").exists()
-    assert "tutorials/a/revisions/r1/index.md) (r1, an older revision)" in (out / "versions.md").read_text()
-    assert "a (r1)](tutorials/a/revisions/r1/)" in (repo / "README.md").read_text() \
+    assert (out / "tutorials" / "a" / "revisions" / "v0.18" / "index.md").exists()
+    assert "tutorials/a/revisions/v0.18/index.md) (v0.18, an older revision)" in (out / "versions.md").read_text()
+    assert "a (v0.18)](tutorials/a/revisions/v0.18/)" in (repo / "README.md").read_text() \
         if (repo / "README.md").exists() else True
 
 
@@ -297,7 +302,7 @@ def test_ui_serves_the_revision_for_rev(repo):
     from aiohttp.test_utils import TestClient, TestServer
     from tut.ui.server import UI
     make_tut(repo, "a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
-    d = make_revision(repo, "a", "r1", ["v0.18.0"])
+    d = make_revision(repo, "a", "v0.18", ["v0.18.0"])
     (d / "README.md").write_text(GOOD_README.replace("# T\n", "# T\n\nOLD TEXT\n"))
     generate.sync(repo)
 
@@ -307,10 +312,10 @@ def test_ui_serves_the_revision_for_rev(repo):
             h = {"X-Tut-Token": ui.token}
             lst = await (await c.get("/api/tutorials", headers=h)).json()
             assert lst["versions"] == ["v0.19.0", "v0.18.0"]
-            assert lst["tutorials"][0]["revisions"][0]["rev"] == "r1"
+            assert lst["tutorials"][0]["revisions"][0]["rev"] == "v0.18"
             cur = await (await c.get("/api/tutorials/a?lang=en", headers=h)).json()
-            old = await (await c.get("/api/tutorials/a?lang=en&rev=r1", headers=h)).json()
+            old = await (await c.get("/api/tutorials/a?lang=en&rev=v0.18", headers=h)).json()
             assert cur["revision"] is None and "OLD TEXT" not in cur["html"]
-            assert old["revision"] == "r1" and "OLD TEXT" in old["html"]
+            assert old["revision"] == "v0.18" and "OLD TEXT" in old["html"]
             assert (await c.get("/api/tutorials/a?rev=r9", headers=h)).status == 404
     asyncio.run(main())

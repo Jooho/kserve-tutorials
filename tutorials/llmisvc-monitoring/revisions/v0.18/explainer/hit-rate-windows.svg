@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 360" role="img" aria-labelledby="t d">
+<title id="t">Two hit-rate panels, two windows</title>
+<desc id="d">Both panels divide vLLM's prefix_cache_hits_total by prefix_cache_queries_total. Avg Cache Hit Rate uses the counters since the Pod started; vLLM KV Cache Hit Rate uses only the last five minutes. After load 1 both show 304 of 500, after load 2 both show 304 of 1020; five minutes later the first still shows 304 of 1020 and the second drops to 0%.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #1d2330; }
+  .h { font-size: 15px; font-weight: 650; }
+  .s { font-size: 12.5px; fill: #4a5263; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #2b3140; }
+  .axis { stroke: #868e96; stroke-width: 1.4; }
+  .load { fill: #ffe8cc; stroke: #e8590c; stroke-width: 1.2; }
+  .cum { fill: #e7f5ff; stroke: #1c7ed6; stroke-width: 1.4; }
+  .win { fill: #fff4e6; stroke: #e8590c; stroke-width: 1.4; fill-opacity: .7; }
+  .slide { animation: slide 8s infinite linear; }
+  @keyframes slide { 0% { transform: translateX(0) } 100% { transform: translateX(470px) } }
+  @media (prefers-color-scheme: dark) {
+    text { fill: #e6e9ef; } .s { fill: #b4bccb; } .m { fill: #d5dae3; }
+    .axis { stroke: #8b93a5; } .load { fill: #3a2414; stroke: #ff922b; }
+    .cum { fill: #132a3d; stroke: #4dabf7; } .win { fill: #3a2414; stroke: #ff922b; }
+  }
+  @media (prefers-reduced-motion: reduce) { .slide { animation: none; } }
+</style>
+
+<line class="axis" x1="40" y1="70" x2="840" y2="70"/>
+<text class="s" x="40" y="56">time</text>
+<rect class="load" x="150" y="62" width="60" height="16" rx="3"/><text class="s" x="140" y="100">load 1</text>
+<rect class="load" x="260" y="62" width="60" height="16" rx="3"/><text class="s" x="250" y="100">load 2</text>
+<text class="s" x="560" y="100">5+ minutes later</text>
+
+<text class="h" x="40" y="140">Avg Cache Hit Rate: since the Pod started</text>
+<rect class="cum" x="40" y="152" width="760" height="22" rx="4"/>
+<text class="m" x="160" y="196">304/500 = 60.8%</text>
+<text class="m" x="300" y="196">304/1020 = 29.8%</text>
+<text class="m" x="600" y="196">304/1020 = 29.8%  (stays)</text>
+
+<text class="h" x="40" y="246">vLLM KV Cache Hit Rate: last 5 minutes only</text>
+<g class="slide"><rect class="win" x="40" y="258" width="300" height="22" rx="4"/></g>
+<text class="m" x="160" y="302">60.8%</text>
+<text class="m" x="300" y="302">29.8%</text>
+<text class="m" x="600" y="302">0%: nothing happened in the window</text>
+
+<text class="s" x="40" y="340">Same vLLM counters, different windows. Neither comes from the InferencePool or the EPP.</text>
+</svg>

@@ -39,7 +39,7 @@ def _copy_tree(src: Path, dst: Path):
         if p.is_dir():
             continue
         rel = p.relative_to(src)
-        target = dst / rel.parent / LANG_FILES.get(rel.name, rel.name)   # also revisions/rN/README.md
+        target = dst / rel.parent / LANG_FILES.get(rel.name, rel.name)   # also revisions/vX.Y/README.md
         target.parent.mkdir(parents=True, exist_ok=True)
         if p.suffix == ".md":
             text = "\n".join(_site_fence_info(l) for l in p.read_text().split("\n"))

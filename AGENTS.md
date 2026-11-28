@@ -100,7 +100,7 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 13. **No AI in GitHub Actions.** There is no API key in CI. Scouts, drafts,
     translations and explainers run locally, and only when the maintainer
     asks (docs/rfc/0002-tutorial-revisions.md).
-14. **Never edit a revision** (`tutorials/<id>/revisions/rN/`). It is the
+14. **Never edit a revision** (`tutorials/<id>/revisions/vX.Y/`). It is the
     frozen tutorial for older versions; changes go to the current tutorial.
 
 ## How to work (every task)
@@ -204,7 +204,7 @@ the upstream's newest release. When the maintainer says "move to v0.21.0":
    tutorials need a revision.
 4. **Keep the old version, then fix.** For each tutorial that fails or whose
    explanation is no longer true: `./tut revision start <id> --to v0.21.0`
-   (the old tutorial becomes a frozen `revisions/rN/`), find the cause, edit
+   (the old tutorial becomes a frozen `revisions/vX.Y/`), find the cause, edit
    the current tutorial for the new version and set `status: draft`. Add the
    commits to the same PR, change its title, let CI run again
    (docs/authoring.md "A new product version changes a tutorial").

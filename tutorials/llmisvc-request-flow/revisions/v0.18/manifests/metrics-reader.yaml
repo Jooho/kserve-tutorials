@@ -1,0 +1,15 @@
+# Identity used to read the EPP scheduler's /metrics endpoint.
+# The endpoint checks the bearer token (TokenReview) and asks the API server
+# whether its owner may "get" the non-resource URL /metrics.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: llmisvc-request-flow-metrics-reader
+rules:
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]

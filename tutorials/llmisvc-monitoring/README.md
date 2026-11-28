@@ -3,9 +3,11 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** ✅ stable · **Tested with KServe:** v0.18.0, v0.20.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+> **Status:** 🚧 draft · **Tested with KServe:** v0.20.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
 >
 > 🌐 [한국어](README.ko.md)
+>
+> **Older KServe versions:** v0.18.0: [v0.18](revisions/v0.18/README.md)
 
 <!-- /tut -->
 
@@ -31,7 +33,7 @@ What you will learn:
   rise for prompts that share a beginning, and which stay flat for prompts that
   do not.
 - That vLLM's prefix cache and the EPP's prefix index are two different things,
-  and why the EPP counts every request three times in this setup.
+  and why the EPP counts every request 16 times in this setup.
 - How to read the dashboard, including panels whose name or place misleads.
 
 ## Step 0: Environment
@@ -44,7 +46,7 @@ is safe to run again.
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.20.0}"
 export NS="${NS:-llmisvc-monitoring}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
@@ -263,7 +265,7 @@ checked: with Prometheus unable to read the Secret, the EPP target stayed
 `up`.) This chart's Prometheus uses the ServiceMonitors of every namespace
 that carry the label `release: prometheus`. The ServiceMonitor selects the two
 Services of the LLMInferenceService by their label; each endpoint applies to
-the Service that has a port of that name (`metrics` on the EPP Service, `https`
+the Service that has a port of that name (`metrics` on the EPP Service, `http`
 on the vLLM Service).
 
 ```bash run
@@ -278,8 +280,9 @@ kubectl apply -f manifests/servicemonitor.yaml -n "$NS"
 ```yaml
 # Scrapes both Services of the LLMInferenceService in this namespace:
 # the EPP scheduler (port "metrics", 9090, bearer token required) and
-# vLLM (port "https", 8000; the port is named https but serves plain HTTP
-# unless TLS is enabled for LLMInferenceServices).
+# vLLM (port "http", 8000: plain HTTP. With TLS enabled for
+# LLMInferenceServices the port is named "https" instead, and this endpoint
+# would need that name and scheme).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -297,7 +300,7 @@ spec:
     bearerTokenSecret:
       name: metrics-reader-token
       key: token
-  - port: https
+  - port: http
     path: /metrics
     interval: 15s
     scheme: http
@@ -439,20 +442,23 @@ kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
   | python3 -c 'import json, sys; a = json.load(sys.stdin); print(a[a.index("--config-text") + 1])'
 ```
 
-It has two scorers with their weights, and a picker:
+It has four scorers with their weights, and a picker:
 
 ```bash verify
 kubectl get deployment demo-model-kserve-router-scheduler -n "$NS" \
   -o jsonpath='{.spec.template.spec.containers[?(@.name=="main")].args}' \
   | python3 -c 'import json, re, sys
 a = json.load(sys.stdin); c = a[a.index("--config-text") + 1]
-assert re.search(r"pluginRef: queue-scorer\s+weight: 2", c) and re.search(r"pluginRef: prefix-cache-scorer\s+weight: 3", c), c'
+want = {"queue-scorer": 2, "kv-cache-utilization-scorer": 2, "prefix-cache-scorer": 3, "no-hit-lru-scorer": 2}
+assert all(re.search(rf"pluginRef: {p}\s+weight: {w}\b", c) for p, w in want.items()), c'
 ```
 
 | Plugin | What it scores with | Weight |
 |--------|---------------------|--------|
 | `queue-scorer` | `vllm:num_requests_waiting` of each Pod, as the EPP last read it: fewer waiting is better | 2 |
+| `kv-cache-utilization-scorer` | `vllm:kv_cache_usage_perc` of each Pod, as the EPP last read it: a less full KV cache is better | 2 |
 | `prefix-cache-scorer` | the EPP's **own** prefix index: how much of the prompt the EPP has already sent to each Pod | 3 |
+| `no-hit-lru-scorer` | for a prompt the index does not know: which Pod got such a new prompt least recently | 2 |
 | `max-score-picker` | takes the Pod with the highest weighted sum | |
 
 The prefix-cache-scorer does **not** read vLLM's prefix cache metrics. A
@@ -460,8 +466,7 @@ helper the EPP adds on its own (it is not in the configuration above, but its
 name shows up in the EPP's plugin metrics), `approx-prefix-cache-producer`, hashes each
 prompt into blocks, looks them up in an index of "which Pod got which prompt"
 before scheduling, and records the chosen Pod afterwards. Step 7 shows how its
-numbers differ from vLLM's. The KV cache utilization is read but not scored
-in this configuration.
+numbers differ from vLLM's.
 
 ## Step 6: Import the Grafana dashboard
 
@@ -510,10 +515,10 @@ where its number comes from. Three places mislead:
 - **vLLM KV Cache Hit Rate** measures the *prefix* cache (`prefix_cache_*`
   counters), not the KV cache usage next to it.
 - **Scheduler Attempts** and **Request Throughput** count EPP scheduling calls,
-  and in this setup every request makes three of them (Step 7). Scheduler
+  and in this setup every request makes 16 of them (Step 7). Scheduler
   Attempts shows the successful ones; failed attempts would appear as a second
-  number. Request Throughput is a rate over 5 minutes: 60 calls spread over
-  300 seconds show as 0.2 per second for several minutes, not as a spike.
+  number. Request Throughput is a rate over 5 minutes: 320 calls spread over
+  300 seconds show as about 1.1 per second for several minutes, not as a spike.
 
 If you came through the learning path, the earlier tutorials' requests are in
 the counters too, so your panels show other numbers than the pictures below;
@@ -547,7 +552,7 @@ the slow part here.
 
 | Panel | Query |
 |-------|-------|
-| Request Throughput (RPS) | `inference_objective_request_total` per second, by model (EPP; three per request here) |
+| Request Throughput (RPS) | `inference_objective_request_total` per second, by model (EPP; 16 per request here) |
 
 **4. vLLM Engine Status**: straight from the vLLM Pods
 
@@ -587,10 +592,10 @@ epp_counts() {
   epp_metrics '^inference_extension_(scheduler_attempts_total|prefix_indexer_hit_ratio_(sum|count))' \
     | awk '$1 ~ /^inference_extension_scheduler_attempts_total/ {a += $NF} $1 ~ /hit_ratio_count/ {c += $NF} $1 ~ /hit_ratio_sum/ {s += $NF} END {print a + 0, c + 0, s + 0}'
 }
-# HTTPRoute rules that send to the InferencePool (Envoy asks the EPP once per rule)
-RULES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
+# Matches of the HTTPRoute rules that send to the InferencePool (Envoy asks the EPP once per match)
+MATCHES=$(kubectl get httproute -n "$NS" -o json | python3 -c '
 import json, sys
-print(sum(1 for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
+print(sum(len(rule.get("matches", [])) for r in json.load(sys.stdin)["items"] for rule in r["spec"]["rules"]
           if any(b.get("kind") == "InferencePool" for b in rule.get("backendRefs", []))))')
 read -r HITS0 QUERIES0 < <(prefix_cache)
 read -r ATT0 LOOK0 RATIO0 < <(epp_counts)
@@ -625,33 +630,36 @@ the prompt is computed before any of the answer, so the next 19, which start
 by 20 x 25 = 500 and `prefix_cache_hits_total` by 19 x 16 = 304: 61%. We got
 exactly 304 of 500 in every run, and with this prompt more is not possible.
 
-**What the EPP did.** It made 60 scheduling attempts for 20 requests. Envoy
-talks to the EPP through *ExtProc* (external processing): an Envoy filter hands
-the request to an outside service and waits for its answer. Envoy Gateway adds
-one such filter to the Gateway's listener for every HTTPRoute rule that sends
-to an InferencePool, and the route has three (`/v1/completions`,
-`/v1/chat/completions`, `/v1/responses`). The filters of a listener form a
-chain that every request passes through, and only the catch-all rule switches
-them off, so a request to `/v1/completions` goes through all three: the EPP is
-asked three times. (The llmisvc-request-flow tutorial shows the three calls in
+**What the EPP did.** It made 320 scheduling attempts for 20 requests: 16
+for each. Envoy talks to the EPP through *ExtProc* (external processing): an
+Envoy filter hands the request to an outside service and waits for its answer.
+In Envoy's configuration every **match** of an HTTPRoute rule is a route of
+its own, and the Gateway's listener has one such filter for each of those
+routes that sends to an InferencePool. The route has nine rules that do, with
+16 matches together: four for the paths under `/<namespace>/demo-model`, four
+for the same paths under `/publishers/...`, and one rule, `v1-model-routing`,
+with eight matches (the bare `/v1/...` paths, chosen by a header). The filters
+of a listener form a chain that every request to the pool passes through, so a
+request to `/v1/completions` goes through all 16: the EPP is asked 16 times.
+(The llmisvc-request-flow tutorial lists the rules and shows the 16 calls in
 the EPP log.)
 
-Its prefix index was looked up 60 times, and 59 lookups found the prompt: all
-but the very first, because that one recorded the Pod and every later lookup,
-of the same request or the next, found the record. The EPP estimates tokens
-without vLLM's tokenizer and uses its own block size (llm-d-router source), so
-its numbers cannot be compared with vLLM's token counts. Here each lookup
-scored either 0 or 1, so the hit ratios add up to the number of lookups that
-found the prompt.
+Its prefix index was looked up 320 times, and 319 lookups found the prompt:
+all but the very first, because that one recorded the Pod and every later
+lookup, of the same request or the next, found the record. The EPP estimates
+tokens without vLLM's tokenizer and uses its own block size (llm-d-router
+source), so its numbers cannot be compared with vLLM's token counts. Here each
+lookup scored either 0 or 1, so the hit ratios add up to the number of lookups
+that found the prompt.
 
 ```bash verify retry=3 delay=5
 read -r HITS1 QUERIES1 < <(prefix_cache)
 read -r ATT1 LOOK1 RATIO1 < <(epp_counts)
 awk -v h=$((HITS1 - HITS0)) -v q=$((QUERIES1 - QUERIES0)) -v a=$((ATT1 - ATT0)) -v l=$((LOOK1 - LOOK0)) \
-    -v r0="$RATIO0" -v r1="$RATIO1" -v rules="$RULES" 'BEGIN {
+    -v r0="$RATIO0" -v r1="$RATIO1" -v matches="$MATCHES" 'BEGIN {
   printf "vLLM prefix cache: %d of %d prompt tokens were hits\n", h, q
-  printf "EPP: %d scheduling attempts for 20 requests (%d route rules), %d prefix index lookups, hit ratios add up to %.0f\n", a, rules, l, r1 - r0
-  exit !(q > 0 && h / q >= 0.5 && a == 20 * rules)
+  printf "EPP: %d scheduling attempts for 20 requests (%d route matches), %d prefix index lookups, hit ratios add up to %.0f\n", a, matches, l, r1 - r0
+  exit !(q > 0 && h / q >= 0.5 && a == 20 * matches)
 }'
 ```
 
@@ -659,16 +667,16 @@ Expected output (our run):
 
 ```text
 vLLM prefix cache: 304 of 500 prompt tokens were hits
-EPP: 60 scheduling attempts for 20 requests (3 route rules), 60 prefix index lookups, hit ratios add up to 59
+EPP: 320 scheduling attempts for 20 requests (16 route matches), 320 prefix index lookups, hit ratios add up to 319
 ```
 
-On the dashboard after this load (our run): **Scheduler Attempts** 60, both
-hit rate panels at 60.8%, **vLLM Running** at 15 to 20 (Prometheus samples
-every 15 seconds and catches the batch at some moment of it; all 20 requests
-fit into one batch, so **waiting** and the queue panels stay at 0), and the KV
+On the dashboard after this load (our run): **Scheduler Attempts** 320, both
+hit rate panels at 60.8%, **vLLM Running** with a peak somewhere up to 20,
+7 in this picture (Prometheus samples every 15 seconds and catches the batch
+at some moment of it; all 20 requests fit into one batch, so **waiting** and the queue panels stay at 0), and the KV
 cache gauges at 0% again once the requests are done.
 
-<a href="images/panels-after-prefix.png" target="_blank"><img src="images/panels-after-prefix.png" width="720" alt="After load 1: Scheduler Attempts 60, Avg Cache Hit Rate 60.8%, vLLM KV Cache Hit Rate 60.8%, running requests peak near 17, waiting 0"></a>
+<a href="images/panels-after-prefix.png" target="_blank"><img src="images/panels-after-prefix.png" width="720" alt="After load 1: Scheduler Attempts 320, Avg Cache Hit Rate 60.8%, vLLM KV Cache Hit Rate 60.8%, running requests peak at 7, waiting 0"></a>
 
 > **Note:** vLLM on CPU defaults to `block_size=128`: a prompt would need 128
 > identical tokens before anything is reused. The LLMInferenceService of this
@@ -703,11 +711,11 @@ echo 'Varied Prompts Test Complete'
 **vLLM**: `prefix_cache_queries_total` rises by 520 (20 prompts of 26 tokens)
 and `prefix_cache_hits_total` does not move: 0 of 520.
 
-**EPP**: 60 more attempts, 60 more lookups, and its hit ratios add up to 40,
-although vLLM reused nothing. Each request's first lookup misses and records
-the Pod; the second and third lookups of the same request, made a moment later
-by the next ExtProc filter, find that record. That is the three-calls-per-request
-effect again, now in the EPP's hit numbers.
+**EPP**: 320 more attempts, 320 more lookups, and its hit ratios add up to
+300, although vLLM reused nothing. Each request's first lookup misses and
+records the Pod; the other 15 lookups of the same request, made a moment later
+by the next ExtProc filters, find that record: 20 misses, 300 hits. That is
+the 16-calls-per-request effect again, now in the EPP's hit numbers.
 
 ```bash verify retry=3 delay=5
 read -r HITS1 QUERIES1 < <(prefix_cache)
@@ -724,14 +732,14 @@ Expected output (our run):
 
 ```text
 vLLM prefix cache: 0 of 520 prompt tokens were hits
-EPP: 60 scheduling attempts, 60 prefix index lookups, hit ratios add up to 40
+EPP: 320 scheduling attempts, 320 prefix index lookups, hit ratios add up to 300
 ```
 
 On the dashboard both hit rate panels now show **29.8%**, not 0%: they divide
 all hits by all queries in their window, 304 of 1020 for both loads together.
-**Scheduler Attempts** is at 120.
+**Scheduler Attempts** is at 640.
 
-<a href="images/panels-after-varied.png" target="_blank"><img src="images/panels-after-varied.png" width="720" alt="After load 2: Scheduler Attempts 120, Avg Cache Hit Rate 29.8%, vLLM KV Cache Hit Rate 29.8%"></a>
+<a href="images/panels-after-varied.png" target="_blank"><img src="images/panels-after-varied.png" width="720" alt="After load 2: Scheduler Attempts 640, Avg Cache Hit Rate 29.8%, vLLM KV Cache Hit Rate 29.8%"></a>
 
 ### The two hit rate panels part ways
 
@@ -805,8 +813,8 @@ it with the environment's `teardown.sh` when you are done.
 - vLLM's prefix cache and the EPP's prefix index are different things: the EPP
   guesses from what it has routed, in its own blocks, and it does not
   read vLLM's cache metrics.
-- With the default HTTPRoute, Envoy asks the EPP three times per request, so
-  every EPP counter (attempts, requests, index lookups) is three times the
-  number of requests.
+- With the default HTTPRoute, Envoy asks the EPP 16 times per request (once
+  per match of the rules that send to the InferencePool), so every EPP counter
+  (attempts, requests, index lookups) is 16 times the number of requests.
 - The two hit rate panels use the same vLLM counters over different windows:
   since the Pod started, or the last 5 minutes.

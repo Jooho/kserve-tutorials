@@ -3,9 +3,11 @@
 <!-- tut:header -->
 
 <!-- Generated from tutorial.yaml by `./tut sync` — do not edit by hand. -->
-> **Status:** ✅ stable · **Tested with KServe:** v0.18.0, v0.20.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
+> **Status:** 🚧 draft · **Tested with KServe:** v0.20.0 · **Environment:** [`kind-kserve/v1`](../../envs/kind-kserve/v1/) · **GPU:** not required
 >
 > 🌐 [한국어](README.ko.md)
+>
+> **Older KServe versions:** v0.18.0: [v0.18](revisions/v0.18/README.md)
 
 <!-- /tut -->
 
@@ -38,7 +40,7 @@ link above) and creates the namespace used below. It is safe to run again.
 
 ```bash run
 # Generated from tutorial.yaml by `./tut sync` — do not edit by hand.
-export KSERVE_VERSION="${KSERVE_VERSION:-v0.18.0}"
+export KSERVE_VERSION="${KSERVE_VERSION:-v0.20.0}"
 export NS="${NS:-llmisvc-anatomy}"
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/tools/local-config.sh"   # your settings in .tut.env, if any
@@ -149,7 +151,8 @@ KServe installs **well-known LLMInferenceServiceConfigs** into the cluster:
 | Config | Role |
 |--------|------|
 | `kserve-config-llm-template` | vLLM container template (command, probes, security) |
-| `kserve-config-llm-scheduler` | EPP scheduler + tokenizer sidecar |
+| `kserve-config-llm-scheduler` | EPP scheduler |
+| `kserve-config-llm-router-route` | The HTTPRoute rules (which paths go to the InferencePool) |
 
 When an LLMInferenceService is created, the controller **merges** these configs
 automatically. Even without `baseRefs`, the command, probes and EPP scheduler are
@@ -189,7 +192,7 @@ kubectl apply -f llmisvc-cpu.yaml
 │     └── ServiceAccount                                        │
 │                                                               │
 │  3. Scheduler (request routing)                               │
-│     ├── Deployment (EPP scheduler + tokenizer sidecar)        │
+│     ├── Deployment (EPP scheduler)                            │
 │     ├── Service (*-epp-service, gRPC 9002 etc.)               │
 │     ├── Role + RoleBinding (RBAC)                             │
 │     └── ServiceAccount                                        │
@@ -240,16 +243,12 @@ kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-rout
 │      (tokenizer.json, vocab.json, etc.)     │
 │      Does NOT download model weights        │
 │                                             │
-│  ┌─────────────┐            ┌────────────┐  │
-│  │  scheduler  │            │ tokenizer  │  │
-│  │  (main)     │   (idle)   │ (sidecar)  │  │
-│  │  gRPC:9002  │            │ HTTP:8082  │  │
-│  │  health:9003│            │ (health)   │  │
-│  │  metrics:   │            │ Idle in    │  │
-│  │   9090      │            │ default    │  │
-│  │  Scoring,   │            │ config     │  │
-│  │  Pod select │            │            │  │
-│  └─────────────┘            └────────────┘  │
+│  ┌─────────────────────────────────────┐    │
+│  │  scheduler (main)                   │    │
+│  │  gRPC: 9002   health: 9003          │    │
+│  │  metrics: 9090                      │    │
+│  │  Scoring, Pod selection             │    │
+│  └─────────────────────────────────────┘    │
 └─────────────────────────────────────────────┘
          ▲
          │ gRPC (ExtProc)
@@ -258,16 +257,16 @@ kubectl get pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice-rout
 
 | Container | Image | Role |
 |-----------|-------|------|
-| `storage-initializer` (init) | `kserve/storage-initializer` | Downloads only tokenizer files (filtered by `STORAGE_ALLOW_PATTERNS`) |
-| `main` (scheduler) | `llm-d/llm-d-inference-scheduler` | EPP scheduler; talks to Envoy over ExtProc gRPC and picks a Pod after scoring |
-| `tokenizer` (sidecar) | `llm-d/llm-d-uds-tokenizer` | **Idle** by default; used by `precise-prefix-cache-scorer` over a Unix socket |
+| `storage-initializer` (init) | `kserve/storage-initializer` | Downloads only tokenizer files (filtered by `STORAGE_ALLOW_PATTERNS`), no model weights. They are for an optional tokenizer container that the default plugins do not use, so it is not started |
+| `main` (scheduler) | `llm-d/llm-d-router-endpoint-picker` | EPP scheduler; talks to Envoy over ExtProc gRPC and picks a Pod after scoring |
 
-The scheduler Pod must have exactly the three containers above:
+The scheduler Pod must have exactly these two containers, one init and one
+that keeps running:
 
 ```bash verify
 POD=$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")
 test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.initContainers[*].name}')" = "storage-initializer"
-test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.containers[*].name}' | wc -w)" -eq 2
+test "$(kubectl get pod -n "$NS" "$POD" -o jsonpath='{.spec.containers[*].name}')" = "main"
 ```
 
 #### Scheduling plugins (from the well-known config)
@@ -277,44 +276,18 @@ kubectl describe pod -n "$NS" -l app.kubernetes.io/component=llminferenceservice
   | grep -A 15 "config-text" || true
 ```
 
-Default configuration:
+Default configuration: four scorers, each with a weight, and a picker. Every
+scorer gives each vLLM Pod a score between 0 and 1; the picker adds them up
+with their weights and takes the highest.
 
 - `queue-scorer` (weight 2) — prefers Pods with fewer queued requests
-- `prefix-cache-scorer` (weight 3) — prefers Pods with a higher prefix-cache hit rate (from vLLM metrics)
+- `kv-cache-utilization-scorer` (weight 2) — prefers Pods whose KV cache is less full
+- `prefix-cache-scorer` (weight 3) — prefers the Pod that most likely has this prompt's prefix cached
+- `no-hit-lru-scorer` (weight 2) — for a prompt no Pod has cached, prefers the Pod that got such a "cold" prompt least recently, so new prefixes spread over the Pods
 - `max-score-picker` — picks the Pod with the highest combined score
 
-#### Why the tokenizer sidecar is idle
-
-The well-known config (`kserve-config-llm-scheduler`) always injects the
-tokenizer, but the default `prefix-cache-scorer` only reads vLLM metrics. The
-tokenizer is used only after switching to `precise-prefix-cache-scorer`.
-
-<details>
-<summary>precise-prefix-cache-scorer — when the tokenizer is used</summary>
-
-With `precise-prefix-cache-scorer` the tokenizer becomes active:
-
-1. The tokenizer tokenizes the prompt and computes block hashes
-2. vLLM publishes cache events over ZMQ
-3. The scheduler matches block hashes with cache events to pick the exact Pod
-
-| | `prefix-cache-scorer` (default) | `precise-prefix-cache-scorer` |
-|---|---|---|
-| Data source | vLLM metrics (`prefix_cache_hit_rate`) | vLLM's real-time ZMQ event stream |
-| Method | Uses the hit rate reported by vLLM | Scheduler tokenizes → block hash → exact match |
-| Tokenizer | **Not used** (injected but idle) | **Used** (over a Unix domain socket) |
-| Extra vLLM config | None | `--enable-kvcache`, `--block-size`, ZMQ publishing |
-
-The tokenizer and scheduler talk over a **Unix domain socket**
-(`/tmp/tokenizer/tokenizer-uds.socket`) inside the same Pod, which avoids the
-kernel network stack:
-
-```bash skip
-kubectl exec -n "$NS" "$("$TUT_LIB/llmisvc/v1/scheduler-pod.sh" "$NS")" -c main -- ls -la /tmp/tokenizer/
-```
-
-Configuration example: [precise-prefix-kv-cache-routing](https://github.com/kserve/kserve/tree/master/docs/samples/llmisvc/precise-prefix-kv-cache-routing)
-</details>
+With one vLLM Pod, as here, every request goes to that Pod whatever the
+scores are. The request-flow tutorial of this series shows the scores.
 
 ### 3. InferencePool — linking scheduler and workload
 
@@ -342,7 +315,7 @@ kubectl get svc -n "$NS"
 
 | Service | Purpose | Ports |
 |---------|---------|-------|
-| `*-workload-svc` | Names the vLLM Pods (not used by inference requests, see below) | 8000 (HTTPS) |
+| `*-workload-svc` | Names the vLLM Pods (not used by inference requests, see below) | 8000 (`http`; it is `https` only when TLS is enabled for the workload) |
 | `*-epp-service` | Exposes the EPP scheduler | 9002 (gRPC), 9003 (health), 9090 (metrics), 5557 (ZMQ) |
 
 > The metrics port (9090) is plain HTTP but requires a bearer token
@@ -350,12 +323,12 @@ kubectl get svc -n "$NS"
 > request-flow tutorial of this series.
 
 > **Inference requests do not pass through `*-workload-svc`.** For
-> `/v1/completions`, `/v1/chat/completions` and `/v1/responses` the
-> HTTPRoute's backend is the InferencePool: the EPP picks a Pod and Envoy
-> connects to that Pod's IP directly. The workload Service serves the rest:
-> the HTTPRoute's last rule sends other paths under `/<namespace>/demo-model`
-> to it, monitoring finds the vLLM Pods through it, and clients inside the
-> cluster can call vLLM by its name. The request-flow tutorial shows the Pod
+> `/v1/completions`, `/v1/chat/completions`, `/v1/responses` and
+> `/v1/messages` the HTTPRoute's backend is the InferencePool: the EPP picks
+> a Pod and Envoy connects to that Pod's IP directly. The workload Service
+> serves the rest: the route's catch-all rules send other paths under
+> `/<namespace>/demo-model` to it, monitoring finds the vLLM Pods through it,
+> and clients inside the cluster can call vLLM by its name. The request-flow tutorial shows the Pod
 > IP in the Envoy log.
 
 ## Step 5: Check the result
@@ -477,6 +450,6 @@ with the environment's `teardown.sh` when you are done.
 
 - One LLMInferenceService YAML creates 10+ resources
 - The **well-known LLMInferenceServiceConfig** is injected, so no separate config is needed
-- The scheduler Pod has three containers: init (tokenizer download) + scheduler + tokenizer (idle by default)
+- The scheduler Pod has two containers: an init container (tokenizer files) and the scheduler, which scores the Pods with four plugins
 - Core structure: **Deployment (workload)** ↔ **InferencePool** ↔ **scheduler** ↔ **HTTPRoute** ↔ **Gateway**
 - Cleanup cascades through OwnerReferences

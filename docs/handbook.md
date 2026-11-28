@@ -27,7 +27,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 | One tutorial = one directory, self-contained; shared things are versioned parts (`envs/`, `lib/`) | RFC §4.1, §4.6, §4.7 |
 | README.md (English) is the source; translations follow it, CI runs only English | RFC §4.8, §4.11 |
 | Versions are per tutorial (`versions.tested`), not per branch; `stable` = last fully verified `main` | RFC §4.4, §4.15, release.md |
-| A change made because of a new KServe version moves the old versions to a frozen revision (`tutorials/<id>/revisions/rN/`, no exceptions); CI runs two versions per tutorial (N = the version pinned in project.yaml, N-1 = the tutorial's newest tested version below N; a tutorial without N runs only that N-1); skipped versions (a gap between tested minors) are listed by `./tut revision todo` and moved with `./tut revision keep` after the maintainer agrees | RFC 0002, authoring.md section 6 |
+| A change made because of a new KServe version moves the old versions to a frozen revision (`tutorials/<id>/revisions/vX.Y/`, no exceptions); CI runs two versions per tutorial (N = the version pinned in project.yaml, N-1 = the tutorial's newest tested version below N; a tutorial without N runs only that N-1); skipped versions (a gap between tested minors) are listed by `./tut revision todo` and moved with `./tut revision keep` after the maintainer agrees | RFC 0002, authoring.md section 6 |
 | The KServe version is always pinned in project.yaml (`version`), never the upstream's newest release. The maintainer starts a move to a new version locally (pin, add to `tested`, PR; failing tutorials get a revision and a `status: draft` fix; a person reviews). No scheduled workflow, canary or bot (2026-11-27) | AGENTS.md "A new product version", RFC 0002 section 8 |
 | `stable` moves once a month by schedule, skipped when `main` did not change (schedule off until a first dry run, 2026-11-26) | RFC 0002 section 8, release.md |
 | No AI in GitHub Actions: every AI step (scouts, drafts, translations, explainers) runs locally | RFC 0002 section 3, AGENTS.md hard rule 13 |
@@ -74,7 +74,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 |---|---|---|
 | `cli.py` | argparse front end of every `./tut` command; completion (`complete()` walks the parser) | test_completion, test_local_config |
 | `model.py` | load `tutorial.yaml`, env profiles, lib modules; `Tutorial` properties (`default_version`, `tested_versions`, `env_options`, ...); `env_settings()` → `TUT_ENV_*`; revisions (`load_revisions`, `variants`), `resolve(t, version)`, N and N-1 (`pinned_minor()`, `ci_minors()`) | test_rules, test_revisions |
-| `revision.py` | `./tut revision start` and `keep`: copy a tutorial from the base branch into `revisions/rN/`, re-render its setup and header, re-point links, move the current tutorial to the new version | test_revisions |
+| `revision.py` | `./tut revision start` and `keep`: copy a tutorial from the base branch into `revisions/vX.Y/`, re-render its setup and header, re-point links, move the current tutorial to the new version | test_revisions |
 | `project.py` | load and validate `project.yaml` (`ProjectError`, lint P001) | test_project |
 | `markdown.py` | parse a README: fenced blocks with role and attrs, `<!-- tut:... -->` regions | test_rules |
 | `generate.py` | `./tut sync`: fill `tut:header`, `tut:setup`, `tut:include`, `tut:use`, `tut:catalog`; write CODEOWNERS | test_rules, test_shared |
@@ -118,7 +118,7 @@ tutorials/<id>/README.md + tutorial.yaml ── ./tut sync ──▶ README with
 - The page theme is Auto / Light / Dark; both terminals (main and ⧉) follow it and share their own text size (`static/term-theme.js`).
 - Learning paths open with `?collection=`: covered `run` blocks are hidden, cleanup waits for the end, and the collection `vars` are exported.
 
-**Versions.** A tutorial lists `versions.default` (what readers get) and `versions.tested` (what PR CI and releases run: N, the version pinned in project.yaml, and N-1, the tutorial's newest tested version below it; RFC 0002). Older versions of a changed tutorial live in `revisions/rN/`. An env declares `versions.min/max` it can install (T005). Nothing follows upstream by itself: the maintainer moves the pin (`./tut kserve-version <ver>`), adds the version to `tested`, and the PR's CI shows what breaks; the `version-scout` agent reads the upstream changes between two versions and says which tutorials they touch (AGENTS.md "A new product version").
+**Versions.** A tutorial lists `versions.default` (what readers get) and `versions.tested` (what PR CI and releases run: N, the version pinned in project.yaml, and N-1, the tutorial's newest tested version below it; RFC 0002). Older versions of a changed tutorial live in `revisions/vX.Y/`. An env declares `versions.min/max` it can install (T005). Nothing follows upstream by itself: the maintainer moves the pin (`./tut kserve-version <ver>`), adds the version to `tested`, and the PR's CI shows what breaks; the `version-scout` agent reads the upstream changes between two versions and says which tutorials they touch (AGENTS.md "A new product version").
 
 ## 5. Commands by task
 
@@ -174,7 +174,7 @@ The AI CLI runs on the user's machine with the user's login. No API keys are in 
 | `site.yml` | push to `stable` | build and publish the site |
 
 What runs in a PR is decided by `plan.affected`:
-- a change under `tutorials/<id>/` runs that tutorial on its in-window versions, and a new or touched `revisions/rN/` on its own;
+- a change under `tutorials/<id>/` runs that tutorial on its in-window versions, and a new or touched `revisions/vX.Y/` on its own;
 - a change under `envs/<env>/` runs the tutorials using that env;
 - a change under `lib/<m>/` runs the tutorials that list it in `uses`;
 - any file in `EXECUTION_PATHS` (runner, parser, setup generator, `project.yaml`, tool installer, local config, `run-tutorials.yml`, diagnose) runs **every** tutorial;

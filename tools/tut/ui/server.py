@@ -51,7 +51,7 @@ class UI:
         return t
 
     def variant(self, tid: str, rev: str | None):
-        """The tutorial, or its revision `rev` (tutorials/<id>/revisions/rN/, RFC 0002)."""
+        """The tutorial, or its revision `rev` (tutorials/<id>/revisions/vX.Y/, RFC 0002)."""
         t = self.tutorial_or_404(tid)
         if not rev:
             return t

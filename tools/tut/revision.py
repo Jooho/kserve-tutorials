@@ -2,7 +2,7 @@
 its current versions, then move it to a new product version (RFC 0002).
 
 1. Copy tutorials/<id>/ as it is on the base branch (not the working tree: the
-   copy must be what was verified) to tutorials/<id>/revisions/rN/.
+   copy must be what was verified) to tutorials/<id>/revisions/vX.Y/.
 2. Make the copy work from its new place: `frozen: true` in its tutorial.yaml,
    the generated setup step (`cd` into the revision) and header re-rendered,
    relative links that leave the tutorial directory re-pointed.
@@ -30,8 +30,8 @@ from pathlib import Path
 import yaml
 
 from . import generate, markdown, shared
-from .model import (REPO_ROOT, REVISION_RE, REVISIONS_DIR, VERSION_RE, Tutorial, load_revisions,
-                    load_tutorials, version_key)
+from .model import (REPO_ROOT, REVISIONS_DIR, VERSION_RE, Tutorial, load_revisions,
+                    load_tutorials, revision_name, version_key)
 
 
 class RevisionError(Exception):
@@ -39,11 +39,6 @@ class RevisionError(Exception):
 
 
 LINK_RE = re.compile(r"(\]\(|(?:src|href)=\")(?![a-z][a-z0-9+.-]*:|#|/)([^)\"\s#]+)")
-
-
-def next_name(t: Tutorial) -> str:
-    nums = [int(REVISION_RE.match(r.revision).group(1)) for r in load_revisions(t)]
-    return f"r{max(nums, default=0) + 1}"
 
 
 def _base_files(t: Tutorial, base: str) -> dict[str, bytes]:
@@ -138,14 +133,18 @@ def users_of(t: Tutorial, tutorials: list[Tutorial]) -> list[str]:
 
 
 def _copy(t: Tutorial, base: str, tested: list[str] | None = None) -> Path:
-    """tutorials/<id>/ on `base` -> revisions/rN/, frozen, working from its new
+    """tutorials/<id>/ on `base` -> revisions/vX.Y/, frozen, working from its new
     place. `tested`: the versions the revision keeps (default: all of base's)."""
     files = _base_files(t, base)
     old = yaml.safe_load(files["tutorial.yaml"]) or {}
     if not (old.get("versions") or {}).get("tested"):
         raise RevisionError(f"{t.id} on {base} lists no tested versions")
-    name = next_name(t)
+    name = revision_name(tested if tested is not None else old["versions"]["tested"])
+    if not name:
+        raise RevisionError(f"{t.id}: cannot name the revision, no version like v0.18.0 to keep")
     dst = t.path / REVISIONS_DIR / name
+    if dst.exists():
+        raise RevisionError(f"{dst.relative_to(t.root)} already exists")
     for sub, data in files.items():
         p = dst / sub
         p.parent.mkdir(parents=True, exist_ok=True)
