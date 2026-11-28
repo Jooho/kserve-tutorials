@@ -90,14 +90,14 @@ run-keep: ## Like run, but keep resources when a step fails
 	@test -n "$(T)" || { echo "usage: make run-keep T=<tutorial-id> [V=<version>]"; exit 2; }
 	./tut run $(T) $(if $(V),--version $(V)) --keep-on-failure
 
-matrix: ## What a release and the weekly run verify
-	./tut matrix --scheduled
+matrix: ## What a release verifies: every tutorial and revision on its N and N-1
+	./tut matrix
 
 release-plan: ## Show the next release version and what it would verify
 	@echo "next version: $$(./tut release next-version)"
 	@./tut release can-ff $$(git rev-parse $(REF)) || true
 	@echo "matrix:"
-	@./tut matrix --scheduled | sed 's/^/  /'
+	@./tut matrix | sed 's/^/  /'
 
 release: ## Start the release workflow on GitHub: make release [REF=main] [DRY_RUN=false]
 	gh workflow run release.yml -f ref=$(REF) -f dry_run=$(DRY_RUN)

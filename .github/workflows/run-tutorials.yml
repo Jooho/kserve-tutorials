@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       matrix: {type: string, required: true, description: "JSON list from ./tut affected|matrix --json"}
-      label: {type: string, default: pr, description: "pr | scheduled | canary | release (used in artifact names)"}
+      label: {type: string, default: pr, description: "pr | release (used in artifact names)"}
       ref: {type: string, default: "", description: "commit to check out (default: the triggering ref)"}
 
 permissions: {contents: read}

@@ -252,24 +252,35 @@ def cmd_project(a):
     return 0
 
 
-def cmd_latest(a):
-    """./tut latest: the product version N stands for (RFC 0002 section 8)."""
-    from .model import latest_version
-    v = latest_version(REPO_ROOT)
-    if not v:
-        try:
-            up = project.load(REPO_ROOT).upstream
-        except project.ProjectError as e:
-            sys.exit(str(e))
-        if not up:
-            sys.exit("project.yaml has neither `latest` nor `upstream`")
-        r = subprocess.run(["gh", "api", f"repos/{up}/releases/latest", "--jq", ".tag_name"],
+def cmd_product_version(a):
+    """./tut <id>-version [VERSION]: show or set the pinned product version
+    (`version` in project.yaml): N in CI. Setting it checks that the upstream
+    has that release; nothing follows the upstream's newest release by itself."""
+    import re as _re
+    from .model import VERSION_RE
+    try:
+        proj = project.load(REPO_ROOT)
+    except project.ProjectError as e:
+        sys.exit(str(e))
+    if not a.version:
+        print(proj.version)
+        return 0
+    if not VERSION_RE.match(a.version):
+        sys.exit(f"{a.version!r} is not a version like v0.20.0")
+    if proj.upstream and not a.no_check:
+        r = subprocess.run(["gh", "api", f"repos/{proj.upstream}/releases/tags/{a.version}", "--jq", ".tag_name"],
                            capture_output=True, text=True)
-        if r.returncode != 0 or not r.stdout.strip():
-            sys.exit(f"cannot read the latest release of {up}: {r.stderr.strip() or 'no output'} "
-                     "(set `latest` in project.yaml, or TUT_LATEST_VERSION)")
-        v = r.stdout.strip()
-    print(v)
+        if r.returncode != 0 or r.stdout.strip() != a.version:
+            sys.exit(f"{proj.upstream} has no release {a.version} ({(r.stderr or r.stdout).strip() or 'no answer'}); "
+                     "nothing changed. --no-check skips this (offline).")
+    f = project.path(REPO_ROOT)
+    text, n = _re.subn(r"(?m)^(version:\s*)\S+", lambda m: m.group(1) + a.version, f.read_text(), count=1)
+    if not n:
+        sys.exit(f"{f}: no `version:` line to update")
+    f.write_text(text)
+    print(f"{proj.name} version: {proj.version} -> {a.version} (project.yaml)")
+    print(f"Next: ./tut tested add {a.version} --all, ./tut sync, open the PR; CI runs every tutorial on "
+          f"{a.version} and on its previous tested version (AGENTS.md \"A new product version\").")
     return 0
 
 
@@ -279,8 +290,7 @@ def cmd_affected(a):
 
 
 def cmd_matrix(a):
-    m = (plan.canary_matrix(a.canary) if a.canary else plan.out_of_window() if a.out_of_window
-         else plan.scheduled_matrix())
+    m = plan.out_of_window() if a.out_of_window else plan.full_matrix()
     print(json.dumps(m) if a.json else "\n".join(f"{e['tutorial']} @ {e['version']}" for e in m))
 
 
@@ -311,12 +321,18 @@ def cmd_revision(a):
 
 
 def cmd_tested(a):
-    """./tut tested add <version> <id>...: what the canary bot PR runs after a pass."""
+    """./tut tested add <version> <id>...|--all: put a new version into versions.tested."""
     import re as _re
     from .model import VERSION_RE
     if not VERSION_RE.match(a.version):
         sys.exit(f"{a.version!r} is not a version like v0.20.0")
-    for tid in a.ids:
+    ids = a.ids
+    if a.all:
+        ids = [t.id for t in load_tutorials(REPO_ROOT, include_template=False)
+               if not t.errors and t.status in ("stable", "deprecated")]
+    if not ids:
+        sys.exit("name the tutorials, or --all (every stable or deprecated tutorial)")
+    for tid in ids:
         t = _tutorial(tid)
         if a.version in t.tested_versions:
             print(f"{tid}: already tested with {a.version}")
@@ -733,8 +749,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--get", metavar="KEY", help="print one value, e.g. --get upstream (for scripts)")
     s.set_defaults(fn=cmd_project)
 
-    s = sub.add_parser("latest", help="the product version CI treats as newest (N): project.yaml `latest`, else upstream's latest release")
-    s.set_defaults(fn=cmd_latest)
+    proj = _project()
+    if proj:
+        s = sub.add_parser(f"{proj.id}-version",
+                           help=f"show the pinned {proj.name} version (project.yaml `version`, N in CI), or set it")
+        s.add_argument("version", nargs="?", metavar="VERSION",
+                       help="set it, e.g. v0.21.0 (checked against the upstream's releases)")
+        s.add_argument("--no-check", action="store_true", help="do not ask GitHub whether the release exists")
+        s.set_defaults(fn=cmd_product_version)
 
     s = sub.add_parser("run", help="execute a tutorial README end to end")
     s.add_argument("id")
@@ -755,11 +777,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_affected)
 
-    s = sub.add_parser("matrix", help="CI matrix for scheduled or canary runs")
-    g = s.add_mutually_exclusive_group(required=True)
-    g.add_argument("--scheduled", action="store_true")
-    g.add_argument("--canary", metavar="VERSION")
-    g.add_argument("--out-of-window", action="store_true",
+    s = sub.add_parser("matrix", help="every tutorial and revision CI can run, on its N and N-1 (a release verifies this)")
+    s.add_argument("--out-of-window", action="store_true",
                    help="tested versions CI no longer runs (not N or N-1 of their tutorial)")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_matrix)
@@ -793,11 +812,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="also start the tutorials that copy this one's shared steps (tut:use)")
     s.set_defaults(fn=cmd_revision, id=None)
 
-    s = sub.add_parser("tested", help="add a version to versions.tested (canary bot PR)")
+    s = sub.add_parser("tested", help="add a version to versions.tested (moving to a new product version)")
     tt = s.add_subparsers(dest="tcmd", required=True)
     r = tt.add_parser("add")
     r.add_argument("version")
-    r.add_argument("ids", nargs="+", metavar="id")
+    r.add_argument("ids", nargs="*", metavar="id")
+    r.add_argument("--all", action="store_true", help="every stable or deprecated tutorial")
     s.set_defaults(fn=cmd_tested)
 
     s = sub.add_parser("translation", help="translation status (no arguments), draft, mark",
@@ -869,7 +889,7 @@ def build_parser() -> argparse.ArgumentParser:
     rsub.add_parser("next-version", help="next YYYY.MM.N tag")
     r = rsub.add_parser("check", help="fail unless every expected matrix entry has a passing report")
     r.add_argument("--reports", required=True)
-    r.add_argument("--expected", required=True, help="JSON file from `tut matrix --scheduled --json`")
+    r.add_argument("--expected", required=True, help="JSON file from `tut matrix --json`")
     r = rsub.add_parser("can-ff", help="can `stable` fast-forward to this commit?")
     r.add_argument("sha")
     r = rsub.add_parser("notes", help="release notes (markdown)")

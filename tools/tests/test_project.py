@@ -13,6 +13,7 @@ id: kuadrant
 name: Kuadrant
 title: {en: Kuadrant Tutorials, ko: Kuadrant 튜토리얼}
 version_var: KUADRANT_VERSION
+version: v0.18.0
 upstream: kuadrant/kuadrant-operator
 glossary: [Kuadrant, AuthPolicy, RateLimitPolicy]
 """
@@ -51,9 +52,12 @@ def test_P001_missing_or_invalid_project_yaml(tmp_path):
     make_env(tmp_path)
     (tmp_path / "project.yaml").unlink()
     assert [f.code for f in lint.Linter(tmp_path).run()] == ["P001"]
-    (tmp_path / "project.yaml").write_text("id: x\nname: X\ntitle: {en: X}\nversion_var: lower\n")
+    (tmp_path / "project.yaml").write_text("id: x\nname: X\ntitle: {en: X}\nversion_var: lower\nversion: v0.18.0\n")
     f = lint.Linter(tmp_path).run()
     assert [x.code for x in f] == ["P001"] and "version_var" in f[0].message
+    (tmp_path / "project.yaml").write_text("id: x\nname: X\ntitle: {en: X}\nversion_var: X_VERSION\n")
+    f = lint.Linter(tmp_path).run()                               # the pinned version is not optional
+    assert [x.code for x in f] == ["P001"] and "'version' is a required property" in f[0].message
     with pytest.raises(project.ProjectError):
         project.load(tmp_path)
 

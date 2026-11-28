@@ -10,6 +10,7 @@ Tutorial metadata
   T006 deprecated/archived tutorials need a `deprecation` block
   T007 stable tutorials must use a frozen env profile
   T008 env_options must be options the env declares, with allowed values
+  T009 a tested version is newer than the pinned product version (project.yaml `version`)
 
 Documents (README.md and translations)
   D001 shell code blocks need exactly one role: run | verify | cleanup | skip
@@ -99,8 +100,8 @@ import jsonschema
 import yaml
 
 from . import catalog, generate, markdown, project, shared
-from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, REVISIONS_DIR, Tutorial, load_envs,
-                    load_modules, load_revisions, load_schema, load_tutorials)
+from .model import (LANGS, MODULE_REF_RE, REPO_ROOT, REVISIONS_DIR, VERSION_RE, Tutorial, load_envs,
+                    load_modules, load_revisions, load_schema, load_tutorials, minor)
 
 TRANSLATION_RE = re.compile(
     r"<!--\s*tut-translation\s+source=(\S+)\s+sha=([0-9a-f]+)((?:\s+[a-z]+=\S+)*)\s*-->")
@@ -285,6 +286,13 @@ class Linter:
             self.err("T003", f, f"env {t.env_ref!r} does not exist under envs/")
         if t.default_version and t.default_version not in t.tested_versions:
             self.err("T004", f, f"versions.default {t.default_version} is not in versions.tested")
+        pin = getattr(self.project, "version", None)
+        if pin and VERSION_RE.match(pin):
+            for ver in t.tested_versions:
+                if VERSION_RE.match(str(ver)) and minor(ver) > minor(pin):
+                    self.err("T009", f, f"{ver} is newer than the pinned {self.project.name} version {pin} "
+                             f"(project.yaml); CI would never run it. Move the pin first: "
+                             f"./tut {self.project.id}-version {ver}")
         if env:
             for ver in t.tested_versions:
                 if not env.supports(ver):

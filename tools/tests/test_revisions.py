@@ -8,7 +8,7 @@ import subprocess
 import pytest
 import yaml
 
-from test_rules import GOOD_README, make_env, make_tut, meta
+from test_rules import GOOD_README, make_env, make_tut, meta, pin
 from tut import catalog, generate, lint, model, plan, revision, runner, site
 
 
@@ -60,42 +60,64 @@ def test_resolve_picks_current_then_revision_by_tag_then_minor(repo):
     assert r.key == "t@r1" and r.rel == "tutorials/t/revisions/r1" and r.root == repo
 
 
-def test_ci_runs_N_and_the_newest_tested_minor_below_it(repo, monkeypatch):
+def test_ci_runs_N_and_the_newest_tested_minor_below_it(repo):
     make_tut(repo, "a", versions={"default": "v0.20.0", "tested": ["v0.20.0"]})
     make_revision(repo, "a", "r1", ["v0.17.0", "v0.18.0"])          # a jumped 0.18 -> 0.20
     make_tut(repo, "b", versions={"default": "v0.19.1", "tested": ["v0.18.0", "v0.19.1"]})
+    pin(repo, "v0.20.0")
     ts = model.load_tutorials(repo)
-    monkeypatch.delenv(model.LATEST_ENV, raising=False)
-    assert model.latest(ts) == (0, 20)                               # offline: newest tested
-    m = plan.scheduled_matrix(repo)
+    assert model.pinned_version(repo) == "v0.20.0" and model.pinned_minor(ts) == (0, 20)
+    m = plan.full_matrix(repo)
     # a: N=0.20 and N-1 = its newest tested minor below N (0.18, in r1); b has no N: only 0.19
     assert {(e["tutorial"], e["version"], e["revision"]) for e in m} == {
         ("a", "v0.20.0", ""), ("a", "v0.18.0", "r1"), ("b", "v0.19.1", "")}
     assert sorted((e["tutorial"], e["version"]) for e in plan.out_of_window(repo)) == [
         ("a", "v0.17.0"), ("b", "v0.18.0")]
-    # CI sets N from the upstream's latest release: nobody tests 0.21, everyone runs only its newest
-    monkeypatch.setenv(model.LATEST_ENV, "v0.21.0")
-    assert model.latest(ts) == (0, 21)
-    assert {(e["tutorial"], e["version"]) for e in plan.scheduled_matrix(repo)} == {
+    # the pin moves to 0.21 and nobody tests it yet: everyone runs only its newest version
+    pin(repo, "v0.21.0")
+    assert {(e["tutorial"], e["version"]) for e in plan.full_matrix(repo)} == {
         ("a", "v0.20.0"), ("b", "v0.19.1")}
 
 
-def test_project_yaml_latest_pins_N(repo, monkeypatch):
+def test_N_is_only_the_pinned_version(repo, monkeypatch):
     make_tut(repo, "a", versions={"default": "v0.20.0", "tested": ["v0.18.0", "v0.20.0"]})
-    p = repo / "project.yaml"
-    p.write_text(p.read_text() + "latest: v0.20.0\n")
-    ts = model.load_tutorials(repo)
-    assert model.latest_version(repo) == "v0.20.0" and model.latest(ts) == (0, 20)
-    assert {e["version"] for e in plan.scheduled_matrix(repo)} == {"v0.18.0", "v0.20.0"}
-    # pinned below what upstream has (v0.21): CI still treats v0.20 as N
-    p.write_text(p.read_text().replace("latest: v0.20.0", "latest: v0.19.0"))
-    assert model.latest(model.load_tutorials(repo)) == (0, 20)      # a tested version above the pin wins
-    monkeypatch.setenv(model.LATEST_ENV, "v0.21.0")                  # the env var overrides the file
-    assert model.latest_version(repo) == "v0.21.0"
-    assert {e["version"] for e in plan.scheduled_matrix(repo)} == {"v0.20.0"}
+    pin(repo, "v0.20.0")
+    assert {e["version"] for e in plan.full_matrix(repo)} == {"v0.18.0", "v0.20.0"}
+    # nothing else moves N: not an environment variable, not what a tutorial tests
+    monkeypatch.setenv("TUT_LATEST_VERSION", "v0.21.0")
+    assert model.pinned_minor(model.load_tutorials(repo)) == (0, 20)
+    pin(repo, "v0.19.0")
+    assert model.pinned_minor(model.load_tutorials(repo)) == (0, 19)
+    # T009: a tested version above the pin would never run
+    assert ("T009", "tutorials/a/tutorial.yaml") in errors(repo)
+    pin(repo, "v0.20.0")
+    assert errors(repo) == []
+
+
+def test_product_version_command_checks_the_release_and_sets_the_pin(repo, monkeypatch, capsys):
+    from tut import cli
+    make_tut(repo, "a")
+    monkeypatch.setattr(cli, "REPO_ROOT", repo)
+    calls = []
+
+    def fake_gh(cmd, **kw):
+        calls.append(cmd)
+        tag = cmd[2].rsplit("/", 1)[-1]
+        ok = tag == "v0.21.0"
+        return subprocess.CompletedProcess(cmd, 0 if ok else 1, tag + "\n" if ok else "", "" if ok else "Not Found")
+    monkeypatch.setattr(cli.subprocess, "run", fake_gh)
+    assert cli.main(["kserve-version"]) == 0 and capsys.readouterr().out.strip() == "v0.18.0"
+    with pytest.raises(SystemExit, match="has no release v0.99.0"):
+        cli.main(["kserve-version", "v0.99.0"])
+    assert model.pinned_version(repo) == "v0.18.0"                  # nothing changed
+    assert cli.main(["kserve-version", "v0.21.0"]) == 0
+    assert calls[-1][:3] == ["gh", "api", "repos/kserve/kserve/releases/tags/v0.21.0"]
+    assert model.pinned_version(repo) == "v0.21.0"
+    assert "# the newest KServe version" in (repo / "project.yaml").read_text()   # the comment stays
 
 
 def test_pr_matrix_runs_a_new_revision_and_not_an_old_one(repo):
+    pin(repo, "v0.19.0")
     make_tut(repo, "a", versions={"default": "v0.19.0", "tested": ["v0.19.0"]})
     commit_all(repo)
     base = git(repo, "rev-parse", "HEAD").strip()
@@ -110,16 +132,10 @@ def test_pr_matrix_runs_a_new_revision_and_not_an_old_one(repo):
     assert {(e["version"], e["revision"]) for e in plan.pr_matrix(base2, repo)} == {("v0.19.0", "")}
 
 
-def test_canary_skips_versions_a_revision_already_has(repo):
-    make_tut(repo, "a", versions={"default": "v0.20.0", "tested": ["v0.20.0"]})
-    make_revision(repo, "a", "r1", ["v0.19.0"])
-    assert plan.canary_matrix("v0.19.0", repo) == []
-    assert [e["version"] for e in plan.canary_matrix("v0.21.0", repo)] == ["v0.21.0"]
-
-
 # ------------------------------------------------------------- revision start
 def test_revision_start_keeps_the_base_state_and_moves_the_tutorial(repo):
     d = make_tut(repo, "a")
+    pin(repo, "v0.19.0")
     (d / "README.md").write_text(GOOD_README.replace("# T\n", "# T\n\nSee [env](../../envs/kind-x/v1/) "
                                                      "and [cm](manifests/cm.yaml).\n"))
     (d / "tutorial.yaml").write_text(
@@ -147,12 +163,33 @@ def test_revision_start_keeps_the_base_state_and_moves_the_tutorial(repo):
     script, _ = runner.build_script(model.resolve(model.load_tutorials(repo)[0], "v0.18.0"), "v0.18.0", False)
     assert "tutorials/a/revisions/r1/README.md:" in script
     assert errors(repo) == []
-    with pytest.raises(revision.RevisionError, match="already tested"):
+    with pytest.raises(revision.RevisionError, match="already kept as r1"):     # not a second copy
         revision.start(model.load_tutorials(repo)[0], "v0.19.0", base="HEAD")
 
 
-def test_skipped_lists_a_gap_in_tested_and_keep_moves_the_versions_before_it(repo, monkeypatch):
-    monkeypatch.delenv(model.LATEST_ENV, raising=False)
+def test_revision_start_after_the_new_version_was_added_to_tested(repo):
+    """The flow for a new product version: pin it, add it to tested, CI fails,
+    then keep the old version as a revision (AGENTS.md "A new product version")."""
+    d = make_tut(repo, "a")                                       # tested [v0.18.0]
+    generate.sync(repo)
+    commit_all(repo)
+    pin(repo, "v0.20.0")
+    (d / "tutorial.yaml").write_text((d / "tutorial.yaml").read_text().replace("- v0.18.0", "- v0.18.0\n  - v0.20.0"))
+    t = model.load_tutorials(repo)[0]
+    assert t.tested_versions == ["v0.18.0", "v0.20.0"]
+    assert {e["version"] for e in plan.full_matrix(repo)} == {"v0.18.0", "v0.20.0"}     # N and N-1
+    revision.start(t, "v0.20.0", base="HEAD")                     # v0.20.0 is new on this branch
+    t = model.load_tutorials(repo)[0]
+    assert t.tested_versions == ["v0.20.0"] and t.default_version == "v0.20.0"
+    assert model.load_revisions(t)[0].tested_versions == ["v0.18.0"]
+    assert {(e["version"], e["revision"]) for e in plan.full_matrix(repo)} == {("v0.20.0", ""), ("v0.18.0", "r1")}
+    assert errors(repo, base="HEAD") == []
+    with pytest.raises(revision.RevisionError, match="already tested with v0.18.0 on HEAD"):
+        revision.start(model.load_tutorials(repo)[0], "v0.18.0", base="HEAD")
+
+
+def test_skipped_lists_a_gap_in_tested_and_keep_moves_the_versions_before_it(repo):
+    pin(repo, "v0.21.0")
     d = make_tut(repo, "a", versions={"default": "v0.21.0", "tested": ["v0.17.0", "v0.18.0", "v0.21.0"]})
     make_tut(repo, "b", versions={"default": "v0.20.0", "tested": ["v0.20.0"]})
     make_tut(repo, "c", versions={"default": "v0.18.0", "tested": ["v0.18.0"]})
@@ -161,7 +198,7 @@ def test_skipped_lists_a_gap_in_tested_and_keep_moves_the_versions_before_it(rep
     commit_all(repo)
     # N=0.21. a: 0.21 and 0.18 (its tested minor below N) until the maintainer says keep;
     # b, c have no N: only their newest; d: 0.21 and 0.20
-    assert {(e["tutorial"], e["version"]) for e in plan.scheduled_matrix(repo)} == {
+    assert {(e["tutorial"], e["version"]) for e in plan.full_matrix(repo)} == {
         ("a", "v0.21.0"), ("a", "v0.18.0"), ("b", "v0.20.0"), ("c", "v0.18.0"),
         ("d", "v0.20.0"), ("d", "v0.21.0")}
     # only a gap is a skip; d's old versions join up, c has not moved yet
@@ -175,7 +212,7 @@ def test_skipped_lists_a_gap_in_tested_and_keep_moves_the_versions_before_it(rep
     assert 'cd "$REPO_ROOT/tutorials/a/revisions/r1"' in r.readme("en").read_text()
     assert model.resolve(t, "v0.18.0").revision == "r1"
     assert plan.skipped(repo) == []
-    assert ("a", "v0.18.0") in {(e["tutorial"], e["version"]) for e in plan.scheduled_matrix(repo)}
+    assert ("a", "v0.18.0") in {(e["tutorial"], e["version"]) for e in plan.full_matrix(repo)}
     assert errors(repo, base="HEAD") == []                      # R004: the revision keeps them
     c = model.load_tutorials(repo)[2]
     with pytest.raises(revision.RevisionError, match="skipped no version"):
@@ -209,6 +246,7 @@ def test_R001_R003_R005_revision_metadata(repo):
 
 
 def test_R002_R004_frozen_revision_and_removed_versions(repo):
+    pin(repo, "v0.19.0")
     make_tut(repo, "a", versions={"default": "v0.18.0", "tested": ["v0.18.0"]})
     commit_all(repo)
     base = git(repo, "rev-parse", "HEAD").strip()
@@ -251,7 +289,7 @@ def test_tested_add_appends_to_the_list(repo, monkeypatch):
     (d / "tutorial.yaml").write_text("id: a\nversions:\n  default: v0.18.0\n  tested: [v0.18.0]   # weekly\n")
     monkeypatch.setattr(cli, "REPO_ROOT", repo)
     monkeypatch.setattr(cli, "_tutorial", lambda tid: model.load_tutorials(repo)[0])
-    cli.cmd_tested(type("A", (), {"version": "v0.19.0", "ids": ["a"]}))
+    cli.cmd_tested(type("A", (), {"version": "v0.19.0", "ids": ["a"], "all": False}))
     assert "  tested: [v0.18.0, v0.19.0]   # weekly" in (d / "tutorial.yaml").read_text()
 
 

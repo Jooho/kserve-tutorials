@@ -1,14 +1,12 @@
 """Decide what CI should execute.
 
 `./tut affected --base <ref>`  tutorials touched by a change (PR runs)
-`./tut matrix --scheduled`      every runnable tutorial and revision x every tested version
-`./tut matrix --canary <ver>`   stable/deprecated tutorials against a new version of the product
+`./tut matrix`                  every runnable tutorial and revision (a release verifies this)
 
-Only two minors run per tutorial (RFC 0002): N = the product's newest minor
-(`./tut latest`: project.yaml `latest`, else the upstream's latest release; CI
-sets TUT_LATEST_VERSION from it; offline without a pin, the newest any tutorial tests) if the tutorial tests it, and N-1 = the newest
-minor it tests below N. A matrix entry names the tutorial and the
-version; `./tut run <id> --version V` picks the revision tested with V.
+Two minors run per tutorial (RFC 0002): N = `version` in project.yaml (always
+pinned) if the tutorial tests it, and N-1 = the newest minor it tests below N.
+A matrix entry names the tutorial and the version; `./tut run <id> --version V`
+picks the revision tested with V.
 
 Blast radius rules (the reason envs are versioned):
   tutorials/<id>/explainer/** -> nothing (an AI explainer is read, never executed)
@@ -26,7 +24,7 @@ import subprocess
 from pathlib import Path
 
 from .model import (EXPLAINER_DIR, REPO_ROOT, REVISIONS_DIR, VERSION_RE, Tutorial, ci_minors,
-                    latest, load_tutorials, minor, runs_in_ci, variants, version_key)
+                    load_tutorials, minor, pinned_minor, runs_in_ci, variants, version_key)
 
 
 def changed_files(base: str, root: Path = REPO_ROOT) -> list[str]:
@@ -94,7 +92,7 @@ def pr_matrix(base: str, root: Path = REPO_ROOT) -> list[dict]:
     the change adds or touches (a frozen one cannot change: lint)."""
     paths = changed_files(base, root)
     tutorials = load_tutorials(root)
-    n = latest(tutorials)
+    n = pinned_minor(tutorials, root)
     out = []
     for t in affected(paths, tutorials):
         ms = ci_minors(t, n)
@@ -104,17 +102,17 @@ def pr_matrix(base: str, root: Path = REPO_ROOT) -> list[dict]:
     return out
 
 
-def scheduled_matrix(root: Path = REPO_ROOT) -> list[dict]:
+def full_matrix(root: Path = REPO_ROOT) -> list[dict]:
     """Every tutorial and revision CI can run, on its CI versions."""
     tutorials = load_tutorials(root)
-    n = latest(tutorials)
+    n = pinned_minor(tutorials, root)
     return [e for t in tutorials for v in variants(t) for e in _runs(v, ci_minors(t, n))]
 
 
 def out_of_window(root: Path = REPO_ROOT) -> list[dict]:
     """Tested versions CI no longer runs (shown as "last verified")."""
     tutorials = load_tutorials(root)
-    n = latest(tutorials)
+    n = pinned_minor(tutorials, root)
     return [entry(v, x) for t in tutorials for v in variants(t) if not v.errors
             for x in v.tested_versions if not runs_in_ci(x, ci_minors(t, n))]
 
@@ -136,9 +134,3 @@ def skipped(root: Path = REPO_ROOT) -> list[dict]:
         if gaps:
             out.append({"tutorial": t.id, "versions": [v for v in vs if minor(v) < gaps[-1]]})
     return out
-
-
-def canary_matrix(version: str, root: Path = REPO_ROOT) -> list[dict]:
-    return [entry(t, version) for t in load_tutorials(root)
-            if not t.errors and t.ci_runnable and t.status in ("stable", "deprecated")
-            and all(version not in v.tested_versions for v in variants(t))]

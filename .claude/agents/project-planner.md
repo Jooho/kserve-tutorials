@@ -26,7 +26,7 @@ Walk these every time. For each, look at what exists, not at what you assume a p
 - **Author and contributor**: docs/prompts.md, docs/authoring.md, CONTRIBUTING.md, `./tut new`, `./tut draft`, error and help texts of the CLI.
 - **Trust**: .github/workflows, tools/tests, docs/release.md, the status of tutorials (draft / stable), what CI does not cover.
 - **Open source safety**: LICENSE, CONTRIBUTING.md, CODE_OF_CONDUCT, SECURITY.md, issue and PR templates, CODEOWNERS, sign-off rules, branch protection and required checks (`gh api repos/{owner}/{repo}/branches/main/protection`, read only), secret scanning, pinned actions and dependencies, hard-coded personal names, handles, paths or URLs, files that should not be public.
-- **Content**: what is not migrated yet, which versions are tested, what the canary and weekly runs say.
+- **Content**: what is not migrated yet, which versions are tested, what the last PR and release runs say.
 - **The agents' system**: AGENTS.md, the handbook, the tech lead's notebook. A question the maintainer answered twice is a missing rule.
 
 Then read what is already known, so you do not propose it again as news: docs/backlog.md (every open item), the handbook's Decisions table, open issues and PRs (`gh issue list`, `gh pr list`), and the notebook.

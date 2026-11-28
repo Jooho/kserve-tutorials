@@ -177,9 +177,16 @@ def start(t: Tutorial, version: str, base: str = "origin/main") -> Path:
         raise RevisionError(f"{t.key} is a revision; start from the current tutorial {t.id}")
     if not VERSION_RE.match(version):
         raise RevisionError(f"{version!r} is not a version like v0.20.0")
-    if version in t.tested_versions:
-        raise RevisionError(f"{t.id} is already tested with {version}: nothing to keep apart; to "
-                            f"move older versions out, use ./tut revision keep {t.id}")
+    base_tested = ((yaml.safe_load(_base_files(t, base)["tutorial.yaml"]) or {})
+                   .get("versions") or {}).get("tested") or []
+    if version in base_tested:
+        raise RevisionError(f"{t.id} is already tested with {version} on {base}: nothing to keep apart; "
+                            f"to move older versions out, use ./tut revision keep {t.id}")
+    for r in load_revisions(t):
+        kept = [v for v in base_tested if v in r.tested_versions]
+        if kept:
+            raise RevisionError(f"{t.id}: {', '.join(kept)} is already kept as {r.revision}; "
+                                f"edit the current tutorial for {version}")
     dst = _copy(t, base)
     _set_versions(t.path / "tutorial.yaml", version, [version])
     return dst

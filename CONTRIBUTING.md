@@ -35,7 +35,7 @@ for example:
   `TUT_AI`, then finishes the result and checks it.
 - "Migrate `llmisvc/02-request-flow` from the legacy repository." The agent
   follows docs/migration-guide.md.
-- "The weekly run failed on inferencegraph-ensemble; find out why." The agent
+- "CI failed on inferencegraph-ensemble; find out why." The agent
   follows docs/ci-playbook.md.
 
 What to expect from the agent, and what to check in its PR:

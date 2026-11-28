@@ -13,7 +13,7 @@ env_options: {types: [llmisvc]}   # LLMInferenceService + its gateway stack
 namespace: llmisvc-monitoring          # defaults to the id
 versions:
   default: v0.18.0              # what readers and PR CI use
-  tested: [v0.18.0]             # what the weekly CI runs; must include default
+  tested: [v0.18.0, v0.20.0]             # what CI runs; must include default
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, observability, intermediate]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en, ko]                 # en is the source; others are translations

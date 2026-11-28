@@ -47,9 +47,16 @@ def meta(tid, **kw):
     return m
 
 
-# The real project.yaml without its `latest` pin: tests set N themselves.
-PROJECT_YAML = re.sub(r"(?m)^latest:.*\n", "",
+# The real project.yaml with a fixed pin, so tests do not move when the
+# repository moves to a new version; `pin(root, version)` sets another one.
+PROJECT_YAML = re.sub(r"(?m)^version:\s*\S+", "version: v0.18.0",
                       (Path(__file__).resolve().parents[2] / "project.yaml").read_text())
+
+
+def pin(root: Path, version: str):
+    """Set the pinned product version (project.yaml `version`) of a test repository."""
+    p = root / "project.yaml"
+    p.write_text(re.sub(r"(?m)^version:\s*\S+", f"version: {version}", p.read_text()))
 
 
 def make_project(root: Path, text: str = PROJECT_YAML):

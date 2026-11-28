@@ -13,7 +13,7 @@ uses: [llmisvc/v1]
 namespace: llmisvc-anatomy
 versions:
   default: v0.18.0
-  tested: [v0.18.0]
+  tested: [v0.18.0, v0.20.0]
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en, ko]

@@ -1,9 +1,8 @@
 # KServe Tutorials
 
 Hands-on tutorials for [KServe](https://kserve.github.io/website/). Every
-tutorial lists the KServe versions it was tested with, and CI runs each one
-end to end against those versions every week. If a tutorial says it works,
-CI recently checked that it does.
+tutorial lists the KServe versions it was tested with: CI runs it end to end
+against those versions whenever it changes, and before every release.
 
 ## Tutorials
 
@@ -12,10 +11,10 @@ CI recently checked that it does.
 <!-- Generated from tutorials/*/tutorial.yaml by `./tut sync` — do not edit by hand. -->
 | Tutorial | Status | Tested KServe | Tags | Environment | GPU |
 |---|---|---|---|---|---|
-| [Two Models, One Answer — InferenceGraph Ensemble and Combiner](tutorials/inferencegraph-ensemble/) | ✅ stable | v0.18.0 | `inferencegraph` `inferenceservice` `mlserver` `storage` `ensemble` `intermediate` | `kind-kserve/v1` | no |
-| [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | ✅ stable | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-kserve/v1` | no |
-| [Through the Scheduler's Eyes - Metric Observation](tutorials/llmisvc-monitoring/) | ✅ stable | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `observability` `intermediate` | `kind-kserve/v1` | no |
-| [Journey of a Request — From Gateway to vLLM](tutorials/llmisvc-request-flow/) | ✅ stable | v0.18.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `envoy-gateway` `vllm` `request-flow` `observability` `intermediate` | `kind-kserve/v1` | no |
+| [Two Models, One Answer — InferenceGraph Ensemble and Combiner](tutorials/inferencegraph-ensemble/) | ✅ stable | v0.18.0, v0.20.0 | `inferencegraph` `inferenceservice` `mlserver` `storage` `ensemble` `intermediate` | `kind-kserve/v1` | no |
+| [One Apply, Ten Resources — LLMInferenceService Anatomy](tutorials/llmisvc-anatomy/) | ✅ stable | v0.18.0, v0.20.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `resources` `beginner` | `kind-kserve/v1` | no |
+| [Through the Scheduler's Eyes - Metric Observation](tutorials/llmisvc-monitoring/) | ✅ stable | v0.18.0, v0.20.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `vllm` `observability` `intermediate` | `kind-kserve/v1` | no |
+| [Journey of a Request — From Gateway to vLLM](tutorials/llmisvc-request-flow/) | ✅ stable | v0.18.0, v0.20.0 | `llmisvc` `gateway-api-inference-extension` `epp-scheduler` `envoy-gateway` `vllm` `request-flow` `observability` `intermediate` | `kind-kserve/v1` | no |
 
 **Collections** (reading paths)
 
@@ -26,6 +25,7 @@ CI recently checked that it does.
 
 **By KServe version**
 
+- **v0.20.0**: [inferencegraph-ensemble](tutorials/inferencegraph-ensemble/), [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [llmisvc-monitoring](tutorials/llmisvc-monitoring/), [llmisvc-request-flow](tutorials/llmisvc-request-flow/)
 - **v0.18.0**: [inferencegraph-ensemble](tutorials/inferencegraph-ensemble/), [llmisvc-anatomy](tutorials/llmisvc-anatomy/), [llmisvc-monitoring](tutorials/llmisvc-monitoring/), [llmisvc-request-flow](tutorials/llmisvc-request-flow/)
 
 <!-- /tut -->

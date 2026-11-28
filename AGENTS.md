@@ -16,8 +16,8 @@ to break. Then the document for your task below.
 |---|---|
 | Write or edit a tutorial | [docs/authoring.md](docs/authoring.md) |
 | Migrate a tutorial from `Jooho/kserve-tutorials-legacy` | [docs/migration-guide.md](docs/migration-guide.md), then docs/authoring.md |
-| A CI run, scheduled run or canary failed | [docs/ci-playbook.md](docs/ci-playbook.md) |
-| Move tutorials to a new KServe version, or ask what a version will break | section "A new product version" below (`version-scout` agent), then [docs/ci-playbook.md](docs/ci-playbook.md) |
+| A CI run or a release run failed | [docs/ci-playbook.md](docs/ci-playbook.md) |
+| Move tutorials to a new KServe version, or ask what a version will break | section "A new product version" below, then [docs/ci-playbook.md](docs/ci-playbook.md) |
 | Groups, tags, collections, owners (`catalog/`) | docs/authoring.md § Groups, tags and collections |
 | Change `envs/`, `lib/` (shared parts) | docs/authoring.md § Shared parts, then RFC §4.6 |
 | Change `tools/`, `schema/`, rules or workflows | [docs/rfc/0001-repository-structure.md](docs/rfc/0001-repository-structure.md) |
@@ -53,7 +53,8 @@ make new T=<id> [TITLE=".."] [OWNER=<handle>]   # new tutorial from tutorials/_t
 ./tut list [--tag T] [--status S] [--collection C]   # one line per tutorial
 ./tut show <id>                     # everything about one tutorial
 ./tut project [--get <key>]         # what project.yaml says (product name, version_var, ...)
-./tut latest                        # the KServe version CI treats as newest (N): project.yaml `latest`, else upstream
+./tut kserve-version [<version>]    # show or set the pinned KServe version (project.yaml `version`): N in CI
+./tut tested add <version> --all    # put a new version into versions.tested (moving to a new KServe version)
 eval "$(./tut completion)"          # Tab completion for ./tut in this shell
 ./tut translation              # state of every translation + next step
 ./tut translation draft <id> ko   # AI draft via TUT_AI=claude|copilot|codex|cmd:...
@@ -97,8 +98,8 @@ PYTHONPATH=tools python3 -m pytest -q tools/tests   # when changing tools/
 12. **Never push to `stable`.** Only the release workflow moves it, and only
     forward to a fully verified commit of `main` (docs/release.md).
 13. **No AI in GitHub Actions.** There is no API key in CI. Scouts, drafts,
-    translations and explainers run locally; a workflow may open a PR or an
-    issue for a local agent to pick up (docs/rfc/0002-tutorial-revisions.md).
+    translations and explainers run locally, and only when the maintainer
+    asks (docs/rfc/0002-tutorial-revisions.md).
 14. **Never edit a revision** (`tutorials/<id>/revisions/rN/`). It is the
     frozen tutorial for older versions; changes go to the current tutorial.
 
@@ -185,32 +186,37 @@ maintainer says so.
   yourself; filing issues still needs the maintainer's approval in the
   conversation.
 
-## A new product version: ask the version scout first
+## A new product version: the maintainer starts it
 
-The `version-scout` agent (`.claude/agents/version-scout.md`) finds out from
-the upstream changes themselves which tutorials a new product version will
-break, change or make obsolete, before anything is run.
+Nothing moves to a new KServe version by itself: no scheduled workflow, no
+bot. The version is always the one pinned in `project.yaml` (`version`), never
+the upstream's newest release. When the maintainer says "move to v0.21.0":
 
-- Call it with a target (`v0.21.0`, or `master` for what is coming) before you
-  add a version to `versions.tested`, when a new upstream release appears, and
-  when a canary fails. Other agents: read its file and do the comparison
-  yourself.
-- It gives a verdict per tutorial (breaks, changes, obsolete, fine, unknown)
-  with evidence on both sides: the tutorial's file and line, and the upstream
-  source at both versions or the PR. It keeps apart what happens at the target
-  and what `master` announces for later.
-- It edits nothing and decides nothing. Its proposals are plans: they go to the
-  tech lead and then to the maintainer like any plan. A run (`./tut run <id>
-  --version <target>`) confirms a finding.
-- When a tutorial has to change because of the new version, the old versions
-  go to a frozen revision first: `./tut revision start <id> --to <version>`,
-  then edit (docs/authoring.md "A new product version changes a tutorial").
-- When the weekly canary passes, a bot PR adds the version to
-  `versions.tested`; run the scout for that version and, with the maintainer's
-  permission, add its report to the PR. The maintainer merges.
+1. **Pin it.** `./tut kserve-version v0.21.0` checks that the upstream has
+   that release and updates `project.yaml`. `./tut tested add v0.21.0 --all`
+   adds it to every stable tutorial; `./tut sync` updates the headers.
+2. **Ask the version scout** (`.claude/agents/version-scout.md`) what the
+   version breaks or changes, from the upstream source. It gives a verdict per
+   tutorial (breaks, changes, obsolete, fine, unknown) with evidence on both
+   sides; it edits nothing. Its report goes into the PR text.
+3. **Open the PR.** CI runs every tutorial on N (the pinned version) and on
+   N-1 (the newest version it tested before). The failures show which
+   tutorials need a revision.
+4. **Keep the old version, then fix.** For each tutorial that fails or whose
+   explanation is no longer true: `./tut revision start <id> --to v0.21.0`
+   (the old tutorial becomes a frozen `revisions/rN/`), find the cause, edit
+   the current tutorial for the new version and set `status: draft`. Add the
+   commits to the same PR, change its title, let CI run again
+   (docs/authoring.md "A new product version changes a tutorial").
+5. **A person reviews** the changed tutorials; only then `status: stable`.
+   If a failure stays unexplained, stop and talk to the maintainer.
+
+- Every git and GitHub step is asked for, as always (How to work, step 4).
+- `./tut revision todo` lists tutorials that skipped versions; `./tut revision
+  keep <id>` moves those to a revision, with the maintainer's word.
 - New features of a release: the `feature-scout` agent
-  (`.claude/agents/feature-scout.md`) drafts `tutorial-proposal` issues; filing
-  them needs the maintainer's permission.
+  (`.claude/agents/feature-scout.md`) drafts `tutorial-proposal` issues when
+  the maintainer asks; filing them needs the maintainer's permission.
 
 ## Translations
 

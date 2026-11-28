@@ -93,9 +93,9 @@ def notes(version: str, sha: str, reports: list[dict], repo: str = "<owner>/<rep
         out.append("| — | — | no CI-runnable tutorials | — |")
     out += ["", "### Tutorials in this release", "",
             f"| Tutorial | Status | Tested {proj.name} | Environment |", "|---|---|---|---|"]
-    from .model import ci_minors, latest, runs_in_ci, variants
+    from .model import ci_minors, pinned_minor, runs_in_ci, variants
     tutorials = load_tutorials(root)
-    n = latest(tutorials)
+    n = pinned_minor(tutorials, root)
     for t in tutorials:
         ms = ci_minors(t, n)
         for v in variants(t):

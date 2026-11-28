@@ -2,8 +2,8 @@
 #
 # The tut engine (tools/, schema/) is generic. Everything it shows or writes
 # that names the product comes from this file: page titles, "Tested with
-# KServe v0.18.0", the shell variable that holds the version, the release the
-# weekly canary checks. Another project (Kuadrant, llm-d, vLLM, ...) keeps the
+# KServe v0.18.0", the shell variable that holds the version, the pinned
+# version CI treats as newest. Another project (Kuadrant, llm-d, vLLM, ...) keeps the
 # same engine and ships its own project.yaml.
 id: kserve
 name: KServe                     # "Tested with KServe v0.18.0", "KServe v0.18.0"
@@ -18,8 +18,8 @@ intro:                           # first paragraph of the site's home page (Mark
     [KServe](https://kserve.github.io/website/) 실습 튜토리얼 모음입니다.
     모든 튜토리얼은 표시된 KServe 버전으로 CI에서 실제 실행되어 검증됩니다.
 version_var: KSERVE_VERSION      # shell variable a tutorial reads its version from
-upstream: kserve/kserve          # GitHub repo whose latest release ./tut latest falls back to
-latest: v0.20.0                  # newest version we move to (CI N, canary); remove to follow upstream's latest release
+upstream: kserve/kserve          # GitHub repo whose releases ./tut kserve-version checks a version against
+version: v0.20.0                 # the newest KServe version the tutorials move to (N in CI); set with ./tut kserve-version <ver>
 example: llmisvc-anatomy         # finished tutorial ./tut draft shows the AI as the model
 glossary:                        # product terms translations keep in English
   - KServe

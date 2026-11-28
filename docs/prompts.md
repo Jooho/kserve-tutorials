@@ -24,7 +24,7 @@ In Claude Code you can also skip the exact id and say it in your own words ("mak
 | Move a tutorial from `Jooho/kserve-tutorials-legacy` | [2. Migrate a tutorial](#2-migrate-a-tutorial) |
 | A new tutorial from work you tested by hand | [3a. New tutorial from tested work](#3a-new-tutorial-from-tested-work) |
 | A new tutorial written from scratch | [3b. New tutorial from scratch](#3b-new-tutorial-from-scratch) |
-| A CI run, weekly run or canary failed | [4. Fix a CI failure](#4-fix-a-ci-failure) |
+| A CI run or a release run failed | [4. Fix a CI failure](#4-fix-a-ci-failure) |
 | Teaching page with diagrams for a tutorial (AI explainer) | [5. Make an explainer](#5-make-an-explainer) |
 
 Before the first session: `make setup`, `./tut config TUT_AI=claude` (or `codex`), and for migrations a clone of the legacy repository next to this one (`../kserve-tutorials-legacy`).

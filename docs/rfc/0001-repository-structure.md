@@ -77,12 +77,12 @@ More tutorials exist locally and will be added, and the repository is meant for 
 │   ├── teardown.sh
 │   └── README.md
 ├── catalog/                    # tags, groups, collections (learning paths), maintainers
-├── project.yaml                # the product: name, title, version variable, canary upstream
+├── project.yaml                # the product: name, title, version variable, pinned version
 ├── schema/                     # JSON schemas for tutorial.yaml, profile.yaml, ...
 ├── tools/tut/                  # rules, runner, planner, site builder
 ├── tools/tests/                # tests for the rules themselves
 ├── docs/rfc/                   # design records like this one
-└── .github/workflows/          # ci.yml, scheduled.yml, site.yml
+└── .github/workflows/          # ci.yml, release.yml, site.yml
 ```
 
 ### 4.3 `tutorial.yaml`
@@ -98,7 +98,7 @@ uses: [llmisvc/v1]                  # script modules, pinned
 namespace: llmisvc-anatomy          # default: id
 versions:                           # of the product named in project.yaml
   default: v0.18.0                  # what readers and PR CI use
-  tested: [v0.18.0]                 # what the weekly CI runs
+  tested: [v0.18.0]                 # what CI runs
 tags: [llmisvc, gateway-api-inference-extension, epp-scheduler, vllm, resources, beginner]
 requires: {gpu: false, cpu: 4, memory: 16Gi}
 langs: [en]
@@ -131,11 +131,11 @@ draft ──► stable ──► deprecated ──► archived
 | Status | Meaning | CI | Rules |
 |---|---|---|---|
 | `draft` | Being written | Runs on PR | D007 is a warning, any env allowed |
-| `stable` | Recommended | PR + weekly + canary | Must use a frozen env (T007), must verify (D007) |
-| `deprecated` | Still works, being replaced | PR + weekly + canary | Needs `deprecation.reason` |
+| `stable` | Recommended | PR + release | Must use a frozen env (T007), must verify (D007) |
+| `deprecated` | Still works, being replaced | PR + release | Needs `deprecation.reason` |
 | `archived` | Kept for reference, frozen | Not executed | Needs `deprecation.reason` and `last_supported_version` |
 
-**Example: WVA is removed from KServe.** The canary run (§4.10) fails for the WVA tutorial only and opens an issue for it. The owner either:
+**Example: WVA is removed from KServe.** The PR that moves the repository to that KServe version (§4.10) fails for the WVA tutorial only. The owner either:
 
 - **archives** it: `status: archived`, `deprecation.last_supported_version: v0.17.1`. The page shows a banner, the catalog stops listing it under newer versions, CI stops running it. One file changes.
 - **rewrites** it for the replacement feature: a normal PR to that directory, which runs only that tutorial.
@@ -160,7 +160,7 @@ What a change can reach:
 | `envs/<name>/v<N>/**` | Tutorials whose `env` is `<name>/v<N>` (only allowed while not frozen) |
 | `lib/<name>/v<N>/**` | Tutorials that list `<name>/v<N>` in `uses` (only allowed while not frozen) |
 | how tutorials are executed (runner, parser, setup generator, tool installer, local config, `run-tutorials.yml`) | every tutorial |
-| anything else | None; lint and unit tests still run, the weekly run covers the rest |
+| anything else | None; lint and unit tests still run |
 
 **Script modules** (`lib/<name>/v<N>/`) apply the same rule to reusable scripts. A tutorial declares the modules it calls (`uses: [llmisvc/v1]`) and calls them as `"$TUT_LIB/llmisvc/v1/gateway-url.sh"`. A script exists once, so it is reused instead of copied; it is pinned, so improving it means a new module version that tutorials adopt one at a time. Lint enforces that every call is declared (L002) and that frozen modules do not change (L003). Readers still see what a script does: the README can include it with `tut:include`, and the local UI shows it under the block that calls it.
 
@@ -218,6 +218,7 @@ Errors fail CI; warnings are printed. The authoritative list is the docstring of
 | T006 | `deprecated`/`archived` have a `deprecation` block |
 | T007 | `stable` tutorials use a frozen profile |
 | T008 | `env_options` are options the env declares, with allowed values |
+| T009 | No tested version is newer than the pinned product version (`project.yaml version`): CI would never run it |
 | D001 | Every shell block has exactly one role |
 | D002 | Generated regions are up to date |
 | D003 | No hard-coded product version (`project.yaml` name, e.g. KServe) outside generated regions (escape: `<!-- tut-allow-version -->`) |
@@ -255,11 +256,11 @@ The rules have their own tests (`tools/tests/`), so changing a rule is a reviewe
 | Workflow | Trigger | Does |
 |---|---|---|
 | `ci.yml` | pull request, push to main | lint (`--base`), rule tests, site build; then **executes only affected tutorials** with their `versions.default` |
-| `scheduled.yml` | weekly + manual | **Full matrix:** every runnable tutorial × every `versions.tested` version. **Canary:** the latest KServe release against every stable/deprecated tutorial that does not list it yet. Failures open or update one issue per tutorial. |
+| (removed 2026-11-27) `scheduled.yml` | - | The weekly full matrix and the canary were removed: the maintainer moves the repository to a new KServe version by hand (RFC 0002 section 8) |
 | `release.yml` | manual (`make release`) | Full matrix at one commit of `main`; if everything passes, fast-forwards `stable`, tags `YYYY.MM.N`, publishes the site |
 | `site.yml` | push to `stable`, called by `release.yml` | Builds and publishes the site to GitHub Pages |
 
-The canary answers "when do I need to update?" before readers notice: when KServe ships a release, each tutorial either passes (add the version to `tested`) or gets an issue.
+"When do I need to update?" is answered by the PR that pins a new KServe version (`./tut kserve-version <ver>`, then the version in every tutorial's `tested`): each tutorial either passes on it or shows where it breaks.
 
 ### 4.11 Translations
 
@@ -317,7 +318,7 @@ AI works on top of the rules, never instead of them:
 
 - `AGENTS.md` (imported by `CLAUDE.md`) is the entry point for every coding agent: commands, hard rules, and which document to read for which task (`docs/authoring.md`, `docs/ci-playbook.md`, `docs/migration-guide.md`).
 - Knowledge accumulates in the repository, not in a session: whoever fixes a failure adds a lesson to `docs/authoring.md § Rules learned from CI`, and promotes it to a lint rule with a test when it can be checked mechanically.
-- A canary issue is a precise task: tutorial, KServe version, failing block and log. An agent can propose a fix PR; that PR passes lint and executes the tutorial like any other.
+- A CI failure is a precise task: tutorial, KServe version, failing block and log. An agent can propose a fix; the fix passes lint and executes the tutorial like any other.
 - Translations can be drafted by an agent; D011 and the marker keep them honest.
 - New tutorials start from tested work: `./tut draft <folder>` gives the author's AI CLI the rules, an example and the reusable parts, lets it write only the new tutorial, and reports what it changed or left out.
 - `docs/handbook.md` is the map for agents: decisions already made, code map, CI, invariants. Agents are expected to know the repository better than its maintainer, so knowledge must be written down there.
@@ -348,9 +349,9 @@ A README has to stay a test: terse steps and checks. Teaching material (the big 
 
 1. **License.** Suggest Apache-2.0 for code (matches KServe) and CC BY 4.0 for prose. Needs a decision before the repository is promoted.
 2. ~~**Repository.**~~ **Decided:** the old repository was renamed to `Jooho/kserve-tutorials-legacy` and this repository starts fresh under the original name, which also suits a later move under the `kserve` organization (GitHub keeps redirects on transfer).
-3. **Recording verification.** The weekly run knows when each tutorial last passed per version. Publish as a JSON file on the site, or open a bot PR that updates a `verified` field? The JSON approach avoids commit noise.
+3. **Recording verification.** CI runs know when each tutorial last passed per version. Publish as a JSON file on the site, or open a bot PR that updates a `verified` field? The JSON approach avoids commit noise.
 4. **GPU tutorials.** Not runnable on hosted runners. Options: `requires.gpu` tutorials are lint-only plus a manual `verified` record, or a self-hosted GPU runner later.
-5. **CI cost.** Each tutorial builds its own cluster (isolation over speed). If the weekly matrix gets slow, group tutorials that share a profile and version into one job; the namespace rule (§4.7) makes this safe.
+5. **CI cost.** Each tutorial builds its own cluster (isolation over speed). If the full matrix gets slow, group tutorials that share a profile and version into one job; the namespace rule (§4.7) makes this safe.
 6. **Profile granularity.** Add-ons used by a few tutorials (Prometheus, KEDA, ...) — separate profiles or installed by the tutorial itself? Decided: one profile, `kind-kserve/v1`, whose `env_options` map to KServe's own installer flags (`--type kserve,localmodel,llmisvc`, `--raw` / `--serverless`, `--keda`); a cluster it built is reused and only missing parts are added. Other add-ons stay in the tutorial until three tutorials need the same one.
 
 7. **Site generator lifetime.** Material for MkDocs announces end of life on 2027-05-05, with Zensical as its successor (reads `mkdocs.yml`). The site is generated by `./tut site`, so switching only touches `mkdocs.yml` and `site.yml`. Revisit before 2027-05.
@@ -361,4 +362,4 @@ A README has to stay a test: terse steps and checks. Teaching material (the big 
 2. ✅ **First green run** on GitHub Actions (PR #1); profiles are frozen once a stable tutorial passes on them (backlog D2).
 3. ◐ **Migration** of the remaining tutorials, one PR each, following `docs/migration-guide.md` (done locally with Claude Code).
 4. **Publish**: license, Pages, a pointer from `kserve-tutorials-legacy` to this repository.
-5. **Canary** enabled; first KServe release handled through the issue flow.
+5. (removed 2026-11-27) The canary and the issue flow for new KServe releases: the maintainer moves the repository to a new version by hand (RFC 0002 section 8).

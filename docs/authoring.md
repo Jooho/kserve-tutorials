@@ -24,8 +24,8 @@ The toolkit (`tools/`, `schema/`) names no product. What it shows or writes abou
 | `name` | labels: "Tested with KServe v0.18.0", the UI's version picker, release notes, D003 |
 | `title`, `intro` | the site's home page, the UI's title, release names |
 | `version_var` | the shell variable a tutorial reads its version from (`$KSERVE_VERSION`); the setup step exports it, `./tut run --version` sets it |
-| `upstream` | the GitHub repo whose latest release `./tut latest` falls back to when `latest` is not set |
-| `latest` | the newest version this repository moves to (`./tut latest`): N of the CI window, the weekly canary and the `new-release` issue. Not set: the upstream's latest release. A tested version above it still runs as N |
+| `upstream` | the GitHub repo whose releases `./tut kserve-version <ver>` checks a version against |
+| `version` | the newest KServe version the tutorials move to, always pinned here (required): N in CI. Show or set it with `./tut kserve-version [<ver>]` (the command is `<id>-version`); nothing follows the upstream's newest release by itself. A tested version above it is an error [T009] |
 | `example` | the finished tutorial `./tut draft` shows the AI |
 | `glossary` | product terms translations keep in English |
 
@@ -107,6 +107,9 @@ Line breaks: in `docs/` write one line per paragraph and do not wrap by hand; a 
 When a tutorial has to change because of a new version (an API, a default, a component), readers on the older versions keep the tutorial as it was: a frozen copy in `tutorials/<id>/revisions/rN/` (docs/rfc/0002-tutorial-revisions.md). Always, without trying to keep one README true for both.
 
 ```bash skip
+./tut kserve-version v0.20.0             # pin the new version (checks the upstream has that release)
+./tut tested add v0.20.0 --all           # then ./tut sync; CI of the PR runs every tutorial on v0.20.0 and on v0.18.0
+# for each tutorial that fails or is no longer true on v0.20.0:
 ./tut revision start <id> --to v0.20.0   # copies tutorials/<id>/ from origin/main to revisions/rN (frozen),
                                          # sets versions.tested/default of the current tutorial to v0.20.0
 # edit the tutorial for v0.20.0, ./tut sync, ./tut run <id>, make precommit
@@ -115,6 +118,7 @@ When a tutorial has to change because of a new version (an API, a default, a com
 ./tut revision keep <id> [v0.18.0 ...]   # skipped versions: move them to a revision without a new version
 ```
 
+- The maintainer starts the move (AGENTS.md "A new product version"); `revision start` also works after the new version was added to `tested` on the branch. A tutorial edited for the new version is `status: draft` until a person reviewed it.
 - Freeze first, then edit; the revision and the change go into one commit. The copy is taken from the base branch, so it is what was verified.
 - The copy runs from its new place: its setup step `cd`s into the revision and links that leave the tutorial are re-pointed. `./tut sync` never writes into `revisions/`; the current README's header links each revision.
 - A revision is never edited [R002], uses only frozen env and lib parts [R003], and one version belongs to one variant [R005]. A version removed from `versions.tested` must be in a revision [R004].
@@ -122,7 +126,7 @@ When a tutorial has to change because of a new version (an API, a default, a com
 - `./tut run <id> --version v0.19.0`, `./tut ui` ("My KServe" version) and the site pick the revision tested with that version, by tag, then by minor (v0.19.2 uses what was tested as v0.19.x).
 - The copy includes translations and the explainer as they were: copying them is the one exception to "explainer changes go in their own PR".
 - A change that is not about a version (a typo, more explanation) needs no revision.
-- CI runs two versions of a tutorial: N (`./tut latest`: `latest` in project.yaml, else the newest KServe release) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` and the weekly `ci-window` issue. Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
+- CI runs two versions of a tutorial: N (`version` in project.yaml, `./tut kserve-version`) if the tutorial tests it, and N-1, the newest version it tests below N (revisions included). Older versions stay in `tested` as "last verified". A tutorial that skipped versions (tested v0.18.0 and v0.20.0, nothing for v0.19) is listed by `./tut revision todo` (`make precommit` prints it). Ask the maintainer, then `./tut revision keep <id>` moves the versions before the gap to a frozen revision.
 
 ## 7. Translations
 
@@ -198,7 +202,7 @@ Each entry: what happened → the rule → evidence. Add one whenever you fix a 
 
 ### CI-004 Upstream images disappear
 - **What happened:** the LLMInferenceService never became Ready because the EPP scheduler image from KServe's own default config, `ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1`, stopped being publicly pullable (ghcr.io 403 on the anonymous token). llm-d renamed it to `llm-d-router-endpoint-picker`. Every KServe release up to v0.19.0 was affected for every user, not only CI.
-- **Rule:** a published release can break without any change on our side; that is what the weekly run is for. Work around platform breakage in the environment profile (documented as a known issue with the upstream fix to watch), never in individual tutorials. Diagnostics must show image pull errors (they did: `ImagePullBackOff` + the 403 in events).
+- **Rule:** a published release can break without any change on our side (there is no scheduled run any more: the next PR or release run shows it). Work around platform breakage in the environment profile (documented as a known issue with the upstream fix to watch), never in individual tutorials. Diagnostics must show image pull errors (they did: `ImagePullBackOff` + the 403 in events).
 - **Evidence:** [PR #1, third e2e run](https://github.com/Jooho/kserve-tutorials/actions/runs/44406969077).
 
 ### CI-005 Do no work before the first prompt
