@@ -281,8 +281,14 @@ def test_catalog_site_and_release_see_revisions(repo, tmp_path):
     assert item["state"] == "ok" and item["revision"] == "v0.18"
     assert catalog.resolve(col, by_id, "v0.17.0")[0]["state"] == "unavailable"
     generate.sync(repo)
+    rev_readme = repo / "tutorials" / "a" / "revisions" / "v0.18" / "README.md"
+    rev_readme.write_text(rev_readme.read_text() + "\nCurrent tutorial: [a](../../README.md)\n")
     out = site.build_source(tmp_path / "site", repo)
     assert (out / "tutorials" / "a" / "revisions" / "v0.18" / "index.md").exists()
+    # README links between the tutorial and its revision follow the renaming (mkdocs --strict)
+    cur, old = (out / "tutorials" / "a" / "index.md").read_text(), (out / "tutorials" / "a" / "revisions" / "v0.18" / "index.md").read_text()
+    assert "](revisions/v0.18/index.md)" in cur and "README.md)" not in cur
+    assert "](../../index.md)" in old and "README.md)" not in old
     assert "tutorials/a/revisions/v0.18/index.md) (v0.18, an older revision)" in (out / "versions.md").read_text()
     assert "a (v0.18)](tutorials/a/revisions/v0.18/)" in (repo / "README.md").read_text() \
         if (repo / "README.md").exists() else True

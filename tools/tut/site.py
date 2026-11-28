@@ -46,6 +46,10 @@ def _copy_tree(src: Path, dst: Path):
             # The README's "🌐 English / 한국어" line links README*.md for GitHub; the
             # site renames them to index pages and has its own language switcher.
             text = re.sub(r"^>[ \t]*\n> 🌐 .*\n", "", text, flags=re.M)
+            # Links to another README (a revision's header links the current
+            # tutorial and back) follow the same renaming.
+            text = re.sub(r"(\]\([^)\s]*?)README((?:\.[a-z]{2})?)\.md((?:#[^)\s]*)?\))",
+                          lambda m: f"{m.group(1)}index{m.group(2)}.md{m.group(3)}", text)
             target.write_text(text)
         else:
             shutil.copy2(p, target)
